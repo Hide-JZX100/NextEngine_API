@@ -562,9 +562,15 @@ function checkSheetNames() {
 function showUsageGuide() {
   console.log('=== 在庫情報取得スクリプト使用方法（完全版） ===');
   console.log('');
+  console.log('【初回設定】');
+  console.log('1. setSpreadsheetConfig("スプレッドシートID", "シート名")');
+  console.log('   例: setSpreadsheetConfig("1noQTPM0EMlyBNDdX4JDPZcBvh-3RT1VtWzNDA85SIkM", "GAS")');
+  console.log('2. showSpreadsheetConfig() で設定確認');
+  console.log('');
   console.log('【前提条件】');
   console.log('- 認証スクリプトでトークンが取得済みであること');
   console.log('- スプレッドシートに商品コードが入力済みであること');
+  console.log('- スプレッドシート設定が完了していること');
   console.log('');
   console.log('【主要関数】');
   console.log('1. updateInventoryData()');
@@ -580,6 +586,16 @@ function showUsageGuide() {
   console.log('');
   console.log('4. resetAllInventoryData()');
   console.log('   - 全在庫数値を0にリセット（テスト用）');
+  console.log('');
+  console.log('【設定管理関数】');
+  console.log('5. setSpreadsheetConfig("ID", "シート名")');
+  console.log('   - スプレッドシート設定を保存');
+  console.log('');
+  console.log('6. showSpreadsheetConfig()');
+  console.log('   - 現在の設定を表示');
+  console.log('');
+  console.log('7. checkSheetNames()');
+  console.log('   - 利用可能なシート名を表示');
   console.log('');
   console.log('【更新される在庫情報】');
   console.log('- C列: 在庫数');
