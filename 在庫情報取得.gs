@@ -19,7 +19,7 @@
 const NE_API_URL = 'https://api.next-engine.org';
 
 // スプレッドシートの設定
-const SPREADSHEET_ID = '1noQTPM0EMlyBNDdX4JDPZcBvh-3RT1VtWzNDA85SIkM';
+const SPREADSHEET_ID = '    ';
 const SHEET_NAME = 'GAS'; // 必要に応じて変更してください
 
 // 列のマッピング（0ベース）
