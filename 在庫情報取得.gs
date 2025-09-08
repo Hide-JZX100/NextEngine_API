@@ -356,7 +356,9 @@ function updateSingleProduct(goodsCode) {
     console.log('トークン取得成功');
     
     // 在庫情報を取得
+    console.log('getInventoryByGoodsCode 関数を呼び出します');
     const inventoryData = getInventoryByGoodsCode(goodsCode, tokens);
+    console.log('getInventoryByGoodsCode 完了、結果:', inventoryData ? 'データあり' : 'データなし');
     console.log('在庫情報取得結果:', inventoryData ? 'success' : 'null');
     
     if (inventoryData) {
