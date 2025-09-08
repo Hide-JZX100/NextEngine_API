@@ -367,18 +367,22 @@ function resetAllInventoryData() {
  */
 function checkSheetNames() {
   try {
+    console.log('使用しているスプレッドシートID:', SPREADSHEET_ID);
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheets = spreadsheet.getSheets();
     
     console.log('=== スプレッドシート内のシート名一覧 ===');
     for (let i = 0; i < sheets.length; i++) {
-      console.log(`シート${i + 1}: "${sheets[i].getName()}"`);
+      const sheetName = sheets[i].getName();
+      console.log(`シート${i + 1}: "${sheetName}" (文字数: ${sheetName.length})`);
     }
     console.log('');
-    console.log('上記のシート名のいずれかをSHEET_NAMEに設定してください');
+    console.log('現在のSHEET_NAME設定:', `"${SHEET_NAME}"`);
+    console.log('上記のシート名のいずれかと完全に一致するようにSHEET_NAMEを設定してください');
     
   } catch (error) {
     console.error('シート名確認エラー:', error.message);
+    console.error('スプレッドシートIDが正しいか確認してください');
   }
 }
 
