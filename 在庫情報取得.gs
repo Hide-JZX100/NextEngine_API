@@ -18,7 +18,7 @@
 // ネクストエンジンAPIのエンドポイントは認証.gsで定義済み
 
 // スプレッドシートの設定
-const SPREADSHEET_ID = '    ';
+const SPREADSHEET_ID = '1noQTPM0EMlyBNDdX4JDPZcBvh-3RT1VtWzNDA85SIkM';
 const SHEET_NAME = 'GAS'; // 必要に応じて変更してください
 
 // 列のマッピング（0ベース）
