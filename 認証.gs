@@ -328,24 +328,82 @@ function testApiConnection() {
 }
 
 /**
- * デバッグ用: 手動でuid/stateを入力してテスト
- * 認証URLにアクセス後、リダイレクトURLのuid/stateを手動で入力
+ * 在庫APIのテスト（最終目標に向けて）
+ * 商品マスタ情報の取得をテスト
  */
-function debugAuth() {
-  // ここにブラウザのリダイレクトURLから取得したuid/stateを入力してテスト
-  const uid = 'ここにuidを入力';
-  const state = 'ここにstateを入力';
-  
-  if (uid === 'ここにuidを入力' || state === 'ここにstateを入力') {
-    console.log('uid と state を実際の値に変更してから実行してください');
-    return;
-  }
-  
+function testInventoryApi() {
   try {
-    const result = getAccessToken(uid, state);
-    console.log('デバッグテスト成功:', result);
+    const properties = PropertiesService.getScriptProperties();
+    const accessToken = properties.getProperty('ACCESS_TOKEN');
+    const refreshToken = properties.getProperty('REFRESH_TOKEN');
+    
+    if (!accessToken || !refreshToken) {
+      throw new Error('アクセストークンが見つかりません。');
+    }
+    
+    // 商品マスタ検索API
+    const url = `${NE_API_URL}/api_v1_master_goods/search`;
+    
+    const payload = {
+      'access_token': accessToken,
+      'refresh_token': refreshToken,
+      'fields': 'goods_id,goods_name,stock_quantity', // 必要な項目のみ
+      'limit': '5' // テスト用に5件に制限
+    };
+    
+    const options = {
+      'method': 'POST',
+      'headers': {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      'payload': Object.keys(payload).map(key => 
+        encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
+      ).join('&')
+    };
+    
+    console.log('在庫API テスト実行中...');
+    console.log('使用URL:', url);
+    
+    const response = UrlFetchApp.fetch(url, options);
+    const responseText = response.getContentText();
+    
+    console.log('レスポンスコード:', response.getResponseCode());
+    console.log('在庫API レスポンス:', responseText);
+    
+    const responseData = JSON.parse(responseText);
+    
+    if (responseData.result === 'success') {
+      console.log('=== 在庫API テスト成功 ===');
+      console.log('取得商品数:', responseData.count);
+      console.log('商品情報:', responseData.data);
+      
+      // トークンが更新された場合は保存
+      if (responseData.access_token && responseData.refresh_token) {
+        properties.setProperties({
+          'ACCESS_TOKEN': responseData.access_token,
+          'REFRESH_TOKEN': responseData.refresh_token,
+          'TOKEN_UPDATED_AT': new Date().getTime().toString()
+        });
+        console.log('トークンが更新されました');
+      }
+      
+      return responseData.data;
+    } else {
+      console.log('在庫API エラー:', responseData);
+      
+      if (responseData.code === '004001') {
+        console.log('');
+        console.log('【解決方法】');
+        console.log('ネクストエンジンの「アプリを作る」→アプリ編集→「API」タブで');
+        console.log('「商品マスタ検索」の権限を有効にしてください');
+      }
+      
+      return responseData;
+    }
+    
   } catch (error) {
-    console.error('デバッグテストエラー:', error.message);
+    console.error('在庫API テストエラー:', error.message);
+    throw error;
   }
 }
 
