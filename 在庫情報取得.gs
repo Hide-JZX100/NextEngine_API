@@ -18,7 +18,7 @@
 // ネクストエンジンAPIのエンドポイントは認証.gsで定義済み
 
 // スプレッドシートの設定
-const SPREADSHEET_ID = '1noQTPM0EMlyBNDdX4JDPZcBvh-3RT1VtWzNDA85SIkM';
+const SPREADSHEET_ID = '    ';
 const SHEET_NAME = 'GAS'; // 必要に応じて変更してください
 
 // 列のマッピング（0ベース）
@@ -317,6 +317,7 @@ function updateStoredTokens(accessToken, refreshToken) {
  */
 function updateSingleProduct(goodsCode) {
   try {
+    console.log('=== バージョン確認: 修正版が実行されています ===');
     console.log(`=== 単品更新開始: ${goodsCode} ===`);
     
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
