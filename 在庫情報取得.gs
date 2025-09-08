@@ -363,6 +363,26 @@ function resetAllInventoryData() {
 }
 
 /**
+ * スプレッドシートのシート名を確認
+ */
+function checkSheetNames() {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheets = spreadsheet.getSheets();
+    
+    console.log('=== スプレッドシート内のシート名一覧 ===');
+    for (let i = 0; i < sheets.length; i++) {
+      console.log(`シート${i + 1}: "${sheets[i].getName()}"`);
+    }
+    console.log('');
+    console.log('上記のシート名のいずれかをSHEET_NAMEに設定してください');
+    
+  } catch (error) {
+    console.error('シート名確認エラー:', error.message);
+  }
+}
+
+/**
  * スクリプト使用方法ガイド
  */
 function showUsageGuide() {
