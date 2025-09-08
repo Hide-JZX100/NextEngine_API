@@ -253,22 +253,24 @@ async function getStockByGoodsId(goodsId, tokens) {
  * @param {Object} inventoryData - 在庫データ
  */
 function updateRowWithInventoryData(sheet, rowIndex, inventoryData) {
-  // 在庫情報の列を更新（C列からK列まで）
+  // 在庫情報の列を更新（C列からK列まで）- APIドキュメントに合わせたフィールド名
   const updateValues = [
-    inventoryData.stock_quantity || 0,           // C列: 在庫数
-    inventoryData.allocated_quantity || 0,       // D列: 引当数
-    inventoryData.free_stock_quantity || 0,      // E列: フリー在庫数
-    inventoryData.reserve_stock_quantity || 0,   // F列: 予約在庫数
-    inventoryData.reserve_allocated_quantity || 0, // G列: 予約引当数
-    inventoryData.reserve_free_stock_quantity || 0, // H列: 予約フリー在庫数
-    inventoryData.defective_stock_quantity || 0, // I列: 不良在庫数
-    inventoryData.order_remaining_quantity || 0, // J列: 発注残数
-    inventoryData.shortage_quantity || 0         // K列: 欠品数
+    inventoryData.stock_quantity || 0,                     // C列: 在庫数
+    inventoryData.stock_allocation_quantity || 0,          // D列: 引当数  
+    inventoryData.stock_free_quantity || 0,                // E列: フリー在庫数
+    inventoryData.stock_advance_order_quantity || 0,       // F列: 予約在庫数
+    inventoryData.stock_advance_order_allocation_quantity || 0, // G列: 予約引当数
+    inventoryData.stock_advance_order_free_quantity || 0,  // H列: 予約フリー在庫数
+    inventoryData.stock_defective_quantity || 0,           // I列: 不良在庫数
+    inventoryData.stock_remaining_order_quantity || 0,     // J列: 発注残数
+    inventoryData.stock_out_quantity || 0                  // K列: 欠品数
   ];
   
   // C列からK列まで更新
   const range = sheet.getRange(rowIndex, COLUMNS.STOCK_QTY + 1, 1, updateValues.length);
   range.setValues([updateValues]);
+  
+  console.log('更新データ:', updateValues);
 }
 
 /**
