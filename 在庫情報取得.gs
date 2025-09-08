@@ -120,8 +120,8 @@ function updateInventoryData() {
           console.log(`${i + 2}行目: ${goodsCode} の在庫情報が見つかりません`);
         }
         
-        // API制限を考慮して少し待機（2秒）- 2つのAPIを呼び出すため少し長めに設定
-        Utilities.sleep(1000);
+        // API制限を考慮して少し待機（0.5秒）- 2つのAPIを呼び出すため少し長めに設定
+        Utilities.sleep(500);
         
       } catch (error) {
         console.error(`${i + 2}行目: ${goodsCode} のエラー:`, error.message);
@@ -656,7 +656,7 @@ function showUsageGuide() {
   console.log('【主要関数】');
   console.log('1. updateInventoryData()');
   console.log('   - 全商品の詳細在庫情報を更新');
-  console.log('   - 処理時間: 商品数 × 約4秒（2つのAPIを呼び出すため）');
+  console.log('   - 処理時間: 商品数 × 約2.5秒（2つのAPIを呼び出すため）');
   console.log('');
   console.log('2. updateSingleProduct("商品コード")');
   console.log('   - 特定商品の詳細在庫情報のみ更新（テスト用）');
