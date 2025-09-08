@@ -589,4 +589,24 @@ function showUsageGuide() {
   console.log('- G列: 予約引当数');
   console.log('- H列: 予約フリー在庫数');
   console.log('- I列: 不良在庫数');
-  console.log('- J列: 発注残
+  console.log('- J列: 発注残数');
+  console.log('- K列: 欠品数');
+  console.log('');
+  console.log('【注意事項】');
+  console.log('- APIレート制限のため各商品間に2秒の待機時間があります');
+  console.log('- 商品マスタAPIと在庫マスタAPIの2つを順次呼び出すため処理時間が長くなります');
+  console.log('- 大量の商品がある場合は処理時間が長くなります');
+  console.log('- エラーが発生した商品はスキップされます');
+  console.log('');
+  console.log('【実行推奨順序】');
+  console.log('1. まず testStockMasterFields("dcmcoverg-s-S") でAPIの動作確認');
+  console.log('2. 次に updateSingleProduct("dcmcoverg-s-S") で詳細在庫取得をテスト');
+  console.log('3. 問題なければ updateInventoryData() で全更新');
+}
+
+/**
+ * テスト実行用関数
+ */
+function testSingleUpdate() {
+  updateSingleProduct("dcmcoverg-s-S");
+}
