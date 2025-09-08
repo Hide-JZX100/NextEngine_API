@@ -18,7 +18,7 @@
 // ネクストエンジンAPIのエンドポイントは認証.gsで定義済み
 
 // スプレッドシートの設定
-const SPREADSHEET_ID = '1noQTPM0EMlyBNDdX4JDPZcBvh-3RT1VtWzNDA85SIkM';
+const SPREADSHEET_ID = '    ';
 const SHEET_NAME = 'シート1'; // 必要に応じて変更してください
 
 // 列のマッピング（0ベース）
@@ -173,7 +173,7 @@ async function searchGoodsByCode(goodsCode, tokens) {
   const payload = {
     'access_token': tokens.accessToken,
     'refresh_token': tokens.refreshToken,
-    'goods_code-eq': goodsCode, // 商品コードで完全一致検索
+    'goods_code': goodsCode, // goods_code-eq から変更
     'fields': 'goods_id,goods_code,goods_name'
   };
   
