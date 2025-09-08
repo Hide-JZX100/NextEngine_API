@@ -318,7 +318,7 @@ function updateSingleProduct(goodsCode) {
     const tokens = getStoredTokens();
     
     // 在庫情報を取得
-    const inventoryData = await getInventoryByGoodsCode(goodsCode, tokens);
+    const inventoryData = getInventoryByGoodsCode(goodsCode, tokens);
     
     if (inventoryData) {
       updateRowWithInventoryData(sheet, targetRowIndex, inventoryData);
