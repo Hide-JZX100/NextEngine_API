@@ -15,8 +15,7 @@
  * - 大量データの場合は時間がかかる可能性があります
  */
 
-// ネクストエンジンAPIのエンドポイント
-const NE_API_URL = 'https://api.next-engine.org';
+// ネクストエンジンAPIのエンドポイントは認証.gsで定義済み
 
 // スプレッドシートの設定
 const SPREADSHEET_ID = '    ';
