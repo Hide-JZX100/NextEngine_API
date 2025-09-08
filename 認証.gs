@@ -234,6 +234,120 @@ function clearProperties() {
 }
 
 /**
+ * WebアプリとしてのGETリクエスト処理
+ * ネクストエンジンからのリダイレクト時にuidとstateを受け取る
+ */
+function doGet(e) {
+  const uid = e.parameter.uid;
+  const state = e.parameter.state;
+  
+  if (uid && state) {
+    try {
+      // 自動的にアクセストークンを取得
+      const result = getAccessToken(uid, state);
+      
+      return HtmlService.createHtmlOutput(`
+        <html>
+          <head>
+            <title>ネクストエンジン認証完了</title>
+            <style>
+              body { 
+                font-family: 'Helvetica Neue', Arial, sans-serif; 
+                max-width: 600px; 
+                margin: 50px auto; 
+                padding: 20px;
+                background-color: #f5f5f5;
+              }
+              .container {
+                background: white;
+                padding: 30px;
+                border-radius: 10px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+              }
+              .success { color: #28a745; }
+              .info { color: #17a2b8; }
+              .code { 
+                background: #f8f9fa; 
+                padding: 10px; 
+                border-radius: 5px; 
+                font-family: monospace;
+                margin: 10px 0;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h2 class="success">✅ 認証成功！</h2>
+              <p>ネクストエンジンAPIの認証が完了しました。</p>
+              
+              <h3>取得した情報:</h3>
+              <div class="code">
+                <strong>UID:</strong> ${uid}<br>
+                <strong>State:</strong> ${state}<br>
+                <strong>Access Token:</strong> ${result.access_token.substring(0, 20)}...<br>
+                <strong>Refresh Token:</strong> ${result.refresh_token.substring(0, 20)}...
+              </div>
+              
+              <h3 class="info">次のステップ:</h3>
+              <p>GASエディタに戻り、<code>testApiConnection()</code> を実行してAPI接続をテストしてください。</p>
+              
+              <p><small>このページを閉じて構いません。</small></p>
+            </div>
+          </body>
+        </html>
+      `);
+      
+    } catch (error) {
+      return HtmlService.createHtmlOutput(`
+        <html>
+          <head>
+            <title>認証エラー</title>
+            <style>
+              body { 
+                font-family: Arial, sans-serif; 
+                max-width: 600px; 
+                margin: 50px auto; 
+                padding: 20px;
+              }
+              .error { color: #dc3545; }
+            </style>
+          </head>
+          <body>
+            <h2 class="error">❌ 認証エラー</h2>
+            <p>認証処理中にエラーが発生しました:</p>
+            <p><strong>${error.message}</strong></p>
+            <p>GASエディタでログを確認してください。</p>
+          </body>
+        </html>
+      `);
+    }
+  } else {
+    return HtmlService.createHtmlOutput(`
+      <html>
+        <head>
+          <title>パラメータエラー</title>
+          <style>
+            body { 
+              font-family: Arial, sans-serif; 
+              max-width: 600px; 
+              margin: 50px auto; 
+              padding: 20px;
+            }
+            .error { color: #dc3545; }
+          </style>
+        </head>
+        <body>
+          <h2 class="error">❌ パラメータエラー</h2>
+          <p>必要なパラメータ（uid、state）が見つかりません。</p>
+          <p>認証URLから正しくリダイレクトされていない可能性があります。</p>
+          <p>GASエディタで <code>generateAuthUrl()</code> を実行して、正しい認証URLを取得してください。</p>
+        </body>
+      </html>
+    `);
+  }
+}
+
+/**
  * 認証フロー全体のガイド表示
  */
 function showAuthGuide() {
@@ -245,13 +359,19 @@ function showAuthGuide() {
   console.log('   - CLIENT_SECRET: あなたのクライアントシークレット');
   console.log('   - REDIRECT_URI: リダイレクトURI');
   console.log('');
+  console.log('2. スクリプトをWebアプリとしてデプロイ:');
+  console.log('   - 「デプロイ」→「新しいデプロイ」');
+  console.log('   - 種類: ウェブアプリ');
+  console.log('   - 実行者: 自分');
+  console.log('   - アクセス: 全員');
+  console.log('   - デプロイ後のURLをREDIRECT_URIに設定');
+  console.log('');
   console.log('【認証手順】');
   console.log('1. generateAuthUrl() を実行して認証URLを取得');
   console.log('2. ブラウザで認証URLにアクセス');
   console.log('3. ネクストエンジンにログイン');
-  console.log('4. リダイレクト後のURLから uid と state を取得');
-  console.log('5. getAccessToken(uid, state) を実行');
-  console.log('6. testApiConnection() で動作確認');
+  console.log('4. 自動的にアクセストークンが取得されます');
+  console.log('5. testApiConnection() で動作確認');
   console.log('');
   console.log('【その他の関数】');
   console.log('- showStoredTokens(): 保存済みトークン情報表示');
