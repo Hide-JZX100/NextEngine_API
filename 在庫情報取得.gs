@@ -19,7 +19,7 @@
 const NE_API_URL = 'https://api.next-engine.org';
 
 // スプレッドシートの設定
-const SPREADSHEET_ID = '   ';
+const SPREADSHEET_ID = '    ';
 const SHEET_NAME = 'シート1'; // 必要に応じて変更してください
 
 // 列のマッピング（0ベース）
@@ -85,7 +85,7 @@ function updateInventoryData() {
         console.log(`${i + 2}行目: ${goodsCode} の在庫情報を取得中...`);
         
         // 在庫情報を取得
-        const inventoryData = await getInventoryByGoodsCode(goodsCode, tokens);
+        const inventoryData = getInventoryByGoodsCode(goodsCode, tokens);
         
         if (inventoryData) {
           // スプレッドシートの行を更新
