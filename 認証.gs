@@ -106,6 +106,8 @@ function getAccessToken(uid, state) {
     };
     
     console.log('アクセストークン取得リクエスト送信中...');
+    console.log('使用URL:', url);
+    console.log('ペイロード:', payload);
     const response = UrlFetchApp.fetch(url, options);
     const responseText = response.getContentText();
     
