@@ -223,16 +223,25 @@ function showStoredTokens() {
 }
 
 /**
- * スクリプトプロパティをクリア（テスト用）
+ * デバッグ用: 手動でuid/stateを入力してテスト
+ * 認証URLにアクセス後、リダイレクトURLのuid/stateを手動で入力
  */
-function clearProperties() {
-  const properties = PropertiesService.getScriptProperties();
-  properties.deleteProperty('ACCESS_TOKEN');
-  properties.deleteProperty('REFRESH_TOKEN');
-  properties.deleteProperty('TOKEN_OBTAINED_AT');
-  properties.deleteProperty('TOKEN_UPDATED_AT');
+function debugAuth() {
+  // ここにブラウザのリダイレクトURLから取得したuid/stateを入力してテスト
+  const uid = 'ここにuidを入力';
+  const state = 'ここにstateを入力';
   
-  console.log('トークン情報をクリアしました');
+  if (uid === 'ここにuidを入力' || state === 'ここにstateを入力') {
+    console.log('uid と state を実際の値に変更してから実行してください');
+    return;
+  }
+  
+  try {
+    const result = getAccessToken(uid, state);
+    console.log('デバッグテスト成功:', result);
+  } catch (error) {
+    console.error('デバッグテストエラー:', error.message);
+  }
 }
 
 /**
