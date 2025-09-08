@@ -1,15 +1,20 @@
 /**
  * ネクストエンジン在庫情報取得スクリプト（完全版）
- * 
+ *
  * 【目的】
  * スプレッドシートの商品コードに対応する詳細在庫情報をネクストエンジンAPIから取得し更新
- * 
+ *
  * 【機能】
  * 1. スプレッドシートから商品コードを読み取り
  * 2. ネクストエンジン商品マスタAPIで基本情報を取得
  * 3. ネクストエンジン在庫マスタAPIで詳細在庫情報を取得
  * 4. スプレッドシートの在庫情報を詳細データで更新
- * 
+ *
+ * 【事前設定】
+ * スクリプトプロパティに以下の値を設定してください：
+ * - SPREADSHEET_ID: 対象スプレッドシートのID
+ * - SHEET_NAME: 対象シート名
+ *
  * 【注意事項】
  * - 認証スクリプトで事前にトークンを取得済みである必要があります
  * - API制限を考慮して適切な間隔でリクエストを送信します
@@ -18,25 +23,39 @@
 
 // ネクストエンジンAPIのエンドポイントは認証.gsで定義済み
 
-// スプレッドシートの設定
-const SPREADSHEET_ID = '    ';
-const SHEET_NAME = 'GAS'; // 必要に応じて変更してください
-
 // 列のマッピング（0ベース）
 const COLUMNS = {
-  GOODS_CODE: 0,     // A列: 商品コード
-  GOODS_NAME: 1,     // B列: 商品名  
-  STOCK_QTY: 2,      // C列: 在庫数
-  ALLOCATED_QTY: 3,  // D列: 引当数
-  FREE_QTY: 4,       // E列: フリー在庫数
-  RESERVE_QTY: 5,    // F列: 予約在庫数
-  RESERVE_ALLOCATED_QTY: 6, // G列: 予約引当数
-  RESERVE_FREE_QTY: 7,      // H列: 予約フリー在庫数
-  DEFECTIVE_QTY: 8,  // I列: 不良在庫数
-  ORDER_REMAINING_QTY: 9,   // J列: 発注残数
-  SHORTAGE_QTY: 10,  // K列: 欠品数
-  JAN_CODE: 11       // L列: JANコード
+  GOODS_CODE: 0,              // A列: 商品コード
+  GOODS_NAME: 1,              // B列: 商品名
+  STOCK_QTY: 2,               // C列: 在庫数
+  ALLOCATED_QTY: 3,           // D列: 引当数
+  FREE_QTY: 4,                // E列: フリー在庫数
+  RESERVE_QTY: 5,             // F列: 予約在庫数
+  RESERVE_ALLOCATED_QTY: 6,   // G列: 予約引当数
+  RESERVE_FREE_QTY: 7,        // H列: 予約フリー在庫数
+  DEFECTIVE_QTY: 8,           // I列: 不良在庫数
+  ORDER_REMAINING_QTY: 9,     // J列: 発注残数
+  SHORTAGE_QTY: 10,           // K列: 欠品数
+  JAN_CODE: 11                // L列: JANコード
 };
+
+/**
+ * スプレッドシート設定を取得
+ */
+function getSpreadsheetConfig() {
+  const properties = PropertiesService.getScriptProperties();
+  const spreadsheetId = properties.getProperty('SPREADSHEET_ID');
+  const sheetName = properties.getProperty('SHEET_NAME');
+  
+  if (!spreadsheetId || !sheetName) {
+    throw new Error('スプレッドシート設定が不完全です。スクリプトプロパティにSPREADSHEET_IDとSHEET_NAMEを設定してください。');
+  }
+  
+  return {
+    spreadsheetId,
+    sheetName
+  };
+}
 
 /**
  * メイン関数：在庫情報を更新
@@ -45,12 +64,17 @@ function updateInventoryData() {
   try {
     console.log('=== 在庫情報更新開始 ===');
     
+    // スプレッドシート設定を取得
+    const config = getSpreadsheetConfig();
+    console.log(`対象スプレッドシート: ${config.spreadsheetId}`);
+    console.log(`対象シート: ${config.sheetName}`);
+    
     // スプレッドシートを取得
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = spreadsheet.getSheetByName(SHEET_NAME);
+    const spreadsheet = SpreadsheetApp.openById(config.spreadsheetId);
+    const sheet = spreadsheet.getSheetByName(config.sheetName);
     
     if (!sheet) {
-      throw new Error(`シート "${SHEET_NAME}" が見つかりません`);
+      throw new Error(`シート "${config.sheetName}" が見つかりません`);
     }
     
     // データ範囲を取得（ヘッダー行を除く）
@@ -97,7 +121,7 @@ function updateInventoryData() {
         }
         
         // API制限を考慮して少し待機（2秒）- 2つのAPIを呼び出すため少し長めに設定
-        Utilities.sleep(2000);
+        Utilities.sleep(1000);
         
       } catch (error) {
         console.error(`${i + 2}行目: ${goodsCode} のエラー:`, error.message);
@@ -229,7 +253,6 @@ function getInventoryByGoodsCode(goodsCode, tokens) {
  */
 function searchGoodsWithStock(goodsCode, tokens) {
   const url = `${NE_API_URL}/api_v1_master_goods/search`;
-  
   const payload = {
     'access_token': tokens.accessToken,
     'refresh_token': tokens.refreshToken,
@@ -242,7 +265,7 @@ function searchGoodsWithStock(goodsCode, tokens) {
     'headers': {
       'Content-Type': 'application/x-www-form-urlencoded'
     },
-    'payload': Object.keys(payload).map(key => 
+    'payload': Object.keys(payload).map(key =>
       encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
     ).join('&')
   };
@@ -263,7 +286,6 @@ function searchGoodsWithStock(goodsCode, tokens) {
       if (responseData.data && responseData.data.length > 0) {
         const goodsData = responseData.data[0];
         console.log('取得した商品データ:', goodsData);
-        
         return {
           goods_id: goodsData.goods_id,
           goods_name: goodsData.goods_name,
@@ -294,7 +316,6 @@ function searchGoodsWithStock(goodsCode, tokens) {
  */
 function getStockByGoodsId(goodsId, tokens) {
   const url = `${NE_API_URL}/api_v1_master_stock/search`;
-  
   const payload = {
     'access_token': tokens.accessToken,
     'refresh_token': tokens.refreshToken,
@@ -307,7 +328,7 @@ function getStockByGoodsId(goodsId, tokens) {
     'headers': {
       'Content-Type': 'application/x-www-form-urlencoded'
     },
-    'payload': Object.keys(payload).map(key => 
+    'payload': Object.keys(payload).map(key =>
       encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
     ).join('&')
   };
@@ -330,7 +351,6 @@ function getStockByGoodsId(goodsId, tokens) {
       
       // 在庫マスタAPIから取得したデータをそのまま返す
       return stockData;
-      
     } else {
       console.log(`商品ID ${goodsId} の在庫情報が見つかりません`);
       console.log('API応答詳細:', JSON.stringify(responseData, null, 2));
@@ -351,15 +371,15 @@ function getStockByGoodsId(goodsId, tokens) {
 function updateRowWithInventoryData(sheet, rowIndex, inventoryData) {
   // 在庫情報の列を更新（C列からK列まで）
   const updateValues = [
-    inventoryData.stock_quantity || 0,                            // C列: 在庫数
-    inventoryData.stock_allocated_quantity || 0,                  // D列: 引当数  
-    inventoryData.stock_free_quantity || 0,                       // E列: フリー在庫数
-    inventoryData.stock_advance_order_quantity || 0,              // F列: 予約在庫数
-    inventoryData.stock_advance_order_allocation_quantity || 0,   // G列: 予約引当数
-    inventoryData.stock_advance_order_free_quantity || 0,         // H列: 予約フリー在庫数
-    inventoryData.stock_defective_quantity || 0,                  // I列: 不良在庫数
-    inventoryData.stock_remaining_order_quantity || 0,            // J列: 発注残数
-    inventoryData.stock_out_quantity || 0                         // K列: 欠品数
+    inventoryData.stock_quantity || 0,                              // C列: 在庫数
+    inventoryData.stock_allocated_quantity || 0,                    // D列: 引当数
+    inventoryData.stock_free_quantity || 0,                         // E列: フリー在庫数
+    inventoryData.stock_advance_order_quantity || 0,                // F列: 予約在庫数
+    inventoryData.stock_advance_order_allocation_quantity || 0,     // G列: 予約引当数
+    inventoryData.stock_advance_order_free_quantity || 0,           // H列: 予約フリー在庫数
+    inventoryData.stock_defective_quantity || 0,                    // I列: 不良在庫数
+    inventoryData.stock_remaining_order_quantity || 0,              // J列: 発注残数
+    inventoryData.stock_out_quantity || 0                           // K列: 欠品数
   ];
   
   // C列からK列まで更新
@@ -396,14 +416,17 @@ function updateSingleProduct(goodsCode) {
     console.log('=== バージョン確認: 完全版が実行されています ===');
     console.log(`=== 単品更新開始: ${goodsCode} ===`);
     
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    // スプレッドシート設定を取得
+    const config = getSpreadsheetConfig();
+    
+    const spreadsheet = SpreadsheetApp.openById(config.spreadsheetId);
     console.log('スプレッドシート取得成功');
     
-    const sheet = spreadsheet.getSheetByName(SHEET_NAME);
+    const sheet = spreadsheet.getSheetByName(config.sheetName);
     console.log('シート取得結果:', sheet ? 'success' : 'null');
     
     if (!sheet) {
-      throw new Error(`シート "${SHEET_NAME}" が見つかりません`);
+      throw new Error(`シート "${config.sheetName}" が見つかりません`);
     }
     
     // 商品コードを検索
@@ -462,7 +485,6 @@ function testStockMasterFields(goodsCode = "dcmcoverg-s-S") {
     
     const tokens = getStoredTokens();
     const url = `${NE_API_URL}/api_v1_master_stock/search`;
-    
     const payload = {
       'access_token': tokens.accessToken,
       'refresh_token': tokens.refreshToken,
@@ -475,7 +497,7 @@ function testStockMasterFields(goodsCode = "dcmcoverg-s-S") {
       'headers': {
         'Content-Type': 'application/x-www-form-urlencoded'
       },
-      'payload': Object.keys(payload).map(key => 
+      'payload': Object.keys(payload).map(key =>
         encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
       ).join('&')
     };
@@ -496,7 +518,6 @@ function testStockMasterFields(goodsCode = "dcmcoverg-s-S") {
       console.log('データが取得できませんでした');
       console.log('応答詳細:', JSON.stringify(responseData, null, 2));
     }
-    
   } catch (error) {
     console.error('テストエラー:', error.message);
   }
@@ -510,10 +531,13 @@ function resetAllInventoryData() {
   try {
     console.log('=== 在庫情報リセット開始 ===');
     
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = spreadsheet.getSheetByName(SHEET_NAME);
+    // スプレッドシート設定を取得
+    const config = getSpreadsheetConfig();
     
+    const spreadsheet = SpreadsheetApp.openById(config.spreadsheetId);
+    const sheet = spreadsheet.getSheetByName(config.sheetName);
     const lastRow = sheet.getLastRow();
+    
     if (lastRow <= 1) {
       console.log('データが存在しません');
       return;
@@ -525,7 +549,6 @@ function resetAllInventoryData() {
     range.setValues(resetValues);
     
     console.log(`${lastRow - 1}行の在庫情報をリセットしました`);
-    
   } catch (error) {
     console.error('リセットエラー:', error.message);
     throw error;
@@ -537,8 +560,11 @@ function resetAllInventoryData() {
  */
 function checkSheetNames() {
   try {
-    console.log('使用しているスプレッドシートID:', SPREADSHEET_ID);
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    // スプレッドシート設定を取得
+    const config = getSpreadsheetConfig();
+    
+    console.log('使用しているスプレッドシートID:', config.spreadsheetId);
+    const spreadsheet = SpreadsheetApp.openById(config.spreadsheetId);
     const sheets = spreadsheet.getSheets();
     
     console.log('=== スプレッドシート内のシート名一覧 ===');
@@ -547,30 +573,85 @@ function checkSheetNames() {
       console.log(`シート${i + 1}: "${sheetName}" (文字数: ${sheetName.length})`);
     }
     console.log('');
-    console.log('現在のSHEET_NAME設定:', `"${SHEET_NAME}"`);
+    console.log('現在のSHEET_NAME設定:', `"${config.sheetName}"`);
     console.log('上記のシート名のいずれかと完全に一致するようにSHEET_NAMEを設定してください');
-    
   } catch (error) {
     console.error('シート名確認エラー:', error.message);
-    console.error('スプレッドシートIDが正しいか確認してください');
+    console.error('スプレッドシートIDまたは設定が正しいか確認してください');
   }
 }
 
 /**
- * スクリプト使用方法ガイド
+ * スクリプト設定状況を確認
+ */
+function checkScriptConfiguration() {
+  try {
+    console.log('=== スクリプト設定状況確認 ===');
+    
+    const properties = PropertiesService.getScriptProperties();
+    
+    // 必要な設定項目をチェック
+    const requiredProperties = [
+      'CLIENT_ID',
+      'CLIENT_SECRET', 
+      'REDIRECT_URI',
+      'SPREADSHEET_ID',
+      'SHEET_NAME',
+      'ACCESS_TOKEN',
+      'REFRESH_TOKEN'
+    ];
+    
+    console.log('【必須設定項目の確認】');
+    let allConfigured = true;
+    
+    requiredProperties.forEach(prop => {
+      const value = properties.getProperty(prop);
+      const status = value ? '✓ 設定済み' : '✗ 未設定';
+      console.log(`${prop}: ${status}`);
+      
+      if (!value) {
+        allConfigured = false;
+      }
+    });
+    
+    console.log('');
+    console.log(`【設定完了状況】: ${allConfigured ? '✓ 全て設定済み' : '✗ 未設定項目があります'}`);
+    
+    if (!allConfigured) {
+      console.log('');
+      console.log('【設定方法】');
+      console.log('GASエディタで以下の手順で設定してください：');
+      console.log('1. 左メニューの「設定」（歯車アイコン）をクリック');
+      console.log('2. 「スクリプト プロパティ」セクションで「スクリプト プロパティを追加」をクリック');
+      console.log('3. 以下のプロパティを追加：');
+      console.log('   - SPREADSHEET_ID: 対象スプレッドシートのID');
+      console.log('   - SHEET_NAME: 対象シート名');
+      console.log('   ※ 認証関連は認証.gsで設定済みの場合はそのまま使用');
+    }
+    
+  } catch (error) {
+    console.error('設定確認エラー:', error.message);
+  }
+}
+
+/**
+ * スクリプト使用方法ガイド（修正版）
  */
 function showUsageGuide() {
-  console.log('=== 在庫情報取得スクリプト使用方法（完全版） ===');
+  console.log('=== 在庫情報取得スクリプト使用方法（修正版） ===');
   console.log('');
-  console.log('【初回設定】');
-  console.log('1. setSpreadsheetConfig("スプレッドシートID", "シート名")');
-  console.log('   例: setSpreadsheetConfig("1noQTPM0EMlyBNDdX4JDPZcBvh-3RT1VtWzNDA85SIkM", "GAS")');
-  console.log('2. showSpreadsheetConfig() で設定確認');
+  console.log('【事前設定】');
+  console.log('スクリプトプロパティに以下を設定してください：');
+  console.log('- SPREADSHEET_ID: 対象スプレッドシートのID');
+  console.log('- SHEET_NAME: 対象シート名');
+  console.log('- その他認証関連設定（認証.gsで設定済みの場合はOK）');
+  console.log('');
+  console.log('【設定確認】');
+  console.log('- checkScriptConfiguration(): 設定状況の確認');
   console.log('');
   console.log('【前提条件】');
   console.log('- 認証スクリプトでトークンが取得済みであること');
   console.log('- スプレッドシートに商品コードが入力済みであること');
-  console.log('- スプレッドシート設定が完了していること');
   console.log('');
   console.log('【主要関数】');
   console.log('1. updateInventoryData()');
@@ -586,16 +667,6 @@ function showUsageGuide() {
   console.log('');
   console.log('4. resetAllInventoryData()');
   console.log('   - 全在庫数値を0にリセット（テスト用）');
-  console.log('');
-  console.log('【設定管理関数】');
-  console.log('5. setSpreadsheetConfig("ID", "シート名")');
-  console.log('   - スプレッドシート設定を保存');
-  console.log('');
-  console.log('6. showSpreadsheetConfig()');
-  console.log('   - 現在の設定を表示');
-  console.log('');
-  console.log('7. checkSheetNames()');
-  console.log('   - 利用可能なシート名を表示');
   console.log('');
   console.log('【更新される在庫情報】');
   console.log('- C列: 在庫数');
@@ -615,14 +686,16 @@ function showUsageGuide() {
   console.log('- エラーが発生した商品はスキップされます');
   console.log('');
   console.log('【実行推奨順序】');
-  console.log('1. まず testStockMasterFields("dcmcoverg-s-S") でAPIの動作確認');
-  console.log('2. 次に updateSingleProduct("dcmcoverg-s-S") で詳細在庫取得をテスト');
-  console.log('3. 問題なければ updateInventoryData() で全更新');
+  console.log('1. まず checkScriptConfiguration() で設定確認');
+  console.log('2. 次に testStockMasterFields("商品コード") でAPIの動作確認');
+  console.log('3. 次に updateSingleProduct("商品コード") で詳細在庫取得をテスト');
+  console.log('4. 問題なければ updateInventoryData() で全更新');
 }
 
 /**
- * テスト実行用関数
+ * テスト実行用関数（設定値を使用）
  */
 function testSingleUpdate() {
+  // デフォルトの商品コードでテスト（実際の商品コードに変更してください）
   updateSingleProduct("dcmcoverg-s-S");
 }
