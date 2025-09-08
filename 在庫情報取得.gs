@@ -163,7 +163,7 @@ function searchGoodsWithStock(goodsCode, tokens) {
     'access_token': tokens.accessToken,
     'refresh_token': tokens.refreshToken,
     'goods_id-eq': goodsCode, // goods_idで検索（testで確認できているため）
-    'fields': 'goods_id,goods_name,stock_quantity,stock_allocated_quantity,stock_free_quantity,stock_defective_quantity'
+    'fields': 'goods_id,goods_name,stock_quantity' // 利用可能なフィールドのみ指定
   };
   
   const options = {
@@ -193,15 +193,15 @@ function searchGoodsWithStock(goodsCode, tokens) {
         const goodsData = responseData.data[0];
         console.log('取得した商品データ:', goodsData);
         
-        // 在庫情報をフォーマット（利用可能なフィールドのみ使用）
+        // 在庫情報をフォーマット（testInventoryApi()の結果に基づく）
         return {
           goods_id: goodsData.goods_id,
           goods_name: goodsData.goods_name,
           stock_quantity: parseInt(goodsData.stock_quantity) || 0,
-          stock_allocated_quantity: parseInt(goodsData.stock_allocated_quantity) || 0,
-          stock_free_quantity: parseInt(goodsData.stock_free_quantity) || 0,
-          stock_defective_quantity: parseInt(goodsData.stock_defective_quantity) || 0,
-          // テスト環境では以下のフィールドが取得できない可能性があるため0で設定
+          // 商品マスタAPIでは以下のフィールドが取得できないため0で設定
+          stock_allocated_quantity: 0,
+          stock_free_quantity: 0,
+          stock_defective_quantity: 0,
           stock_advance_order_quantity: 0,
           stock_advance_order_allocation_quantity: 0,
           stock_advance_order_free_quantity: 0,
