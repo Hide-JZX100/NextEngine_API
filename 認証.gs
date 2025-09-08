@@ -86,7 +86,7 @@ function getAccessToken(uid, state) {
     const config = getScriptProperties();
     
     // アクセストークン取得のリクエスト
-    const url = `${NE_API_URL}/api_v1_neauth.json`;
+    const url = `${NE_API_URL}/api_neauth`;
     
     const payload = {
       'uid': uid,
