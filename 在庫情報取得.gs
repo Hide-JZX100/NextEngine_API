@@ -1,13 +1,14 @@
 /**
- * ネクストエンジン在庫情報取得スクリプト（修正版）
+ * ネクストエンジン在庫情報取得スクリプト（完全版）
  * 
  * 【目的】
- * スプレッドシートの商品コードに対応する在庫情報をネクストエンジンAPIから取得し更新
+ * スプレッドシートの商品コードに対応する詳細在庫情報をネクストエンジンAPIから取得し更新
  * 
  * 【機能】
  * 1. スプレッドシートから商品コードを読み取り
- * 2. ネクストエンジンAPIで在庫情報を取得
- * 3. スプレッドシートの在庫情報を更新
+ * 2. ネクストエンジン商品マスタAPIで基本情報を取得
+ * 3. ネクストエンジン在庫マスタAPIで詳細在庫情報を取得
+ * 4. スプレッドシートの在庫情報を詳細データで更新
  * 
  * 【注意事項】
  * - 認証スクリプトで事前にトークンを取得済みである必要があります
@@ -95,8 +96,8 @@ function updateInventoryData() {
           console.log(`${i + 2}行目: ${goodsCode} の在庫情報が見つかりません`);
         }
         
-        // API制限を考慮して少し待機（1秒）
-        Utilities.sleep(1000);
+        // API制限を考慮して少し待機（2秒）- 2つのAPIを呼び出すため少し長めに設定
+        Utilities.sleep(2000);
         
       } catch (error) {
         console.error(`${i + 2}行目: ${goodsCode} のエラー:`, error.message);
@@ -133,19 +134,89 @@ function getStoredTokens() {
 }
 
 /**
- * 商品コードから在庫情報を取得（修正版）
+ * 商品コードから完全な在庫情報を取得（完全版）
  * @param {string} goodsCode - 商品コード
  * @param {Object} tokens - アクセストークンとリフレッシュトークン
- * @returns {Object|null} 在庫情報
+ * @returns {Object|null} 完全な在庫情報
  */
 function getInventoryByGoodsCode(goodsCode, tokens) {
   try {
-    // 商品マスタAPIを使用して商品情報と在庫数を同時取得
-    const inventoryData = searchGoodsWithStock(goodsCode, tokens);
-    return inventoryData;
+    console.log('在庫情報取得開始...');
+    console.log(`対象商品コード: ${goodsCode}`);
+    
+    // ステップ1: 商品マスタAPIで基本情報を取得
+    console.log('商品マスタAPI呼び出し中...');
+    const goodsData = searchGoodsWithStock(goodsCode, tokens);
+    
+    if (!goodsData) {
+      console.log('商品が見つかりませんでした');
+      return null;
+    }
+    
+    console.log('商品基本情報取得完了');
+    console.log(`商品名: ${goodsData.goods_name}`);
+    console.log(`基本在庫数: ${goodsData.stock_quantity}`);
+    
+    // ステップ2: 在庫マスタAPIで詳細在庫情報を取得
+    console.log('在庫マスタAPI呼び出し中...');
+    const stockDetails = getStockByGoodsId(goodsCode, tokens);
+    
+    let completeInventoryData;
+    
+    if (stockDetails) {
+      console.log('詳細在庫情報取得完了');
+      
+      // 商品情報と詳細在庫情報を結合
+      completeInventoryData = {
+        goods_id: goodsData.goods_id,
+        goods_name: goodsData.goods_name,
+        stock_quantity: parseInt(stockDetails.stock_quantity) || parseInt(goodsData.stock_quantity) || 0,
+        stock_allocated_quantity: parseInt(stockDetails.stock_allocation_quantity) || 0,
+        stock_free_quantity: parseInt(stockDetails.stock_free_quantity) || 0,
+        stock_defective_quantity: parseInt(stockDetails.stock_defective_quantity) || 0,
+        stock_advance_order_quantity: parseInt(stockDetails.stock_advance_order_quantity) || 0,
+        stock_advance_order_allocation_quantity: parseInt(stockDetails.stock_advance_order_allocation_quantity) || 0,
+        stock_advance_order_free_quantity: parseInt(stockDetails.stock_advance_order_free_quantity) || 0,
+        stock_remaining_order_quantity: parseInt(stockDetails.stock_remaining_order_quantity) || 0,
+        stock_out_quantity: parseInt(stockDetails.stock_out_quantity) || 0
+      };
+      
+      console.log('完全な在庫情報を構築しました:');
+      console.log(`- 在庫数: ${completeInventoryData.stock_quantity}`);
+      console.log(`- 引当数: ${completeInventoryData.stock_allocated_quantity}`);
+      console.log(`- フリー在庫数: ${completeInventoryData.stock_free_quantity}`);
+      console.log(`- 不良在庫数: ${completeInventoryData.stock_defective_quantity}`);
+      console.log(`- 予約在庫数: ${completeInventoryData.stock_advance_order_quantity}`);
+      console.log(`- 予約引当数: ${completeInventoryData.stock_advance_order_allocation_quantity}`);
+      console.log(`- 予約フリー在庫数: ${completeInventoryData.stock_advance_order_free_quantity}`);
+      console.log(`- 発注残数: ${completeInventoryData.stock_remaining_order_quantity}`);
+      console.log(`- 欠品数: ${completeInventoryData.stock_out_quantity}`);
+      
+    } else {
+      console.log('詳細在庫情報が取得できませんでした。基本情報のみで構築します。');
+      
+      // 詳細情報が取得できない場合は基本情報のみ使用
+      completeInventoryData = {
+        goods_id: goodsData.goods_id,
+        goods_name: goodsData.goods_name,
+        stock_quantity: parseInt(goodsData.stock_quantity) || 0,
+        stock_allocated_quantity: 0,
+        stock_free_quantity: 0,
+        stock_defective_quantity: 0,
+        stock_advance_order_quantity: 0,
+        stock_advance_order_allocation_quantity: 0,
+        stock_advance_order_free_quantity: 0,
+        stock_remaining_order_quantity: 0,
+        stock_out_quantity: 0
+      };
+    }
+    
+    console.log('在庫情報取得完了');
+    return completeInventoryData;
     
   } catch (error) {
     console.error(`商品コード ${goodsCode} の在庫取得エラー:`, error.message);
+    console.error('エラー詳細:', error.stack);
     return null;
   }
 }
@@ -162,8 +233,8 @@ function searchGoodsWithStock(goodsCode, tokens) {
   const payload = {
     'access_token': tokens.accessToken,
     'refresh_token': tokens.refreshToken,
-    'goods_id-eq': goodsCode, // goods_idで検索（testで確認できているため）
-    'fields': 'goods_id,goods_name,stock_quantity' // 利用可能なフィールドのみ指定
+    'goods_id-eq': goodsCode, // goods_idで検索
+    'fields': 'goods_id,goods_name,stock_quantity'
   };
   
   const options = {
@@ -181,7 +252,7 @@ function searchGoodsWithStock(goodsCode, tokens) {
     const responseText = response.getContentText();
     const responseData = JSON.parse(responseText);
     
-    console.log('API応答:', responseData.result);
+    console.log('商品マスタAPI応答:', responseData.result);
     
     // トークンが更新された場合は保存
     if (responseData.access_token && responseData.refresh_token) {
@@ -193,27 +264,16 @@ function searchGoodsWithStock(goodsCode, tokens) {
         const goodsData = responseData.data[0];
         console.log('取得した商品データ:', goodsData);
         
-        // 在庫情報をフォーマット（testInventoryApi()の結果に基づく）
         return {
           goods_id: goodsData.goods_id,
           goods_name: goodsData.goods_name,
-          stock_quantity: parseInt(goodsData.stock_quantity) || 0,
-          // その他の在庫フィールドは在庫マスタAPIで取得するため初期値0
-          stock_allocated_quantity: 0,
-          stock_free_quantity: 0,
-          stock_defective_quantity: 0,
-          stock_advance_order_quantity: 0,
-          stock_advance_order_allocation_quantity: 0,
-          stock_advance_order_free_quantity: 0,
-          stock_remaining_order_quantity: 0,
-          stock_out_quantity: 0
+          stock_quantity: goodsData.stock_quantity
         };
       } else {
         console.log(`商品コード ${goodsCode} が見つかりません`);
         return null;
       }
     } else {
-      // エラーの詳細をログ出力
       console.error(`商品検索エラー:`, JSON.stringify(responseData));
       if (responseData.message) {
         console.error('エラーメッセージ:', responseData.message);
@@ -221,16 +281,16 @@ function searchGoodsWithStock(goodsCode, tokens) {
       return null;
     }
   } catch (error) {
-    console.error('API呼び出しエラー:', error.toString());
+    console.error('商品マスタAPI呼び出しエラー:', error.toString());
     return null;
   }
 }
 
 /**
- * 商品IDから在庫情報を取得（旧版 - 使用しない）
+ * 商品IDから詳細在庫情報を取得（完全版）
  * @param {string} goodsId - 商品ID
  * @param {Object} tokens - トークン情報
- * @returns {Object} 在庫情報
+ * @returns {Object|null} 詳細在庫情報
  */
 function getStockByGoodsId(goodsId, tokens) {
   const url = `${NE_API_URL}/api_v1_master_stock/search`;
@@ -238,8 +298,8 @@ function getStockByGoodsId(goodsId, tokens) {
   const payload = {
     'access_token': tokens.accessToken,
     'refresh_token': tokens.refreshToken,
-    'goods_id-eq': goodsId, // 商品IDで検索
-    'fields': 'stock_quantity,allocated_quantity,free_stock_quantity,reserve_stock_quantity,reserve_allocated_quantity,reserve_free_stock_quantity,defective_stock_quantity,order_remaining_quantity,shortage_quantity'
+    'stock_goods_id-eq': goodsId, // 正しいフィールド名
+    'fields': 'stock_goods_id,stock_quantity,stock_allocation_quantity,stock_defective_quantity,stock_remaining_order_quantity,stock_out_quantity,stock_free_quantity,stock_advance_order_quantity,stock_advance_order_allocation_quantity,stock_advance_order_free_quantity'
   };
   
   const options = {
@@ -252,25 +312,38 @@ function getStockByGoodsId(goodsId, tokens) {
     ).join('&')
   };
   
-  const response = UrlFetchApp.fetch(url, options);
-  const responseText = response.getContentText();
-  const responseData = JSON.parse(responseText);
-  
-  // トークンが更新された場合は保存
-  if (responseData.access_token && responseData.refresh_token) {
-    updateStoredTokens(responseData.access_token, responseData.refresh_token);
-  }
-  
-  if (responseData.result === 'success' && responseData.data.length > 0) {
-    return responseData.data[0]; // 最初のレコードを返す
-  } else {
-    console.log(`商品ID ${goodsId} の在庫情報が見つかりません`);
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const responseText = response.getContentText();
+    const responseData = JSON.parse(responseText);
+    
+    console.log('在庫マスタAPI応答:', responseData.result);
+    
+    // トークンが更新された場合は保存
+    if (responseData.access_token && responseData.refresh_token) {
+      updateStoredTokens(responseData.access_token, responseData.refresh_token);
+    }
+    
+    if (responseData.result === 'success' && responseData.data && responseData.data.length > 0) {
+      const stockData = responseData.data[0];
+      console.log('取得した詳細在庫データ:', stockData);
+      
+      // 在庫マスタAPIから取得したデータをそのまま返す
+      return stockData;
+      
+    } else {
+      console.log(`商品ID ${goodsId} の在庫情報が見つかりません`);
+      console.log('API応答詳細:', JSON.stringify(responseData, null, 2));
+      return null;
+    }
+  } catch (error) {
+    console.error('在庫マスタAPI呼び出しエラー:', error.toString());
     return null;
   }
 }
 
 /**
- * スプレッドシートの行を在庫データで更新（修正版）
+ * スプレッドシートの行を在庫データで更新（完全版）
  * @param {Sheet} sheet - シートオブジェクト
  * @param {number} rowIndex - 更新する行番号（1ベース）
  * @param {Object} inventoryData - 在庫データ
@@ -294,6 +367,9 @@ function updateRowWithInventoryData(sheet, rowIndex, inventoryData) {
   range.setValues([updateValues]);
   
   console.log('更新データ:', updateValues);
+  console.log('在庫管理スクリプト: データ取得の不具合で最新版を実行したログとなります。');
+  console.log('');
+  console.log(`取得した在庫データ: { goods_id: '${inventoryData.goods_id}', goods_name: '${inventoryData.goods_name}', stock_quantity: ${inventoryData.stock_quantity}, stock_allocated_quantity: ${inventoryData.stock_allocated_quantity}, stock_free_quantity: ${inventoryData.stock_free_quantity}, stock_defective_quantity: ${inventoryData.stock_defective_quantity}, stock_advance_order_quantity: ${inventoryData.stock_advance_order_quantity}, stock_advance_order_allocation_quantity: ${inventoryData.stock_advance_order_allocation_quantity}, stock_advance_order_free_quantity: ${inventoryData.stock_advance_order_free_quantity}, stock_remaining_order_quantity: ${inventoryData.stock_remaining_order_quantity}, stock_out_quantity: ${inventoryData.stock_out_quantity} }`);
 }
 
 /**
@@ -312,12 +388,12 @@ function updateStoredTokens(accessToken, refreshToken) {
 }
 
 /**
- * 特定の商品コードのみ更新（テスト用・修正版）
+ * 特定の商品コードのみ更新（テスト用・完全版）
  * @param {string} goodsCode - 更新したい商品コード
  */
 function updateSingleProduct(goodsCode) {
   try {
-    console.log('=== バージョン確認: 修正版が実行されています ===');
+    console.log('=== バージョン確認: 完全版が実行されています ===');
     console.log(`=== 単品更新開始: ${goodsCode} ===`);
     
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -363,7 +439,6 @@ function updateSingleProduct(goodsCode) {
     
     if (inventoryData) {
       console.log('在庫データ更新開始...');
-      console.log('取得した在庫データ:', inventoryData);
       updateRowWithInventoryData(sheet, targetRowIndex, inventoryData);
       console.log(`商品コード ${goodsCode} の更新が完了しました`);
     } else {
@@ -374,6 +449,56 @@ function updateSingleProduct(goodsCode) {
     console.error('単品更新エラー:', error.message);
     console.error('エラー発生箇所の詳細:', error.stack);
     throw error;
+  }
+}
+
+/**
+ * 在庫マスタAPIのフィールド確認用テスト関数
+ */
+function testStockMasterFields(goodsCode = "dcmcoverg-s-S") {
+  try {
+    console.log('=== 在庫マスタAPI フィールド確認テスト ===');
+    console.log(`対象商品コード: ${goodsCode}`);
+    
+    const tokens = getStoredTokens();
+    const url = `${NE_API_URL}/api_v1_master_stock/search`;
+    
+    const payload = {
+      'access_token': tokens.accessToken,
+      'refresh_token': tokens.refreshToken,
+      'stock_goods_id-eq': goodsCode,
+      'fields': 'stock_goods_id,stock_quantity,stock_allocation_quantity,stock_defective_quantity,stock_remaining_order_quantity,stock_out_quantity,stock_free_quantity,stock_advance_order_quantity,stock_advance_order_allocation_quantity,stock_advance_order_free_quantity'
+    };
+    
+    const options = {
+      'method': 'POST',
+      'headers': {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      'payload': Object.keys(payload).map(key => 
+        encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
+      ).join('&')
+    };
+    
+    const response = UrlFetchApp.fetch(url, options);
+    const responseText = response.getContentText();
+    const responseData = JSON.parse(responseText);
+    
+    console.log('API応答結果:', responseData.result);
+    
+    if (responseData.result === 'success' && responseData.data && responseData.data.length > 0) {
+      console.log('取得できたフィールド一覧:');
+      const stockData = responseData.data[0];
+      Object.keys(stockData).forEach(key => {
+        console.log(`- ${key}: ${stockData[key]}`);
+      });
+    } else {
+      console.log('データが取得できませんでした');
+      console.log('応答詳細:', JSON.stringify(responseData, null, 2));
+    }
+    
+  } catch (error) {
+    console.error('テストエラー:', error.message);
   }
 }
 
@@ -435,7 +560,7 @@ function checkSheetNames() {
  * スクリプト使用方法ガイド
  */
 function showUsageGuide() {
-  console.log('=== 在庫情報取得スクリプト使用方法 ===');
+  console.log('=== 在庫情報取得スクリプト使用方法（完全版） ===');
   console.log('');
   console.log('【前提条件】');
   console.log('- 認証スクリプトでトークンが取得済みであること');
@@ -443,29 +568,25 @@ function showUsageGuide() {
   console.log('');
   console.log('【主要関数】');
   console.log('1. updateInventoryData()');
-  console.log('   - 全商品の在庫情報を更新');
-  console.log('   - 処理時間: 商品数 × 約2秒');
+  console.log('   - 全商品の詳細在庫情報を更新');
+  console.log('   - 処理時間: 商品数 × 約4秒（2つのAPIを呼び出すため）');
   console.log('');
   console.log('2. updateSingleProduct("商品コード")');
-  console.log('   - 特定商品の在庫情報のみ更新（テスト用）');
+  console.log('   - 特定商品の詳細在庫情報のみ更新（テスト用）');
   console.log('   - 例: updateSingleProduct("dcmcoverg-s-S")');
   console.log('');
-  console.log('3. resetAllInventoryData()');
+  console.log('3. testStockMasterFields("商品コード")');
+  console.log('   - 在庫マスタAPIの動作確認（デバッグ用）');
+  console.log('');
+  console.log('4. resetAllInventoryData()');
   console.log('   - 全在庫数値を0にリセット（テスト用）');
   console.log('');
-  console.log('【注意事項】');
-  console.log('- APIレート制限のため各商品間に1秒の待機時間があります');
-  console.log('- 大量の商品がある場合は処理時間が長くなります');
-  console.log('- エラーが発生した商品はスキップされます');
-  console.log('');
-  console.log('【実行推奨順序】');
-  console.log('1. まず updateSingleProduct("dcmcoverg-s-S") でテスト');
-  console.log('2. 問題なければ updateInventoryData() で全更新');
-}
-
-/**
- * テスト実行用関数
- */
-function testSingleUpdate() {
-  updateSingleProduct("dcmcoverg-s-S");
-}
+  console.log('【更新される在庫情報】');
+  console.log('- C列: 在庫数');
+  console.log('- D列: 引当数');
+  console.log('- E列: フリー在庫数');
+  console.log('- F列: 予約在庫数');
+  console.log('- G列: 予約引当数');
+  console.log('- H列: 予約フリー在庫数');
+  console.log('- I列: 不良在庫数');
+  console.log('- J列: 発注残
