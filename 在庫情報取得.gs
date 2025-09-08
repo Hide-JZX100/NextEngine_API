@@ -295,11 +295,21 @@ function updateSingleProduct(goodsCode) {
     console.log(`=== 単品更新開始: ${goodsCode} ===`);
     
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    console.log('スプレッドシート取得成功');
+    
     const sheet = spreadsheet.getSheetByName(SHEET_NAME);
+    console.log('シート取得結果:', sheet ? 'success' : 'null');
+    
+    if (!sheet) {
+      throw new Error(`シート "${SHEET_NAME}" が見つかりません`);
+    }
     
     // 商品コードを検索
     const dataRange = sheet.getRange(2, 1, sheet.getLastRow() - 1, 12);
+    console.log('データ範囲取得成功');
+    
     const values = dataRange.getValues();
+    console.log('データ取得成功、行数:', values.length);
     
     let targetRowIndex = -1;
     for (let i = 0; i < values.length; i++) {
@@ -313,13 +323,18 @@ function updateSingleProduct(goodsCode) {
       throw new Error(`商品コード ${goodsCode} がスプレッドシートに見つかりません`);
     }
     
+    console.log('商品コード発見、行番号:', targetRowIndex);
+    
     // トークンを取得
     const tokens = getStoredTokens();
+    console.log('トークン取得成功');
     
     // 在庫情報を取得
     const inventoryData = getInventoryByGoodsCode(goodsCode, tokens);
+    console.log('在庫情報取得結果:', inventoryData ? 'success' : 'null');
     
     if (inventoryData) {
+      console.log('在庫データ更新開始...');
       updateRowWithInventoryData(sheet, targetRowIndex, inventoryData);
       console.log(`商品コード ${goodsCode} の更新が完了しました`);
     } else {
@@ -328,6 +343,7 @@ function updateSingleProduct(goodsCode) {
     
   } catch (error) {
     console.error('単品更新エラー:', error.message);
+    console.error('エラー発生箇所の詳細:', error.stack);
     throw error;
   }
 }
