@@ -198,7 +198,7 @@ function searchGoodsWithStock(goodsCode, tokens) {
           goods_id: goodsData.goods_id,
           goods_name: goodsData.goods_name,
           stock_quantity: parseInt(goodsData.stock_quantity) || 0,
-          // 商品マスタAPIでは以下のフィールドが取得できないため0で設定
+          // その他の在庫フィールドは在庫マスタAPIで取得するため初期値0
           stock_allocated_quantity: 0,
           stock_free_quantity: 0,
           stock_defective_quantity: 0,
