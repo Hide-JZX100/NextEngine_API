@@ -185,16 +185,16 @@ function getProductListDirect(tokens, offset = 0) {
 }
 
 /**
- * 在庫情報を取得（直接実装）
+ * 在庫情報を取得（既存コードと同じAPI使用）
  */
 function getStockInfoDirect(tokens, goodsId) {
-  const url = "https://api.next-engine.org/api_v1_master_goods/goodsSearchStock";
+  const url = "https://api.next-engine.org/api_v1_master_stock/search";
   
   const params = {
     access_token: tokens.accessToken,
     refresh_token: tokens.refreshToken,
-    goods_id: goodsId,
-    fields: "stock_quantity,allocation_quantity,free_stock_quantity,order_quantity,deficiency_quantity"
+    'stock_goods_id-eq': goodsId,
+    fields: "stock_goods_id,stock_quantity,stock_allocation_quantity,stock_defective_quantity,stock_remaining_order_quantity,stock_out_quantity,stock_free_quantity,stock_advance_order_quantity,stock_advance_order_allocation_quantity,stock_advance_order_free_quantity"
   };
   
   const options = {
@@ -219,11 +219,11 @@ function getStockInfoDirect(tokens, goodsId) {
     if (data.result === "success" && data.data && data.data.length > 0) {
       const stockData = data.data[0];
       return {
-        在庫数: stockData.stock_quantity || 0,
-        引当数: stockData.allocation_quantity || 0,
-        フリー在庫数: stockData.free_stock_quantity || 0,
-        発注残数: stockData.order_quantity || 0,
-        欠品数: stockData.deficiency_quantity || 0
+        在庫数: parseInt(stockData.stock_quantity) || 0,
+        引当数: parseInt(stockData.stock_allocation_quantity) || 0,
+        フリー在庫数: parseInt(stockData.stock_free_quantity) || 0,
+        発注残数: parseInt(stockData.stock_remaining_order_quantity) || 0,
+        欠品数: parseInt(stockData.stock_out_quantity) || 0
       };
     } else {
       console.warn(`商品ID ${goodsId} の在庫情報が見つかりません`);
