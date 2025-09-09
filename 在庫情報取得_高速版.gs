@@ -346,50 +346,14 @@ function testTokenValidity(accessToken) {
 }
 
 /**
- * リフレッシュトークンを使用してアクセストークンを更新
+ * トークンを更新保存（既存コードと同じ方法）
  */
-function refreshAccessToken() {
-  try {
-    const properties = PropertiesService.getScriptProperties();
-    const refreshToken = properties.getProperty('refresh_token');
-    
-    if (!refreshToken) {
-      console.error("リフレッシュトークンが見つかりません");
-      return null;
-    }
-    
-    const url = "https://api.next-engine.org/api_v1_system/refresh";
-    const params = {
-      refresh_token: refreshToken
-    };
-    
-    const options = {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded"
-      },
-      payload: Object.keys(params).map(key => 
-        encodeURIComponent(key) + "=" + encodeURIComponent(params[key])
-      ).join("&")
-    };
-    
-    const response = UrlFetchApp.fetch(url, options);
-    const data = JSON.parse(response.getContentText());
-    
-    if (data.result === "success") {
-      // 新しいトークンを保存
-      properties.setProperty('access_token', data.access_token);
-      properties.setProperty('refresh_token', data.refresh_token);
-      
-      console.log("アクセストークンのリフレッシュが完了しました");
-      return data.access_token;
-    } else {
-      console.error("リフレッシュエラー:", data.message);
-      return null;
-    }
-    
-  } catch (error) {
-    console.error("リフレッシュ処理でエラー:", error.message);
-    return null;
-  }
+function updateStoredTokens(accessToken, refreshToken) {
+  const properties = PropertiesService.getScriptProperties();
+  properties.setProperties({
+    'ACCESS_TOKEN': accessToken,
+    'REFRESH_TOKEN': refreshToken,
+    'TOKEN_UPDATED_AT': new Date().getTime().toString()
+  });
+  console.log('トークンを更新しました');
 }
