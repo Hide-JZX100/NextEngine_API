@@ -267,3 +267,123 @@ function checkProgress() {
     console.log("処理位置は保存されていません（初回実行または完了済み）");
   }
 }
+
+/**
+ * 有効なアクセストークンを取得（自動リフレッシュ対応）
+ */
+function getValidAccessToken() {
+  try {
+    // 既存のgetAccessToken()を試行
+    const accessToken = getAccessToken();
+    
+    if (accessToken) {
+      // トークンの有効性をテスト
+      if (testTokenValidity(accessToken)) {
+        console.log("既存のアクセストークンが有効です");
+        return accessToken;
+      } else {
+        console.log("アクセストークンが無効です。リフレッシュを試行します。");
+      }
+    }
+    
+    // トークンが無効または取得失敗の場合、リフレッシュを試行
+    console.log("トークンのリフレッシュを実行します...");
+    const refreshedToken = refreshAccessToken();
+    
+    if (refreshedToken && testTokenValidity(refreshedToken)) {
+      console.log("アクセストークンのリフレッシュに成功しました");
+      return refreshedToken;
+    } else {
+      console.error("アクセストークンのリフレッシュに失敗しました");
+      console.error("手動で認証を実行してください: authorize()");
+      return null;
+    }
+    
+  } catch (error) {
+    console.error("アクセストークン取得でエラー:", error.message);
+    console.error("手動で認証を実行してください: authorize()");
+    return null;
+  }
+}
+
+/**
+ * アクセストークンの有効性をテスト
+ */
+function testTokenValidity(accessToken) {
+  try {
+    const testUrl = "https://api.next-engine.org/api_v1_receiveorder/receiveOrderListForStock";
+    const params = {
+      access_token: accessToken,
+      limit: 1,
+      fields: "goods_id"
+    };
+    
+    const options = {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      payload: Object.keys(params).map(key => 
+        encodeURIComponent(key) + "=" + encodeURIComponent(params[key])
+      ).join("&")
+    };
+    
+    const response = UrlFetchApp.fetch(testUrl, options);
+    const data = JSON.parse(response.getContentText());
+    
+    return data.result === "success";
+    
+  } catch (error) {
+    console.error("トークン有効性テストでエラー:", error.message);
+    return false;
+  }
+}
+
+/**
+ * リフレッシュトークンを使用してアクセストークンを更新
+ */
+function refreshAccessToken() {
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const refreshToken = properties.getProperty('refresh_token');
+    
+    if (!refreshToken) {
+      console.error("リフレッシュトークンが見つかりません");
+      return null;
+    }
+    
+    const url = "https://api.next-engine.org/api_v1_system/refresh";
+    const params = {
+      refresh_token: refreshToken
+    };
+    
+    const options = {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      payload: Object.keys(params).map(key => 
+        encodeURIComponent(key) + "=" + encodeURIComponent(params[key])
+      ).join("&")
+    };
+    
+    const response = UrlFetchApp.fetch(url, options);
+    const data = JSON.parse(response.getContentText());
+    
+    if (data.result === "success") {
+      // 新しいトークンを保存
+      properties.setProperty('access_token', data.access_token);
+      properties.setProperty('refresh_token', data.refresh_token);
+      
+      console.log("アクセストークンのリフレッシュが完了しました");
+      return data.access_token;
+    } else {
+      console.error("リフレッシュエラー:", data.message);
+      return null;
+    }
+    
+  } catch (error) {
+    console.error("リフレッシュ処理でエラー:", error.message);
+    return null;
+  }
+}
