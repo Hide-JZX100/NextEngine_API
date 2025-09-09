@@ -273,20 +273,26 @@ function checkProgress() {
  */
 function getValidAccessToken() {
   try {
-    // 既存のgetAccessToken()を試行
-    const accessToken = getAccessToken();
+    const properties = PropertiesService.getScriptProperties();
+    const accessToken = properties.getProperty('access_token');
     
-    if (accessToken) {
-      // トークンの有効性をテスト
-      if (testTokenValidity(accessToken)) {
-        console.log("既存のアクセストークンが有効です");
-        return accessToken;
-      } else {
-        console.log("アクセストークンが無効です。リフレッシュを試行します。");
-      }
+    // アクセストークンが存在しない場合
+    if (!accessToken) {
+      console.error("アクセストークンがありません。初回認証が必要です。");
+      return null;
     }
     
-    // トークンが無効または取得失敗の場合、リフレッシュを試行
+    console.log("保存済みアクセストークンを確認中...");
+    
+    // トークンの有効性をテスト
+    if (testTokenValidity(accessToken)) {
+      console.log("既存のアクセストークンが有効です");
+      return accessToken;
+    } else {
+      console.log("アクセストークンが無効です。リフレッシュを試行します。");
+    }
+    
+    // トークンが無効の場合、リフレッシュを試行
     console.log("トークンのリフレッシュを実行します...");
     const refreshedToken = refreshAccessToken();
     
