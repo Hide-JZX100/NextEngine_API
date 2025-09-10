@@ -1,57 +1,58 @@
 /**
- * 在庫情報取得_高速版.gs
- * バッチ処理・分割実行・待機時間最適化を実装した高速版
- * 既存システムと完全独立
+ * 在庫情報取得_改良版.gs
+ * 既存システムと完全同等のAPI使用 + 高速化機能
  */
 
+// スプレッドシートの設定（既存コードと同じ）
+const SPREADSHEET_ID_改良版 = '1noQTPM0EMlyBNDdX4JDPZcBvh-3RT1VtWzNDA85SIkM';
+
 /**
- * メイン実行関数
- * 分割実行で大量データを効率的に処理
+ * メイン実行関数（改良版）
  */
-function main_高速版() {
+function main_改良版() {
   try {
-    console.log("=== 在庫情報取得（高速版）開始 ===");
+    console.log("=== 在庫情報取得（改良版）開始 ===");
     
     // 実行開始時間を記録
     const startTime = new Date().getTime();
-    const maxExecutionTime = 5.5 * 60 * 1000; // 5.5分（安全マージン）
-    
-    // トークン取得（独自実装）
-    const tokens = getTokensDirectly();
-    console.log("トークン取得成功");
+    const maxExecutionTime = 5.5 * 60 * 1000; // 5.5分
     
     // スプレッドシート準備
-    const spreadsheet = SpreadsheetApp.openById("1noQTPM0EMlyBNDdX4JDPZcBvh-3RT1VtWzNDA85SIkM");
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID_改良版);
     const sheet = spreadsheet.getActiveSheet();
     
     // 前回の処理継続位置を取得
     const properties = PropertiesService.getScriptProperties();
-    const lastProcessedIndex = parseInt(properties.getProperty('lastProcessedIndex_高速版') || '0');
-    const isFirstRun = lastProcessedIndex === 0;
+    const lastProcessedRow = parseInt(properties.getProperty('lastProcessedRow_改良版') || '2');
     
-    if (isFirstRun) {
-      // 初回実行時はヘッダーを設定
-      setupHeaders(sheet);
-    }
-    
-    console.log(`前回処理位置: ${lastProcessedIndex}から開始`);
-    
-    // 商品リスト取得
-    const products = getProductListDirect(tokens, lastProcessedIndex);
-    if (products.length === 0) {
-      console.log("処理対象の商品がありません。処理完了または初期化します。");
-      properties.deleteProperty('lastProcessedIndex_高速版');
+    // データ範囲を取得
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) {
+      console.log('データが存在しません');
       return;
     }
     
-    console.log(`取得した商品数: ${products.length}`);
+    const dataRange = sheet.getRange(lastProcessedRow, 1, lastRow - lastProcessedRow + 1, 12);
+    const values = dataRange.getValues();
     
-    // バッチ処理で在庫情報を取得
+    console.log(`処理対象: ${values.length}行（${lastProcessedRow}行目から）`);
+    
+    if (values.length === 0) {
+      console.log("処理対象の商品がありません。処理完了。");
+      properties.deleteProperty('lastProcessedRow_改良版');
+      return;
+    }
+    
+    // トークン取得（既存方式）
+    const tokens = getStoredTokens_改良版();
+    console.log("トークン取得成功");
+    
+    // バッチ処理で在庫情報を取得・更新
     let processedCount = 0;
-    const batchSize = 50; // バッチサイズ
-    const stockDataBatch = [];
+    const batchSize = 20; // バッチサイズ（書き込み頻度調整）
+    const updateBatch = [];
     
-    for (let i = 0; i < products.length; i++) {
+    for (let i = 0; i < values.length; i++) {
       // 実行時間チェック
       const currentTime = new Date().getTime();
       if (currentTime - startTime > maxExecutionTime) {
@@ -59,37 +60,48 @@ function main_高速版() {
         break;
       }
       
-      const product = products[i];
+      const row = values[i];
+      const goodsCode = row[0]; // A列: 商品コード
+      const actualRowNumber = lastProcessedRow + i;
+      
+      if (!goodsCode) {
+        console.log(`${actualRowNumber}行目: 商品コードが空のためスキップ`);
+        continue;
+      }
       
       try {
-        // 在庫情報取得
-        const stockInfo = getStockInfoDirect(tokens, product.goods_id);
-        if (stockInfo) {
-          stockDataBatch.push({
-            商品ID: product.goods_id,
-            商品名: product.goods_name,
-            ...stockInfo
+        console.log(`${actualRowNumber}行目: ${goodsCode} の在庫情報を取得中...`);
+        
+        // 既存システムと同じ方法で在庫情報を取得
+        const inventoryData = getInventoryByGoodsCode_改良版(goodsCode, tokens);
+        
+        if (inventoryData) {
+          updateBatch.push({
+            rowNumber: actualRowNumber,
+            data: inventoryData
           });
           
-          console.log(`処理中: ${i + 1}/${products.length} - ${product.goods_name}`);
+          console.log(`${actualRowNumber}行目: ${goodsCode} 取得完了`);
+        } else {
+          console.log(`${actualRowNumber}行目: ${goodsCode} の在庫情報が見つかりません`);
         }
         
-        // バッチ書き込み
-        if (stockDataBatch.length >= batchSize || i === products.length - 1) {
-          writeBatchToSheet(sheet, stockDataBatch, isFirstRun && processedCount === 0);
-          processedCount += stockDataBatch.length;
-          stockDataBatch.length = 0; // 配列クリア
+        // バッチ更新
+        if (updateBatch.length >= batchSize || i === values.length - 1) {
+          updateRowsBatch_改良版(sheet, updateBatch);
+          processedCount += updateBatch.length;
+          updateBatch.length = 0; // 配列クリア
           
-          console.log(`バッチ書き込み完了: ${processedCount}件`);
+          console.log(`バッチ更新完了: ${processedCount}件`);
         }
         
         // API制限対策の待機（0.3秒）
-        if (i < products.length - 1) {
+        if (i < values.length - 1) {
           Utilities.sleep(300);
         }
         
       } catch (error) {
-        console.error(`商品ID ${product.goods_id} の処理でエラー:`, error.message);
+        console.error(`${actualRowNumber}行目: ${goodsCode} のエラー:`, error.message);
         // エラー時は少し長めに待機
         Utilities.sleep(500);
         continue;
@@ -97,19 +109,18 @@ function main_高速版() {
     }
     
     // 次回処理開始位置を保存
-    const nextIndex = lastProcessedIndex + processedCount;
+    const nextRow = lastProcessedRow + processedCount;
     if (processedCount > 0) {
-      properties.setProperty('lastProcessedIndex_高速版', nextIndex.toString());
-      console.log(`次回処理開始位置を保存: ${nextIndex}`);
+      if (nextRow <= lastRow) {
+        properties.setProperty('lastProcessedRow_改良版', nextRow.toString());
+        console.log(`次回処理開始行を保存: ${nextRow}行目`);
+      } else {
+        properties.deleteProperty('lastProcessedRow_改良版');
+        console.log("全件処理完了");
+      }
     }
     
     console.log(`=== 処理完了: ${processedCount}件処理 ===`);
-    
-    // 全件処理完了判定
-    if (products.length < 1000) { // 取得件数が制限値未満なら完了
-      properties.deleteProperty('lastProcessedIndex_高速版');
-      console.log("全件処理完了");
-    }
     
   } catch (error) {
     console.error("メイン処理でエラー:", error.message);
@@ -118,19 +129,15 @@ function main_高速版() {
 }
 
 /**
- * トークンを直接取得（既存関数を使わない）
+ * 保存されたトークンを取得（既存コードと同じ）
  */
-function getTokensDirectly() {
+function getStoredTokens_改良版() {
   const properties = PropertiesService.getScriptProperties();
   const accessToken = properties.getProperty('ACCESS_TOKEN');
   const refreshToken = properties.getProperty('REFRESH_TOKEN');
   
   if (!accessToken || !refreshToken) {
-    console.error('アクセストークンが見つかりません。');
-    console.error('以下の手順で認証を完了してください:');
-    console.error('1. generateAuthUrl() を実行');
-    console.error('2. 出力されたURLをブラウザで開いて認証');
-    throw new Error('認証が必要です。generateAuthUrl()を実行してください。');
+    throw new Error('アクセストークンが見つかりません。先に認証を完了してください。');
   }
   
   return {
@@ -140,176 +147,223 @@ function getTokensDirectly() {
 }
 
 /**
- * 商品リストを取得（直接実装）
+ * 商品コードから完全な在庫情報を取得（既存コードベース）
  */
-function getProductListDirect(tokens, offset = 0) {
-  const url = "https://api.next-engine.org/api_v1_receiveorder/receiveOrderListForStock";
-  
-  const params = {
-    access_token: tokens.accessToken,
-    refresh_token: tokens.refreshToken,
-    offset: offset,
-    limit: 1000,
-    fields: "goods_id,goods_name"
-  };
-  
-  const options = {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    payload: Object.keys(params).map(key => 
-      encodeURIComponent(key) + "=" + encodeURIComponent(params[key])
-    ).join("&")
-  };
-  
+function getInventoryByGoodsCode_改良版(goodsCode, tokens) {
   try {
-    const response = UrlFetchApp.fetch(url, options);
-    const data = JSON.parse(response.getContentText());
-    
-    // トークン更新処理
-    if (data.access_token && data.refresh_token) {
-      updateTokensDirect(data.access_token, data.refresh_token);
+    // ステップ1: 商品マスタAPIで基本情報を取得
+    const goodsData = searchGoodsWithStock_改良版(goodsCode, tokens);
+    if (!goodsData) {
+      return null;
     }
     
-    if (data.result === "success" && data.data) {
-      return data.data;
+    // ステップ2: 在庫マスタAPIで詳細在庫情報を取得
+    const stockDetails = getStockByGoodsId_改良版(goodsCode, tokens);
+    
+    let completeInventoryData;
+    if (stockDetails) {
+      // 商品情報と詳細在庫情報を結合
+      completeInventoryData = {
+        goods_id: goodsData.goods_id,
+        goods_name: goodsData.goods_name,
+        stock_quantity: parseInt(stockDetails.stock_quantity) || parseInt(goodsData.stock_quantity) || 0,
+        stock_allocated_quantity: parseInt(stockDetails.stock_allocation_quantity) || 0,
+        stock_free_quantity: parseInt(stockDetails.stock_free_quantity) || 0,
+        stock_defective_quantity: parseInt(stockDetails.stock_defective_quantity) || 0,
+        stock_advance_order_quantity: parseInt(stockDetails.stock_advance_order_quantity) || 0,
+        stock_advance_order_allocation_quantity: parseInt(stockDetails.stock_advance_order_allocation_quantity) || 0,
+        stock_advance_order_free_quantity: parseInt(stockDetails.stock_advance_order_free_quantity) || 0,
+        stock_remaining_order_quantity: parseInt(stockDetails.stock_remaining_order_quantity) || 0,
+        stock_out_quantity: parseInt(stockDetails.stock_out_quantity) || 0
+      };
     } else {
-      console.error("商品リスト取得エラー:", data.message || "不明なエラー");
-      return [];
+      // 詳細情報が取得できない場合は基本情報のみ使用
+      completeInventoryData = {
+        goods_id: goodsData.goods_id,
+        goods_name: goodsData.goods_name,
+        stock_quantity: parseInt(goodsData.stock_quantity) || 0,
+        stock_allocated_quantity: 0,
+        stock_free_quantity: 0,
+        stock_defective_quantity: 0,
+        stock_advance_order_quantity: 0,
+        stock_advance_order_allocation_quantity: 0,
+        stock_advance_order_free_quantity: 0,
+        stock_remaining_order_quantity: 0,
+        stock_out_quantity: 0
+      };
     }
+    
+    return completeInventoryData;
+    
   } catch (error) {
-    console.error("商品リスト取得でネットワークエラー:", error.message);
-    return [];
+    console.error(`商品コード ${goodsCode} の在庫取得エラー:`, error.message);
+    return null;
   }
 }
 
 /**
- * 在庫情報を取得（既存コードと同じAPI使用）
+ * 商品コードで商品マスタを検索（既存コードと同じ）
  */
-function getStockInfoDirect(tokens, goodsId) {
-  const url = "https://api.next-engine.org/api_v1_master_stock/search";
+function searchGoodsWithStock_改良版(goodsCode, tokens) {
+  const url = 'https://api.next-engine.org/api_v1_master_goods/search';
   
-  const params = {
-    access_token: tokens.accessToken,
-    refresh_token: tokens.refreshToken,
-    'stock_goods_id-eq': goodsId,
-    fields: "stock_goods_id,stock_quantity,stock_allocation_quantity,stock_defective_quantity,stock_remaining_order_quantity,stock_out_quantity,stock_free_quantity,stock_advance_order_quantity,stock_advance_order_allocation_quantity,stock_advance_order_free_quantity"
+  const payload = {
+    'access_token': tokens.accessToken,
+    'refresh_token': tokens.refreshToken,
+    'goods_id-eq': goodsCode,
+    'fields': 'goods_id,goods_name,stock_quantity'
   };
   
   const options = {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
+    'method': 'POST',
+    'headers': {
+      'Content-Type': 'application/x-www-form-urlencoded'
     },
-    payload: Object.keys(params).map(key => 
-      encodeURIComponent(key) + "=" + encodeURIComponent(params[key])
-    ).join("&")
+    'payload': Object.keys(payload).map(key =>
+      encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
+    ).join('&')
   };
   
   try {
     const response = UrlFetchApp.fetch(url, options);
-    const data = JSON.parse(response.getContentText());
+    const responseText = response.getContentText();
+    const responseData = JSON.parse(responseText);
     
-    // トークン更新処理
-    if (data.access_token && data.refresh_token) {
-      updateTokensDirect(data.access_token, data.refresh_token);
+    // トークンが更新された場合は保存
+    if (responseData.access_token && responseData.refresh_token) {
+      updateStoredTokens_改良版(responseData.access_token, responseData.refresh_token);
     }
     
-    if (data.result === "success" && data.data && data.data.length > 0) {
-      const stockData = data.data[0];
-      return {
-        在庫数: parseInt(stockData.stock_quantity) || 0,
-        引当数: parseInt(stockData.stock_allocation_quantity) || 0,
-        フリー在庫数: parseInt(stockData.stock_free_quantity) || 0,
-        発注残数: parseInt(stockData.stock_remaining_order_quantity) || 0,
-        欠品数: parseInt(stockData.stock_out_quantity) || 0
-      };
+    if (responseData.result === 'success') {
+      if (responseData.data && responseData.data.length > 0) {
+        const goodsData = responseData.data[0];
+        return {
+          goods_id: goodsData.goods_id,
+          goods_name: goodsData.goods_name,
+          stock_quantity: goodsData.stock_quantity
+        };
+      } else {
+        return null;
+      }
     } else {
-      console.warn(`商品ID ${goodsId} の在庫情報が見つかりません`);
+      console.error(`商品検索エラー:`, responseData.message);
       return null;
     }
   } catch (error) {
-    console.error(`商品ID ${goodsId} の在庫情報取得でエラー:`, error.message);
-    throw error;
+    console.error('商品マスタAPI呼び出しエラー:', error.toString());
+    return null;
   }
 }
 
 /**
- * トークンを更新保存（直接実装）
+ * 商品IDから詳細在庫情報を取得（既存コードと同じ）
  */
-function updateTokensDirect(accessToken, refreshToken) {
-  const properties = PropertiesService.getScriptProperties();
-  properties.setProperties({
-    'ACCESS_TOKEN': accessToken,
-    'REFRESH_TOKEN': refreshToken,
-    'TOKEN_UPDATED_AT': new Date().getTime().toString()
-  });
-  console.log('トークンを更新しました');
+function getStockByGoodsId_改良版(goodsId, tokens) {
+  const url = 'https://api.next-engine.org/api_v1_master_stock/search';
+  
+  const payload = {
+    'access_token': tokens.accessToken,
+    'refresh_token': tokens.refreshToken,
+    'stock_goods_id-eq': goodsId,
+    'fields': 'stock_goods_id,stock_quantity,stock_allocation_quantity,stock_defective_quantity,stock_remaining_order_quantity,stock_out_quantity,stock_free_quantity,stock_advance_order_quantity,stock_advance_order_allocation_quantity,stock_advance_order_free_quantity'
+  };
+  
+  const options = {
+    'method': 'POST',
+    'headers': {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    'payload': Object.keys(payload).map(key =>
+      encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
+    ).join('&')
+  };
+  
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const responseText = response.getContentText();
+    const responseData = JSON.parse(responseText);
+    
+    // トークンが更新された場合は保存
+    if (responseData.access_token && responseData.refresh_token) {
+      updateStoredTokens_改良版(responseData.access_token, responseData.refresh_token);
+    }
+    
+    if (responseData.result === 'success' && responseData.data && responseData.data.length > 0) {
+      return responseData.data[0];
+    } else {
+      return null;
+    }
+  } catch (error) {
+    console.error('在庫マスタAPI呼び出しエラー:', error.toString());
+    return null;
+  }
 }
 
 /**
- * ヘッダー行を設定
+ * 複数行をバッチで更新
  */
-function setupHeaders(sheet) {
-  const headers = [
-    "商品ID", "商品名", "在庫数", "引当数", "フリー在庫数", "発注残数", "欠品数"
-  ];
-  
-  sheet.clear();
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
-  
-  console.log("ヘッダー行を設定しました");
-}
-
-/**
- * バッチでシートに書き込み
- */
-function writeBatchToSheet(sheet, stockDataBatch, isFirstWrite = false) {
-  if (stockDataBatch.length === 0) return;
-  
-  // 書き込み用の二次元配列を作成
-  const writeData = stockDataBatch.map(item => [
-    item.商品ID,
-    item.商品名,
-    item.在庫数,
-    item.引当数,
-    item.フリー在庫数,
-    item.発注残数,
-    item.欠品数
-  ]);
-  
-  // 書き込み開始行を決定
-  const startRow = isFirstWrite ? 2 : sheet.getLastRow() + 1;
-  
-  // 一括書き込み
-  const range = sheet.getRange(startRow, 1, writeData.length, writeData[0].length);
-  range.setValues(writeData);
+function updateRowsBatch_改良版(sheet, updateBatch) {
+  for (const update of updateBatch) {
+    updateRowWithInventoryData_改良版(sheet, update.rowNumber, update.data);
+  }
   
   // スプレッドシートの変更を強制実行
   SpreadsheetApp.flush();
 }
 
 /**
- * 処理状況をリセットする関数（手動実行用）
+ * スプレッドシートの行を在庫データで更新（既存コードと同じ）
  */
-function resetProgress_高速版() {
-  const properties = PropertiesService.getScriptProperties();
-  properties.deleteProperty('lastProcessedIndex_高速版');
-  console.log("高速版の処理状況をリセットしました。次回実行時は最初から開始します。");
+function updateRowWithInventoryData_改良版(sheet, rowIndex, inventoryData) {
+  // 在庫情報の列を更新（C列からK列まで）
+  const updateValues = [
+    inventoryData.stock_quantity || 0, // C列: 在庫数
+    inventoryData.stock_allocated_quantity || 0, // D列: 引当数
+    inventoryData.stock_free_quantity || 0, // E列: フリー在庫数
+    inventoryData.stock_advance_order_quantity || 0, // F列: 予約在庫数
+    inventoryData.stock_advance_order_allocation_quantity || 0, // G列: 予約引当数
+    inventoryData.stock_advance_order_free_quantity || 0, // H列: 予約フリー在庫数
+    inventoryData.stock_defective_quantity || 0, // I列: 不良在庫数
+    inventoryData.stock_remaining_order_quantity || 0, // J列: 発注残数
+    inventoryData.stock_out_quantity || 0 // K列: 欠品数
+  ];
+  
+  // C列からK列まで更新
+  const range = sheet.getRange(rowIndex, 3, 1, updateValues.length);
+  range.setValues([updateValues]);
 }
 
 /**
- * 現在の処理状況を確認する関数（手動実行用）
+ * トークンを更新保存（既存コードと同じ）
  */
-function checkProgress_高速版() {
+function updateStoredTokens_改良版(accessToken, refreshToken) {
   const properties = PropertiesService.getScriptProperties();
-  const lastIndex = properties.getProperty('lastProcessedIndex_高速版');
+  properties.setProperties({
+    'ACCESS_TOKEN': accessToken,
+    'REFRESH_TOKEN': refreshToken,
+    'TOKEN_UPDATED_AT': new Date().getTime().toString()
+  });
+}
+
+/**
+ * 処理状況をリセット
+ */
+function resetProgress_改良版() {
+  const properties = PropertiesService.getScriptProperties();
+  properties.deleteProperty('lastProcessedRow_改良版');
+  console.log("改良版の処理状況をリセットしました。");
+}
+
+/**
+ * 現在の処理状況を確認
+ */
+function checkProgress_改良版() {
+  const properties = PropertiesService.getScriptProperties();
+  const lastRow = properties.getProperty('lastProcessedRow_改良版');
   
-  if (lastIndex) {
-    console.log(`高速版の現在の処理位置: ${lastIndex}`);
+  if (lastRow) {
+    console.log(`改良版の現在の処理位置: ${lastRow}行目から開始`);
   } else {
-    console.log("高速版の処理位置は保存されていません（初回実行または完了済み）");
+    console.log("改良版の処理位置は保存されていません（初回実行または完了済み）");
   }
 }
