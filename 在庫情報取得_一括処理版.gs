@@ -5,42 +5,7 @@
  * - async/await構文をGoogle Apps Script対応の同期処理に変更
  * - エラーハンドリングを改善
  * - デバッグ出力を追加
- */
-
-/**
- * スクリプトプロパティの初期設定
- * 初回実行時に使用してください
-
-function setupBatchProperties() {
-  const properties = PropertiesService.getScriptProperties();
-  
-  // 既存の認証情報は保持して、新しい設定のみ追加
-  const newProperties = {
-    'SPREADSHEET_ID': '1noQTPM0EMlyBNDdX4JDPZcBvh-3RT1VtWzNDA85SIkM',
-    'SHEET_NAME': 'GAS',
-    'BATCH_SIZE': '100',
-    'API_WAIT_TIME': '500'
-  };
-  
-  console.log('=== スクリプトプロパティ設定 ===');
-  
-  for (const [key, value] of Object.entries(newProperties)) {
-    const currentValue = properties.getProperty(key);
-    if (currentValue) {
-      console.log(`${key}: ${currentValue} (既存値を保持)`);
-    } else {
-      properties.setProperty(key, value);
-      console.log(`${key}: ${value} (新規設定)`);
-    }
-  }
-  
-  console.log('');
-  console.log('設定完了！以下の関数でテストを開始できます：');
-  console.log('- testBatchProcessing(10)');
-  console.log('- comparePerformance(20)');
-  console.log('- updateInventoryDataBatch()');
-}
- */
+*/
 
 /**
  * 現在のスクリプトプロパティ設定を表示
