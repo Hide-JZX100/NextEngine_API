@@ -14,27 +14,7 @@
  * - 認証スクリプトで事前にトークンを取得済みである必要があります
  * - 一度に処理できる商品数は最大100件です
  * - 大量データの場合は自動的にバッチ分割します
- */
-
-// スプレッドシートの設定（既存と同じ）
-const SPREADSHEET_ID = '   ';
-const SHEET_NAME = '   ';
-
-// 列のマッピング（既存と同じ）
-const COLUMNS = {
-  GOODS_CODE: 0,    // A列: 商品コード
-  GOODS_NAME: 1,    // B列: 商品名
-  STOCK_QTY: 2,     // C列: 在庫数
-  ALLOCATED_QTY: 3, // D列: 引当数
-  FREE_QTY: 4,      // E列: フリー在庫数
-  RESERVE_QTY: 5,   // F列: 予約在庫数
-  RESERVE_ALLOCATED_QTY: 6, // G列: 予約引当数
-  RESERVE_FREE_QTY: 7,      // H列: 予約フリー在庫数
-  DEFECTIVE_QTY: 8,         // I列: 不良在庫数
-  ORDER_REMAINING_QTY: 9,   // J列: 発注残数
-  SHORTAGE_QTY: 10,         // K列: 欠品数
-  JAN_CODE: 11      // L列: JANコード
-};
+*/
 
 // バッチ処理設定
 const BATCH_SIZE = 100;  // 一度に処理する商品数（APIの制限に合わせて調整可能）
