@@ -1,52 +1,16 @@
 /**
- * ネクストエンジン在庫情報取得スクリプト（一括処理版）
+ * ネクストエンジン在庫情報取得スクリプト（一括処理版）修正版
  * 
- * 【目的】
- * 商品コードを配列で渡し、一度のAPIコールで複数商品の在庫情報を効率的に取得
- * 
- * 【主な改善点】
- * 1. 商品マスタAPIで複数商品を一度に検索（最大100件）
- * 2. 在庫マスタAPIで複数商品の在庫を一度に取得（最大100件）
- * 3. バッチ処理による大幅な高速化
- * 4. APIコール数の削減によるレート制限回避
- * 
- * 【注意事項】
- * - 認証スクリプトで事前にトークンを取得済みである必要があります
- * - 一度に処理できる商品数は最大100件です
- * - 大量データの場合は自動的にバッチ分割します
- * - ハードコーディングを排除し、スクリプトプロパティから設定値を取得
-*/
-
-// 列のマッピング（既存と同じ）
-//　在庫情報取得.gsで宣言済み
-/**
-const COLUMNS = {
-  GOODS_CODE: 0,    // A列: 商品コード
-  GOODS_NAME: 1,    // B列: 商品名
-  STOCK_QTY: 2,     // C列: 在庫数
-  ALLOCATED_QTY: 3, // D列: 引当数
-  FREE_QTY: 4,      // E列: フリー在庫数
-  RESERVE_QTY: 5,   // F列: 予約在庫数
-  RESERVE_ALLOCATED_QTY: 6, // G列: 予約引当数
-  RESERVE_FREE_QTY: 7,      // H列: 予約フリー在庫数
-  DEFECTIVE_QTY: 8,         // I列: 不良在庫数
-  ORDER_REMAINING_QTY: 9,   // J列: 発注残数
-  SHORTAGE_QTY: 10,         // K列: 欠品数
-  JAN_CODE: 11      // L列: JANコード
-};
-*/
-
-// ネクストエンジンAPIのベースURL
-// 認証.gsで宣言済み
-/**
-const NE_API_URL = 'https://api.next-engine.org';
-*/
-
+ * 【修正内容】
+ * - async/await構文をGoogle Apps Script対応の同期処理に変更
+ * - エラーハンドリングを改善
+ * - デバッグ出力を追加
+ */
 
 /**
  * スクリプトプロパティの初期設定
  * 初回実行時に使用してください
- */
+
 function setupBatchProperties() {
   const properties = PropertiesService.getScriptProperties();
   
@@ -76,6 +40,7 @@ function setupBatchProperties() {
   console.log('- comparePerformance(20)');
   console.log('- updateInventoryDataBatch()');
 }
+ */
 
 /**
  * 現在のスクリプトプロパティ設定を表示
@@ -168,7 +133,7 @@ function updateInventoryDataBatch() {
       
       try {
         // バッチで在庫情報を取得
-        const inventoryDataMap = await getBatchInventoryData(batch, tokens);
+        const inventoryDataMap = getBatchInventoryData(batch, tokens);
         
         // スプレッドシートを更新
         for (const goodsCode of batch) {
@@ -229,14 +194,14 @@ function updateInventoryDataBatch() {
  * @param {Object} tokens - アクセストークンとリフレッシュトークン
  * @returns {Map<string, Object>} 商品コード → 在庫情報のマップ
  */
-async function getBatchInventoryData(goodsCodeList, tokens) {
+function getBatchInventoryData(goodsCodeList, tokens) {
   const inventoryDataMap = new Map();
   
   try {
     console.log(`  商品マスタ一括検索: ${goodsCodeList.length}件`);
     
     // ステップ1: 商品マスタAPIで複数商品を一括検索
-    const goodsDataMap = await getBatchGoodsData(goodsCodeList, tokens);
+    const goodsDataMap = getBatchGoodsData(goodsCodeList, tokens);
     console.log(`  商品マスタ取得完了: ${goodsDataMap.size}件`);
     
     if (goodsDataMap.size === 0) {
@@ -246,7 +211,7 @@ async function getBatchInventoryData(goodsCodeList, tokens) {
     
     // ステップ2: 在庫マスタAPIで複数商品の在庫を一括取得
     console.log(`  在庫マスタ一括検索: ${goodsDataMap.size}件`);
-    const stockDataMap = await getBatchStockData(Array.from(goodsDataMap.keys()), tokens);
+    const stockDataMap = getBatchStockData(Array.from(goodsDataMap.keys()), tokens);
     console.log(`  在庫マスタ取得完了: ${stockDataMap.size}件`);
     
     // ステップ3: 商品情報と在庫情報を結合
@@ -285,7 +250,7 @@ async function getBatchInventoryData(goodsCodeList, tokens) {
  * @param {Object} tokens - トークン情報
  * @returns {Map<string, Object>} 商品コード → 商品情報のマップ
  */
-async function getBatchGoodsData(goodsCodeList, tokens) {
+function getBatchGoodsData(goodsCodeList, tokens) {
   const url = `${NE_API_URL}/api_v1_master_goods/search`;
   
   // スクリプトプロパティからバッチサイズを取得
@@ -319,6 +284,8 @@ async function getBatchGoodsData(goodsCodeList, tokens) {
     const response = UrlFetchApp.fetch(url, options);
     const responseText = response.getContentText();
     const responseData = JSON.parse(responseText);
+    
+    console.log(`    商品マスタAPI応答: result=${responseData.result}, count=${responseData.count || 0}`);
     
     // トークンが更新された場合は保存
     if (responseData.access_token && responseData.refresh_token) {
@@ -356,7 +323,7 @@ async function getBatchGoodsData(goodsCodeList, tokens) {
  * @param {Object} tokens - トークン情報
  * @returns {Map<string, Object>} 商品コード → 在庫情報のマップ
  */
-async function getBatchStockData(goodsCodeList, tokens) {
+function getBatchStockData(goodsCodeList, tokens) {
   const url = `${NE_API_URL}/api_v1_master_stock/search`;
   
   // スクリプトプロパティからバッチサイズを取得
@@ -390,6 +357,8 @@ async function getBatchStockData(goodsCodeList, tokens) {
     const response = UrlFetchApp.fetch(url, options);
     const responseText = response.getContentText();
     const responseData = JSON.parse(responseText);
+    
+    console.log(`    在庫マスタAPI応答: result=${responseData.result}, count=${responseData.count || 0}`);
     
     // トークンが更新された場合は保存
     if (responseData.access_token && responseData.refresh_token) {
