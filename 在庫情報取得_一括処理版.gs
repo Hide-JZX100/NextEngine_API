@@ -495,6 +495,173 @@ function testApiFieldInvestigationImproved() {
 }
 
 /**
+ * 二重API版の処理（比較用）- 別ファイルの関数を再実装
+ * @param {string[]} goodsCodeList - 商品コードの配列
+ * @param {Object} tokens - トークン情報
+ * @returns {Map<string, Object>} 商品コード → 在庫情報のマップ
+ */
+function getDualApiInventoryData(goodsCodeList, tokens) {
+  const inventoryDataMap = new Map();
+  
+  try {
+    console.log(`  二重API処理: ${goodsCodeList.length}件`);
+    
+    // ステップ1: 商品マスタAPIで複数商品を一括検索
+    const goodsDataMap = getBatchGoodsDataForComparison(goodsCodeList, tokens);
+    console.log(`  商品マスタ取得完了: ${goodsDataMap.size}件`);
+    
+    if (goodsDataMap.size === 0) {
+      console.log('  商品が見つかりませんでした');
+      return inventoryDataMap;
+    }
+    
+    // ステップ2: 在庫マスタAPIで複数商品の在庫を一括取得
+    const stockDataMap = getBatchStockDataForComparison(Array.from(goodsDataMap.keys()), tokens);
+    console.log(`  在庫マスタ取得完了: ${stockDataMap.size}件`);
+    
+    // ステップ3: 商品情報と在庫情報を結合
+    for (const [goodsCode, goodsData] of goodsDataMap) {
+      const stockData = stockDataMap.get(goodsCode);
+      
+      const completeInventoryData = {
+        goods_id: goodsData.goods_id,
+        goods_name: goodsData.goods_name,
+        stock_quantity: stockData ? parseInt(stockData.stock_quantity) || 0 : parseInt(goodsData.stock_quantity) || 0,
+        stock_allocated_quantity: stockData ? parseInt(stockData.stock_allocation_quantity) || 0 : 0,
+        stock_free_quantity: stockData ? parseInt(stockData.stock_free_quantity) || 0 : 0,
+        stock_defective_quantity: stockData ? parseInt(stockData.stock_defective_quantity) || 0 : 0,
+        stock_advance_order_quantity: stockData ? parseInt(stockData.stock_advance_order_quantity) || 0 : 0,
+        stock_advance_order_allocation_quantity: stockData ? parseInt(stockData.stock_advance_order_allocation_quantity) || 0 : 0,
+        stock_advance_order_free_quantity: stockData ? parseInt(stockData.stock_advance_order_free_quantity) || 0 : 0,
+        stock_remaining_order_quantity: stockData ? parseInt(stockData.stock_remaining_order_quantity) || 0 : 0,
+        stock_out_quantity: stockData ? parseInt(stockData.stock_out_quantity) || 0 : 0
+      };
+      
+      inventoryDataMap.set(goodsCode, completeInventoryData);
+    }
+    
+    console.log(`  結合完了: ${inventoryDataMap.size}件`);
+    return inventoryDataMap;
+    
+  } catch (error) {
+    console.error(`二重API取得エラー:`, error.message);
+    return inventoryDataMap;
+  }
+}
+
+/**
+ * 商品マスタAPI呼び出し（比較用）
+ */
+function getBatchGoodsDataForComparison(goodsCodeList, tokens) {
+  const url = `${NE_API_URL}/api_v1_master_goods/search`;
+  const properties = PropertiesService.getScriptProperties();
+  const batchSize = parseInt(properties.getProperty('BATCH_SIZE')) || 100;
+  const goodsIdCondition = goodsCodeList.join(',');
+  
+  const payload = {
+    'access_token': tokens.accessToken,
+    'refresh_token': tokens.refreshToken,
+    'goods_id-in': goodsIdCondition,
+    'fields': 'goods_id,goods_name,stock_quantity',
+    'limit': batchSize.toString()
+  };
+  
+  const options = {
+    'method': 'POST',
+    'headers': {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    'payload': Object.keys(payload).map(key =>
+      encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
+    ).join('&')
+  };
+  
+  const goodsDataMap = new Map();
+  
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const responseText = response.getContentText();
+    const responseData = JSON.parse(responseText);
+    
+    if (responseData.access_token && responseData.refresh_token) {
+      updateStoredTokens(responseData.access_token, responseData.refresh_token);
+      tokens.accessToken = responseData.access_token;
+      tokens.refreshToken = responseData.refresh_token;
+    }
+    
+    if (responseData.result === 'success' && responseData.data) {
+      responseData.data.forEach(goodsData => {
+        goodsDataMap.set(goodsData.goods_id, {
+          goods_id: goodsData.goods_id,
+          goods_name: goodsData.goods_name,
+          stock_quantity: goodsData.stock_quantity
+        });
+      });
+    }
+    
+    return goodsDataMap;
+    
+  } catch (error) {
+    console.error(`商品マスタ比較用取得エラー:`, error.message);
+    return goodsDataMap;
+  }
+}
+
+/**
+ * 在庫マスタAPI呼び出し（比較用）
+ */
+function getBatchStockDataForComparison(goodsCodeList, tokens) {
+  const url = `${NE_API_URL}/api_v1_master_stock/search`;
+  const properties = PropertiesService.getScriptProperties();
+  const batchSize = parseInt(properties.getProperty('BATCH_SIZE')) || 100;
+  const goodsIdCondition = goodsCodeList.join(',');
+  
+  const payload = {
+    'access_token': tokens.accessToken,
+    'refresh_token': tokens.refreshToken,
+    'stock_goods_id-in': goodsIdCondition,
+    'fields': 'stock_goods_id,stock_quantity,stock_allocation_quantity,stock_defective_quantity,stock_remaining_order_quantity,stock_out_quantity,stock_free_quantity,stock_advance_order_quantity,stock_advance_order_allocation_quantity,stock_advance_order_free_quantity',
+    'limit': batchSize.toString()
+  };
+  
+  const options = {
+    'method': 'POST',
+    'headers': {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    'payload': Object.keys(payload).map(key =>
+      encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
+    ).join('&')
+  };
+  
+  const stockDataMap = new Map();
+  
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const responseText = response.getContentText();
+    const responseData = JSON.parse(responseText);
+    
+    if (responseData.access_token && responseData.refresh_token) {
+      updateStoredTokens(responseData.access_token, responseData.refresh_token);
+      tokens.accessToken = responseData.access_token;
+      tokens.refreshToken = responseData.refresh_token;
+    }
+    
+    if (responseData.result === 'success' && responseData.data) {
+      responseData.data.forEach(stockData => {
+        stockDataMap.set(stockData.stock_goods_id, stockData);
+      });
+    }
+    
+    return stockDataMap;
+    
+  } catch (error) {
+    console.error(`在庫マスタ比較用取得エラー:`, error.message);
+    return stockDataMap;
+  }
+}
+
+/**
  * 性能比較テスト：二重API版 vs 単一API版
  */
 function compareApiVersions(sampleSize = 10) {
@@ -534,7 +701,7 @@ function compareApiVersions(sampleSize = 10) {
     // 二重API版テスト
     console.log('\n--- 二重API版実行 ---');
     const dualApiStartTime = new Date();
-    const dualApiResult = getBatchInventoryData(goodsCodeList, tokens);
+    const dualApiResult = getDualApiInventoryData(goodsCodeList, tokens);
     const dualApiEndTime = new Date();
     const dualApiDuration = (dualApiEndTime - dualApiStartTime) / 1000;
     
@@ -549,16 +716,31 @@ function compareApiVersions(sampleSize = 10) {
     console.log('\n=== 比較結果 ===');
     console.log(`二重API版時間: ${dualApiDuration.toFixed(1)}秒`);
     console.log(`単一API版時間: ${singleApiDuration.toFixed(1)}秒`);
-    console.log(`時間短縮効果: ${((dualApiDuration - singleApiDuration) / dualApiDuration * 100).toFixed(1)}%`);
+    
+    if (dualApiDuration > 0) {
+      const timeReduction = ((dualApiDuration - singleApiDuration) / dualApiDuration * 100);
+      console.log(`時間短縮効果: ${timeReduction.toFixed(1)}%`);
+    }
     
     console.log(`二重API版取得件数: ${dualApiResult.size}件`);
     console.log(`単一API版取得件数: ${singleApiResult.size}件`);
-    console.log(`取得率比較: ${(singleApiResult.size / dualApiResult.size * 100).toFixed(1)}%`);
+    
+    if (dualApiResult.size > 0) {
+      console.log(`取得率比較: ${(singleApiResult.size / dualApiResult.size * 100).toFixed(1)}%`);
+    }
     
     // APIコール数比較
     const dualApiCalls = 2; // 商品マスタ + 在庫マスタ
     const singleApiCalls = 1; // 在庫マスタのみ
     console.log(`APIコール数削減: ${dualApiCalls}回 → ${singleApiCalls}回（${((dualApiCalls - singleApiCalls) / dualApiCalls * 100).toFixed(0)}%削減）`);
+    
+    // 大量データでの推定効果
+    console.log('\n=== 3106件での推定効果 ===');
+    const estimatedDualTime = (dualApiDuration / sampleSize) * 3106;
+    const estimatedSingleTime = (singleApiDuration / sampleSize) * 3106;
+    console.log(`二重API版推定時間: ${estimatedDualTime.toFixed(1)}秒`);
+    console.log(`単一API版推定時間: ${estimatedSingleTime.toFixed(1)}秒`);
+    console.log(`推定時間短縮: ${(estimatedDualTime - estimatedSingleTime).toFixed(1)}秒`);
     
   } catch (error) {
     console.error('比較テストエラー:', error.message);
