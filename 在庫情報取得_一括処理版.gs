@@ -299,12 +299,147 @@ function updateInventoryDataSingleApi() {
 }
 
 /**
- * APIフィールド調査テスト関数
- * 在庫マスタAPIで商品名が取得可能かを調査
+ * 段階的フィールド調査：在庫マスタAPIで商品名フィールドの存在を確認
+ * @param {string[]} sampleGoodsCodeList - サンプル商品コードリスト
+ * @param {Object} tokens - トークン情報
  */
-function testApiFieldInvestigation() {
+function investigateStockApiStepByStep(sampleGoodsCodeList, tokens) {
+  const url = `${NE_API_URL}/api_v1_master_stock/search`;
+  const sampleCodes = sampleGoodsCodeList.slice(0, 3);
+  const goodsIdCondition = sampleCodes.join(',');
+  
+  console.log('=== 段階的在庫マスタAPI フィールド調査 ===');
+  console.log(`調査対象商品: ${sampleCodes.join(', ')}`);
+  
+  // 段階1: 基本的な在庫フィールドのみで試行
+  const basicFields = 'stock_goods_id,stock_quantity,stock_allocation_quantity';
+  console.log('\n--- 段階1: 基本フィールド調査 ---');
+  
+  const basicPayload = {
+    'access_token': tokens.accessToken,
+    'refresh_token': tokens.refreshToken,
+    'stock_goods_id-in': goodsIdCondition,
+    'fields': basicFields,
+    'limit': '3'
+  };
+  
+  const options = {
+    'method': 'POST',
+    'headers': {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    'payload': Object.keys(basicPayload).map(key =>
+      encodeURIComponent(key) + '=' + encodeURIComponent(basicPayload[key])
+    ).join('&')
+  };
+  
   try {
-    console.log('=== APIフィールド調査テスト開始 ===');
+    let response = UrlFetchApp.fetch(url, options);
+    let responseText = response.getContentText();
+    let responseData = JSON.parse(responseText);
+    
+    if (responseData.result === 'success' && responseData.data && responseData.data.length > 0) {
+      console.log('✓ 基本フィールドでの取得成功');
+      console.log(`取得件数: ${responseData.data.length}件`);
+      
+      // 段階2: 商品名フィールドを追加して試行
+      console.log('\n--- 段階2: 商品名フィールド追加調査 ---');
+      
+      const candidateNameFields = [
+        'stock_goods_name',
+        'goods_name', 
+        'name',
+        'product_name',
+        'item_name'
+      ];
+      
+      let successfulNameField = null;
+      
+      for (const nameField of candidateNameFields) {
+        console.log(`  ${nameField} フィールドを試行中...`);
+        
+        const extendedPayload = {
+          'access_token': tokens.accessToken,
+          'refresh_token': tokens.refreshToken,
+          'stock_goods_id-in': goodsIdCondition,
+          'fields': `${basicFields},${nameField}`,
+          'limit': '3'
+        };
+        
+        const extendedOptions = {
+          'method': 'POST',
+          'headers': {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          'payload': Object.keys(extendedPayload).map(key =>
+            encodeURIComponent(key) + '=' + encodeURIComponent(extendedPayload[key])
+          ).join('&')
+        };
+        
+        try {
+          response = UrlFetchApp.fetch(url, extendedOptions);
+          responseText = response.getContentText();
+          responseData = JSON.parse(responseText);
+          
+          if (responseData.result === 'success') {
+            console.log(`    ✓ ${nameField}: 成功`);
+            successfulNameField = nameField;
+            
+            // 実際のデータサンプルを表示
+            if (responseData.data && responseData.data.length > 0) {
+              const sample = responseData.data[0];
+              console.log(`    サンプルデータ: ${JSON.stringify(sample)}`);
+            }
+            break;
+          } else {
+            console.log(`    ✗ ${nameField}: ${responseData.message}`);
+          }
+        } catch (error) {
+          console.log(`    ✗ ${nameField}: エラー - ${error.message}`);
+        }
+        
+        // API負荷軽減のため少し待機
+        Utilities.sleep(200);
+      }
+      
+      console.log('\n--- 調査結果まとめ ---');
+      if (successfulNameField) {
+        console.log(`✓ 商品名フィールド発見: ${successfulNameField}`);
+        console.log('→ 単一API処理が可能です');
+        return {
+          success: true,
+          hasGoodsName: true,
+          goodsNameField: successfulNameField,
+          recommendedFields: `${basicFields},${successfulNameField}`
+        };
+      } else {
+        console.log('✗ 商品名フィールドが見つかりませんでした');
+        console.log('→ 在庫数値のみの更新なら単一API処理可能');
+        console.log('→ 商品名が必要な場合は二重API処理が必要');
+        return {
+          success: true,
+          hasGoodsName: false,
+          recommendedFields: basicFields
+        };
+      }
+      
+    } else {
+      console.error('基本フィールドでの取得に失敗:', responseData.message);
+      return { success: false, error: responseData.message };
+    }
+    
+  } catch (error) {
+    console.error('段階的調査エラー:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 改良版APIフィールド調査テスト関数
+ */
+function testApiFieldInvestigationImproved() {
+  try {
+    console.log('=== 改良版APIフィールド調査テスト開始 ===');
     
     // スクリプトプロパティから設定値を取得
     const properties = PropertiesService.getScriptProperties();
@@ -333,27 +468,29 @@ function testApiFieldInvestigation() {
     
     const tokens = getStoredTokens();
     
-    // フィールド調査実行
-    const investigationResult = investigateStockApiFields(sampleGoodsCodeList, tokens);
+    // 段階的フィールド調査実行
+    const investigationResult = investigateStockApiStepByStep(sampleGoodsCodeList, tokens);
     
     if (investigationResult.success) {
-      console.log('\n=== 調査成功 ===');
-      console.log('在庫マスタAPIのみでの処理可能性を評価しました。');
+      console.log('\n=== 最終調査結果 ===');
       
       if (investigationResult.hasGoodsName) {
-        console.log('✓ 商品名フィールドが利用可能です');
-        console.log('→ 単一API処理が推奨されます');
+        console.log('✅ 単一API処理が推奨されます');
+        console.log(`推奨フィールド設定: ${investigationResult.recommendedFields}`);
+        console.log('次のステップ: compareApiVersions(10) で性能比較');
       } else {
-        console.log('⚠ 商品名フィールドが見つかりません');
-        console.log('→ 商品名が必要な場合は二重API処理が必要です');
-        console.log('→ 在庫数値のみでよい場合は単一API処理が可能です');
+        console.log('⚠️ 商品名が取得できません');
+        console.log('選択肢:');
+        console.log('1. 商品名不要なら単一API処理可能');
+        console.log('2. 商品名必要なら現在の二重API処理継続');
+        console.log(`在庫のみフィールド設定: ${investigationResult.recommendedFields}`);
       }
     } else {
-      console.log('調査に失敗しました:', investigationResult.error);
+      console.log('❌ 調査に失敗しました:', investigationResult.error);
     }
     
   } catch (error) {
-    console.error('APIフィールド調査エラー:', error.message);
+    console.error('改良版APIフィールド調査エラー:', error.message);
   }
 }
 
