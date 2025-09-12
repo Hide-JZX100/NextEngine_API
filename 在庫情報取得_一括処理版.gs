@@ -810,12 +810,12 @@ function generatePerformanceReport(testSize = 50) {
  * 緊急時用：単発での商品情報取得
  * @param {string} goodsCode - 単一の商品コード
  */
-function emergencyGetSingleItem(goodsCode) {
+async function emergencyGetSingleItem(goodsCode) {
   try {
     console.log(`=== 緊急取得: ${goodsCode} ===`);
     
     const tokens = getStoredTokens();
-    const inventoryDataMap = getBatchInventoryDataSingleAPI([goodsCode], tokens);
+    const inventoryDataMap = await getBatchInventoryDataSingleAPI([goodsCode], tokens);
     
     if (inventoryDataMap.has(goodsCode)) {
       const data = inventoryDataMap.get(goodsCode);
