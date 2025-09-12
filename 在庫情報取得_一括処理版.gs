@@ -1,35 +1,176 @@
 /**
- * ネクストエンジン在庫情報取得スクリプト（一括処理版）修正版
+ * 単一API調査・最適化版スクリプト
  * 
- * 【修正内容】
- * - async/await構文をGoogle Apps Script対応の同期処理に変更
- * - エラーハンドリングを改善
- * - デバッグ出力を追加
-*/
+ * 【目的】
+ * 在庫マスタAPIのみでの処理可能性を調査し、APIコール数をさらに削減
+ * 
+ * 【調査ポイント】
+ * 1. 在庫マスタAPIで商品名も取得可能か？
+ * 2. 商品マスタAPIの情報が本当に必要か？
+ * 3. 単一APIでの処理による性能改善効果
+ */
 
 /**
- * 現在のスクリプトプロパティ設定を表示
+ * 在庫マスタAPIで取得可能なフィールドを調査
+ * @param {string[]} sampleGoodsCodeList - サンプル商品コードリスト
+ * @param {Object} tokens - トークン情報
  */
-function showCurrentProperties() {
-  const properties = PropertiesService.getScriptProperties();
+function investigateStockApiFields(sampleGoodsCodeList, tokens) {
+  const url = `${NE_API_URL}/api_v1_master_stock/search`;
   
-  console.log('=== 現在のスクリプトプロパティ設定 ===');
-  console.log(`SPREADSHEET_ID: ${properties.getProperty('SPREADSHEET_ID') || '未設定'}`);
-  console.log(`SHEET_NAME: ${properties.getProperty('SHEET_NAME') || '未設定'}`);
-  console.log(`BATCH_SIZE: ${properties.getProperty('BATCH_SIZE') || '未設定'}`);
-  console.log(`API_WAIT_TIME: ${properties.getProperty('API_WAIT_TIME') || '未設定'}`);
-  console.log('');
-  console.log('認証情報:');
-  console.log(`ACCESS_TOKEN: ${properties.getProperty('ACCESS_TOKEN') ? '設定済み' : '未設定'}`);
-  console.log(`REFRESH_TOKEN: ${properties.getProperty('REFRESH_TOKEN') ? '設定済み' : '未設定'}`);
+  // サンプル商品コード（最初の5件程度）
+  const sampleCodes = sampleGoodsCodeList.slice(0, 5);
+  const goodsIdCondition = sampleCodes.join(',');
+  
+  const payload = {
+    'access_token': tokens.accessToken,
+    'refresh_token': tokens.refreshToken,
+    'stock_goods_id-in': goodsIdCondition,
+    'fields': '', // 空にして全フィールドを取得
+    'limit': '5'
+  };
+  
+  const options = {
+    'method': 'POST',
+    'headers': {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    'payload': Object.keys(payload).map(key =>
+      encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
+    ).join('&')
+  };
+  
+  console.log('=== 在庫マスタAPI フィールド調査 ===');
+  console.log(`調査対象商品: ${sampleCodes.join(', ')}`);
+  
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const responseText = response.getContentText();
+    const responseData = JSON.parse(responseText);
+    
+    if (responseData.result === 'success' && responseData.data && responseData.data.length > 0) {
+      const firstRecord = responseData.data[0];
+      
+      console.log('\n--- 利用可能フィールド一覧 ---');
+      Object.keys(firstRecord).forEach(field => {
+        console.log(`${field}: ${firstRecord[field]}`);
+      });
+      
+      // 商品名関連のフィールドがあるかチェック
+      const hasGoodsName = Object.keys(firstRecord).some(field => 
+        field.toLowerCase().includes('name') || field.toLowerCase().includes('goods_name')
+      );
+      
+      console.log('\n--- 調査結果 ---');
+      console.log(`商品名フィールドの存在: ${hasGoodsName ? '有り' : '無し'}`);
+      console.log(`取得可能フィールド数: ${Object.keys(firstRecord).length}`);
+      
+      return {
+        success: true,
+        hasGoodsName,
+        availableFields: Object.keys(firstRecord),
+        sampleData: firstRecord
+      };
+      
+    } else {
+      console.error('在庫マスタAPI調査失敗:', responseData.message);
+      return { success: false, error: responseData.message };
+    }
+    
+  } catch (error) {
+    console.error('在庫マスタAPI調査エラー:', error.message);
+    return { success: false, error: error.message };
+  }
 }
 
 /**
- * メイン関数：一括処理による在庫情報更新
+ * 在庫マスタAPI単体でのバッチ処理テスト
+ * @param {string[]} goodsCodeList - 商品コードの配列
+ * @param {Object} tokens - トークン情報
+ * @returns {Map<string, Object>} 商品コード → 在庫情報のマップ
  */
-function updateInventoryDataBatch() {
+function getSingleApiInventoryData(goodsCodeList, tokens) {
+  const url = `${NE_API_URL}/api_v1_master_stock/search`;
+  const properties = PropertiesService.getScriptProperties();
+  const batchSize = parseInt(properties.getProperty('BATCH_SIZE')) || 100;
+  
+  const goodsIdCondition = goodsCodeList.join(',');
+  
+  const payload = {
+    'access_token': tokens.accessToken,
+    'refresh_token': tokens.refreshToken,
+    'stock_goods_id-in': goodsIdCondition,
+    // 必要な在庫情報フィールドを明示的に指定
+    'fields': 'stock_goods_id,stock_quantity,stock_allocation_quantity,stock_defective_quantity,stock_remaining_order_quantity,stock_out_quantity,stock_free_quantity,stock_advance_order_quantity,stock_advance_order_allocation_quantity,stock_advance_order_free_quantity',
+    'limit': batchSize.toString()
+  };
+  
+  const options = {
+    'method': 'POST',
+    'headers': {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    'payload': Object.keys(payload).map(key =>
+      encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
+    ).join('&')
+  };
+  
+  const inventoryDataMap = new Map();
+  
   try {
-    console.log('=== 在庫情報一括更新開始 ===');
+    console.log(`  在庫マスタAPI単体呼び出し: ${goodsCodeList.length}件`);
+    
+    const response = UrlFetchApp.fetch(url, options);
+    const responseText = response.getContentText();
+    const responseData = JSON.parse(responseText);
+    
+    console.log(`    API応答: result=${responseData.result}, count=${responseData.count || 0}`);
+    
+    // トークンが更新された場合は保存
+    if (responseData.access_token && responseData.refresh_token) {
+      updateStoredTokens(responseData.access_token, responseData.refresh_token);
+      tokens.accessToken = responseData.access_token;
+      tokens.refreshToken = responseData.refresh_token;
+    }
+    
+    if (responseData.result === 'success' && responseData.data) {
+      responseData.data.forEach(stockData => {
+        const completeInventoryData = {
+          goods_id: stockData.stock_goods_id,
+          goods_name: stockData.stock_goods_id, // 商品名が取得できない場合は商品IDを使用
+          stock_quantity: parseInt(stockData.stock_quantity) || 0,
+          stock_allocated_quantity: parseInt(stockData.stock_allocation_quantity) || 0,
+          stock_free_quantity: parseInt(stockData.stock_free_quantity) || 0,
+          stock_defective_quantity: parseInt(stockData.stock_defective_quantity) || 0,
+          stock_advance_order_quantity: parseInt(stockData.stock_advance_order_quantity) || 0,
+          stock_advance_order_allocation_quantity: parseInt(stockData.stock_advance_order_allocation_quantity) || 0,
+          stock_advance_order_free_quantity: parseInt(stockData.stock_advance_order_free_quantity) || 0,
+          stock_remaining_order_quantity: parseInt(stockData.stock_remaining_order_quantity) || 0,
+          stock_out_quantity: parseInt(stockData.stock_out_quantity) || 0
+        };
+        
+        inventoryDataMap.set(stockData.stock_goods_id, completeInventoryData);
+      });
+      
+      console.log(`    取得完了: ${responseData.data.length}件`);
+    } else {
+      console.error(`    在庫マスタAPI エラー:`, responseData.message || 'Unknown error');
+    }
+    
+    return inventoryDataMap;
+    
+  } catch (error) {
+    console.error(`在庫マスタ単体取得エラー:`, error.message);
+    return inventoryDataMap;
+  }
+}
+
+/**
+ * 単一API版メイン関数：在庫マスタAPIのみで在庫情報更新
+ */
+function updateInventoryDataSingleApi() {
+  try {
+    console.log('=== 単一API版在庫情報更新開始 ===');
     const startTime = new Date();
     
     // スクリプトプロパティから設定値を取得
@@ -39,12 +180,8 @@ function updateInventoryDataBatch() {
     const batchSize = parseInt(properties.getProperty('BATCH_SIZE')) || 100;
     const apiWaitTime = parseInt(properties.getProperty('API_WAIT_TIME')) || 500;
     
-    if (!spreadsheetId) {
-      throw new Error('SPREADSHEET_IDがスクリプトプロパティに設定されていません。');
-    }
-    
-    if (!sheetName) {
-      throw new Error('SHEET_NAMEがスクリプトプロパティに設定されていません。');
+    if (!spreadsheetId || !sheetName) {
+      throw new Error('SPREADSHEET_IDまたはSHEET_NAMEがスクリプトプロパティに設定されていません。');
     }
     
     // スプレッドシートを取得
@@ -71,13 +208,13 @@ function updateInventoryDataBatch() {
     
     // 商品コードのリストを作成（空でないもののみ）
     const goodsCodeList = [];
-    const rowIndexMap = new Map(); // 商品コード → 行インデックスのマッピング
+    const rowIndexMap = new Map();
     
     for (let i = 0; i < values.length; i++) {
       const goodsCode = values[i][COLUMNS.GOODS_CODE];
       if (goodsCode && goodsCode.toString().trim()) {
         goodsCodeList.push(goodsCode.toString().trim());
-        rowIndexMap.set(goodsCode.toString().trim(), i + 2); // 実際の行番号（1ベース）
+        rowIndexMap.set(goodsCode.toString().trim(), i + 2);
       }
     }
     
@@ -88,17 +225,19 @@ function updateInventoryDataBatch() {
       return;
     }
     
-    // バッチ処理で在庫情報を取得・更新
+    // 単一API版バッチ処理で在庫情報を取得・更新
     let totalUpdated = 0;
     let totalErrors = 0;
+    let totalApiCalls = 0;
     
     for (let i = 0; i < goodsCodeList.length; i += batchSize) {
       const batch = goodsCodeList.slice(i, i + batchSize);
       console.log(`\n--- バッチ ${Math.floor(i / batchSize) + 1}: ${batch.length}件 ---`);
       
       try {
-        // バッチで在庫情報を取得
-        const inventoryDataMap = getBatchInventoryData(batch, tokens);
+        // 単一APIで在庫情報を取得
+        const inventoryDataMap = getSingleApiInventoryData(batch, tokens);
+        totalApiCalls++; // 1回のAPIコールのみ
         
         // スプレッドシートを更新
         for (const goodsCode of batch) {
@@ -119,7 +258,7 @@ function updateInventoryDataBatch() {
           }
         }
         
-        // バッチ間の待機（APIレート制限対策）
+        // バッチ間の待機
         if (i + batchSize < goodsCodeList.length) {
           console.log(`次のバッチまで ${apiWaitTime}ms 待機...`);
           Utilities.sleep(apiWaitTime);
@@ -134,281 +273,38 @@ function updateInventoryDataBatch() {
     const endTime = new Date();
     const duration = (endTime - startTime) / 1000;
     
-    console.log('\n=== 一括更新完了 ===');
+    console.log('\n=== 単一API版更新完了 ===');
     console.log(`処理時間: ${duration.toFixed(1)}秒`);
+    console.log(`APIコール数: ${totalApiCalls}回`);
     console.log(`更新成功: ${totalUpdated}件`);
     console.log(`エラー: ${totalErrors}件`);
     console.log(`処理速度: ${(goodsCodeList.length / duration).toFixed(1)}件/秒`);
     
-    // 従来版との比較情報を表示
-    const conventionalTime = goodsCodeList.length * 2; // 従来版の推定時間（2秒/件）
-    const speedImprovement = conventionalTime / duration;
-    console.log(`\n--- 性能改善結果 ---`);
-    console.log(`従来版推定時間: ${conventionalTime.toFixed(1)}秒`);
-    console.log(`高速化倍率: ${speedImprovement.toFixed(1)}倍`);
+    // 従来版・二重API版との比較
+    const conventionalTime = goodsCodeList.length * 2;
+    const dualApiCalls = Math.ceil(goodsCodeList.length / batchSize) * 2;
+    const singleApiImprovement = dualApiCalls / totalApiCalls;
+    
+    console.log(`\n--- API最適化結果 ---`);
+    console.log(`従来版APIコール数: ${goodsCodeList.length * 2}回`);
+    console.log(`二重API版コール数: ${dualApiCalls}回`);
+    console.log(`単一API版コール数: ${totalApiCalls}回`);
+    console.log(`二重API版からの削減率: ${((dualApiCalls - totalApiCalls) / dualApiCalls * 100).toFixed(1)}%`);
+    console.log(`APIコール削減倍率: ${singleApiImprovement.toFixed(1)}倍`);
     
   } catch (error) {
-    console.error('一括更新エラー:', error.message);
+    console.error('単一API版更新エラー:', error.message);
     throw error;
   }
 }
 
 /**
- * バッチで在庫情報を取得
- * @param {string[]} goodsCodeList - 商品コードの配列
- * @param {Object} tokens - アクセストークンとリフレッシュトークン
- * @returns {Map<string, Object>} 商品コード → 在庫情報のマップ
+ * APIフィールド調査テスト関数
+ * 在庫マスタAPIで商品名が取得可能かを調査
  */
-function getBatchInventoryData(goodsCodeList, tokens) {
-  const inventoryDataMap = new Map();
-  
+function testApiFieldInvestigation() {
   try {
-    console.log(`  商品マスタ一括検索: ${goodsCodeList.length}件`);
-    
-    // ステップ1: 商品マスタAPIで複数商品を一括検索
-    const goodsDataMap = getBatchGoodsData(goodsCodeList, tokens);
-    console.log(`  商品マスタ取得完了: ${goodsDataMap.size}件`);
-    
-    if (goodsDataMap.size === 0) {
-      console.log('  商品が見つかりませんでした');
-      return inventoryDataMap;
-    }
-    
-    // ステップ2: 在庫マスタAPIで複数商品の在庫を一括取得
-    console.log(`  在庫マスタ一括検索: ${goodsDataMap.size}件`);
-    const stockDataMap = getBatchStockData(Array.from(goodsDataMap.keys()), tokens);
-    console.log(`  在庫マスタ取得完了: ${stockDataMap.size}件`);
-    
-    // ステップ3: 商品情報と在庫情報を結合
-    for (const [goodsCode, goodsData] of goodsDataMap) {
-      const stockData = stockDataMap.get(goodsCode);
-      
-      const completeInventoryData = {
-        goods_id: goodsData.goods_id,
-        goods_name: goodsData.goods_name,
-        stock_quantity: stockData ? parseInt(stockData.stock_quantity) || 0 : parseInt(goodsData.stock_quantity) || 0,
-        stock_allocated_quantity: stockData ? parseInt(stockData.stock_allocation_quantity) || 0 : 0,
-        stock_free_quantity: stockData ? parseInt(stockData.stock_free_quantity) || 0 : 0,
-        stock_defective_quantity: stockData ? parseInt(stockData.stock_defective_quantity) || 0 : 0,
-        stock_advance_order_quantity: stockData ? parseInt(stockData.stock_advance_order_quantity) || 0 : 0,
-        stock_advance_order_allocation_quantity: stockData ? parseInt(stockData.stock_advance_order_allocation_quantity) || 0 : 0,
-        stock_advance_order_free_quantity: stockData ? parseInt(stockData.stock_advance_order_free_quantity) || 0 : 0,
-        stock_remaining_order_quantity: stockData ? parseInt(stockData.stock_remaining_order_quantity) || 0 : 0,
-        stock_out_quantity: stockData ? parseInt(stockData.stock_out_quantity) || 0 : 0
-      };
-      
-      inventoryDataMap.set(goodsCode, completeInventoryData);
-    }
-    
-    console.log(`  結合完了: ${inventoryDataMap.size}件`);
-    return inventoryDataMap;
-    
-  } catch (error) {
-    console.error(`バッチ在庫取得エラー:`, error.message);
-    return inventoryDataMap;
-  }
-}
-
-/**
- * 複数商品の基本情報を一括取得
- * @param {string[]} goodsCodeList - 商品コードの配列
- * @param {Object} tokens - トークン情報
- * @returns {Map<string, Object>} 商品コード → 商品情報のマップ
- */
-function getBatchGoodsData(goodsCodeList, tokens) {
-  const url = `${NE_API_URL}/api_v1_master_goods/search`;
-  
-  // スクリプトプロパティからバッチサイズを取得
-  const properties = PropertiesService.getScriptProperties();
-  const batchSize = parseInt(properties.getProperty('BATCH_SIZE')) || 100;
-  
-  // 複数の商品IDを検索条件に設定
-  const goodsIdCondition = goodsCodeList.join(',');
-  
-  const payload = {
-    'access_token': tokens.accessToken,
-    'refresh_token': tokens.refreshToken,
-    'goods_id-in': goodsIdCondition, // IN条件で複数商品を一括検索
-    'fields': 'goods_id,goods_name,stock_quantity',
-    'limit': batchSize.toString() // 取得件数制限
-  };
-  
-  const options = {
-    'method': 'POST',
-    'headers': {
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    'payload': Object.keys(payload).map(key =>
-      encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
-    ).join('&')
-  };
-  
-  const goodsDataMap = new Map();
-  
-  try {
-    const response = UrlFetchApp.fetch(url, options);
-    const responseText = response.getContentText();
-    const responseData = JSON.parse(responseText);
-    
-    console.log(`    商品マスタAPI応答: result=${responseData.result}, count=${responseData.count || 0}`);
-    
-    // トークンが更新された場合は保存
-    if (responseData.access_token && responseData.refresh_token) {
-      updateStoredTokens(responseData.access_token, responseData.refresh_token);
-      // トークンを更新
-      tokens.accessToken = responseData.access_token;
-      tokens.refreshToken = responseData.refresh_token;
-    }
-    
-    if (responseData.result === 'success' && responseData.data) {
-      responseData.data.forEach(goodsData => {
-        goodsDataMap.set(goodsData.goods_id, {
-          goods_id: goodsData.goods_id,
-          goods_name: goodsData.goods_name,
-          stock_quantity: goodsData.stock_quantity
-        });
-      });
-      
-      console.log(`    API応答: ${responseData.data.length}件取得`);
-    } else {
-      console.error(`    商品マスタAPI エラー:`, responseData.message || 'Unknown error');
-    }
-    
-    return goodsDataMap;
-    
-  } catch (error) {
-    console.error(`商品マスタ一括取得エラー:`, error.message);
-    return goodsDataMap;
-  }
-}
-
-/**
- * 複数商品の在庫情報を一括取得
- * @param {string[]} goodsCodeList - 商品コードの配列
- * @param {Object} tokens - トークン情報
- * @returns {Map<string, Object>} 商品コード → 在庫情報のマップ
- */
-function getBatchStockData(goodsCodeList, tokens) {
-  const url = `${NE_API_URL}/api_v1_master_stock/search`;
-  
-  // スクリプトプロパティからバッチサイズを取得
-  const properties = PropertiesService.getScriptProperties();
-  const batchSize = parseInt(properties.getProperty('BATCH_SIZE')) || 100;
-  
-  // 複数の商品IDを検索条件に設定
-  const goodsIdCondition = goodsCodeList.join(',');
-  
-  const payload = {
-    'access_token': tokens.accessToken,
-    'refresh_token': tokens.refreshToken,
-    'stock_goods_id-in': goodsIdCondition, // IN条件で複数商品の在庫を一括検索
-    'fields': 'stock_goods_id,stock_quantity,stock_allocation_quantity,stock_defective_quantity,stock_remaining_order_quantity,stock_out_quantity,stock_free_quantity,stock_advance_order_quantity,stock_advance_order_allocation_quantity,stock_advance_order_free_quantity',
-    'limit': batchSize.toString()
-  };
-  
-  const options = {
-    'method': 'POST',
-    'headers': {
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    'payload': Object.keys(payload).map(key =>
-      encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
-    ).join('&')
-  };
-  
-  const stockDataMap = new Map();
-  
-  try {
-    const response = UrlFetchApp.fetch(url, options);
-    const responseText = response.getContentText();
-    const responseData = JSON.parse(responseText);
-    
-    console.log(`    在庫マスタAPI応答: result=${responseData.result}, count=${responseData.count || 0}`);
-    
-    // トークンが更新された場合は保存
-    if (responseData.access_token && responseData.refresh_token) {
-      updateStoredTokens(responseData.access_token, responseData.refresh_token);
-      // トークンを更新
-      tokens.accessToken = responseData.access_token;
-      tokens.refreshToken = responseData.refresh_token;
-    }
-    
-    if (responseData.result === 'success' && responseData.data) {
-      responseData.data.forEach(stockData => {
-        stockDataMap.set(stockData.stock_goods_id, stockData);
-      });
-      
-      console.log(`    API応答: ${responseData.data.length}件取得`);
-    } else {
-      console.error(`    在庫マスタAPI エラー:`, responseData.message || 'Unknown error');
-    }
-    
-    return stockDataMap;
-    
-  } catch (error) {
-    console.error(`在庫マスタ一括取得エラー:`, error.message);
-    return stockDataMap;
-  }
-}
-
-/**
- * 保存されたトークンを取得（既存関数）
- */
-function getStoredTokens() {
-  const properties = PropertiesService.getScriptProperties();
-  const accessToken = properties.getProperty('ACCESS_TOKEN');
-  const refreshToken = properties.getProperty('REFRESH_TOKEN');
-  
-  if (!accessToken || !refreshToken) {
-    throw new Error('アクセストークンが見つかりません。先に認証を完了してください。');
-  }
-  
-  return {
-    accessToken,
-    refreshToken
-  };
-}
-
-/**
- * スプレッドシートの行を在庫データで更新（既存関数）
- */
-function updateRowWithInventoryData(sheet, rowIndex, inventoryData) {
-  const updateValues = [
-    inventoryData.stock_quantity || 0,
-    inventoryData.stock_allocated_quantity || 0,
-    inventoryData.stock_free_quantity || 0,
-    inventoryData.stock_advance_order_quantity || 0,
-    inventoryData.stock_advance_order_allocation_quantity || 0,
-    inventoryData.stock_advance_order_free_quantity || 0,
-    inventoryData.stock_defective_quantity || 0,
-    inventoryData.stock_remaining_order_quantity || 0,
-    inventoryData.stock_out_quantity || 0
-  ];
-  
-  const range = sheet.getRange(rowIndex, COLUMNS.STOCK_QTY + 1, 1, updateValues.length);
-  range.setValues([updateValues]);
-}
-
-/**
- * トークンを更新保存（既存関数）
- */
-function updateStoredTokens(accessToken, refreshToken) {
-  const properties = PropertiesService.getScriptProperties();
-  properties.setProperties({
-    'ACCESS_TOKEN': accessToken,
-    'REFRESH_TOKEN': refreshToken,
-    'TOKEN_UPDATED_AT': new Date().getTime().toString()
-  });
-  console.log('  トークンを更新しました');
-}
-
-/**
- * テスト用：小規模バッチでの動作確認
- * @param {number} maxItems - テスト対象の最大商品数（デフォルト: 10）
- */
-function testBatchProcessing(maxItems = 10) {
-  try {
-    console.log(`=== バッチ処理テスト（最大${maxItems}件） ===`);
+    console.log('=== APIフィールド調査テスト開始 ===');
     
     // スクリプトプロパティから設定値を取得
     const properties = PropertiesService.getScriptProperties();
@@ -419,7 +315,7 @@ function testBatchProcessing(maxItems = 10) {
       throw new Error('SPREADSHEET_IDまたはSHEET_NAMEがスクリプトプロパティに設定されていません。');
     }
     
-    // スプレッドシートから商品コードを取得
+    // スプレッドシートから最初の5件の商品コードを取得
     const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
     const sheet = spreadsheet.getSheetByName(sheetName);
     const lastRow = sheet.getLastRow();
@@ -429,139 +325,132 @@ function testBatchProcessing(maxItems = 10) {
       return;
     }
     
-    const dataRange = sheet.getRange(2, 1, Math.min(maxItems, lastRow - 1), 1);
+    const dataRange = sheet.getRange(2, 1, Math.min(5, lastRow - 1), 1);
+    const values = dataRange.getValues();
+    const sampleGoodsCodeList = values
+      .map(row => row[0])
+      .filter(code => code && code.toString().trim());
+    
+    const tokens = getStoredTokens();
+    
+    // フィールド調査実行
+    const investigationResult = investigateStockApiFields(sampleGoodsCodeList, tokens);
+    
+    if (investigationResult.success) {
+      console.log('\n=== 調査成功 ===');
+      console.log('在庫マスタAPIのみでの処理可能性を評価しました。');
+      
+      if (investigationResult.hasGoodsName) {
+        console.log('✓ 商品名フィールドが利用可能です');
+        console.log('→ 単一API処理が推奨されます');
+      } else {
+        console.log('⚠ 商品名フィールドが見つかりません');
+        console.log('→ 商品名が必要な場合は二重API処理が必要です');
+        console.log('→ 在庫数値のみでよい場合は単一API処理が可能です');
+      }
+    } else {
+      console.log('調査に失敗しました:', investigationResult.error);
+    }
+    
+  } catch (error) {
+    console.error('APIフィールド調査エラー:', error.message);
+  }
+}
+
+/**
+ * 性能比較テスト：二重API版 vs 単一API版
+ */
+function compareApiVersions(sampleSize = 10) {
+  console.log(`=== API版本比較テスト（${sampleSize}件） ===`);
+  
+  try {
+    // スクリプトプロパティから設定値を取得
+    const properties = PropertiesService.getScriptProperties();
+    const spreadsheetId = properties.getProperty('SPREADSHEET_ID');
+    const sheetName = properties.getProperty('SHEET_NAME');
+    
+    if (!spreadsheetId || !sheetName) {
+      throw new Error('設定が不完全です');
+    }
+    
+    // サンプル商品コードを取得
+    const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    const sheet = spreadsheet.getSheetByName(sheetName);
+    const lastRow = sheet.getLastRow();
+    
+    if (lastRow <= 1) {
+      console.log('テスト用データが存在しません');
+      return;
+    }
+    
+    const dataRange = sheet.getRange(2, 1, Math.min(sampleSize, lastRow - 1), 1);
     const values = dataRange.getValues();
     const goodsCodeList = values
       .map(row => row[0])
       .filter(code => code && code.toString().trim())
-      .slice(0, maxItems);
+      .slice(0, sampleSize);
     
-    console.log(`テスト対象商品コード: ${goodsCodeList.join(', ')}`);
+    console.log(`比較対象商品コード: ${goodsCodeList.join(', ')}`);
     
     const tokens = getStoredTokens();
     
-    // バッチで在庫情報を取得
-    const startTime = new Date();
-    const inventoryDataMap = getBatchInventoryData(goodsCodeList, tokens);
-    const endTime = new Date();
-    const duration = (endTime - startTime) / 1000;
+    // 二重API版テスト
+    console.log('\n--- 二重API版実行 ---');
+    const dualApiStartTime = new Date();
+    const dualApiResult = getBatchInventoryData(goodsCodeList, tokens);
+    const dualApiEndTime = new Date();
+    const dualApiDuration = (dualApiEndTime - dualApiStartTime) / 1000;
     
-    console.log(`\n=== テスト結果 ===`);
-    console.log(`処理時間: ${duration.toFixed(1)}秒`);
-    console.log(`取得件数: ${inventoryDataMap.size}件`);
-    console.log(`処理速度: ${(goodsCodeList.length / duration).toFixed(1)}件/秒`);
+    // 単一API版テスト
+    console.log('\n--- 単一API版実行 ---');
+    const singleApiStartTime = new Date();
+    const singleApiResult = getSingleApiInventoryData(goodsCodeList, tokens);
+    const singleApiEndTime = new Date();
+    const singleApiDuration = (singleApiEndTime - singleApiStartTime) / 1000;
     
-    // 取得したデータの内容を表示
-    for (const [goodsCode, data] of inventoryDataMap) {
-      console.log(`${goodsCode}: 在庫${data.stock_quantity} 引当${data.stock_allocated_quantity} フリー${data.stock_free_quantity}`);
-    }
+    // 結果比較
+    console.log('\n=== 比較結果 ===');
+    console.log(`二重API版時間: ${dualApiDuration.toFixed(1)}秒`);
+    console.log(`単一API版時間: ${singleApiDuration.toFixed(1)}秒`);
+    console.log(`時間短縮効果: ${((dualApiDuration - singleApiDuration) / dualApiDuration * 100).toFixed(1)}%`);
+    
+    console.log(`二重API版取得件数: ${dualApiResult.size}件`);
+    console.log(`単一API版取得件数: ${singleApiResult.size}件`);
+    console.log(`取得率比較: ${(singleApiResult.size / dualApiResult.size * 100).toFixed(1)}%`);
+    
+    // APIコール数比較
+    const dualApiCalls = 2; // 商品マスタ + 在庫マスタ
+    const singleApiCalls = 1; // 在庫マスタのみ
+    console.log(`APIコール数削減: ${dualApiCalls}回 → ${singleApiCalls}回（${((dualApiCalls - singleApiCalls) / dualApiCalls * 100).toFixed(0)}%削減）`);
     
   } catch (error) {
-    console.error('バッチテストエラー:', error.message);
-    throw error;
+    console.error('比較テストエラー:', error.message);
   }
 }
 
 /**
- * パフォーマンス比較用：従来版と一括版の処理時間を比較
- * @param {number} sampleSize - 比較対象のサンプル数（デフォルト: 10）
+ * 単一API版使用方法ガイド
  */
-function comparePerformance(sampleSize = 10) {
-  console.log(`=== パフォーマンス比較テスト（${sampleSize}件） ===`);
-  
-  // スクリプトプロパティから設定値を取得
-  const properties = PropertiesService.getScriptProperties();
-  const spreadsheetId = properties.getProperty('SPREADSHEET_ID');
-  const sheetName = properties.getProperty('SHEET_NAME');
-  
-  if (!spreadsheetId || !sheetName) {
-    throw new Error('SPREADSHEET_IDまたはSHEET_NAMEがスクリプトプロパティに設定されていません。');
-  }
-  
-  // スプレッドシートから商品コードを取得
-  const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
-  const sheet = spreadsheet.getSheetByName(sheetName);
-  const lastRow = sheet.getLastRow();
-  
-  if (lastRow <= 1) {
-    console.log('テスト用データが存在しません');
-    return;
-  }
-  
-  const dataRange = sheet.getRange(2, 1, Math.min(sampleSize, lastRow - 1), 1);
-  const values = dataRange.getValues();
-  const goodsCodeList = values
-    .map(row => row[0])
-    .filter(code => code && code.toString().trim())
-    .slice(0, sampleSize);
-  
-  console.log(`比較対象商品コード: ${goodsCodeList.join(', ')}`);
-  
-  const tokens = getStoredTokens();
-  
-  // 従来版の推定時間（実際には実行しない）
-  const conventionalEstimatedTime = goodsCodeList.length * 2; // 2秒/件
-  
-  // 一括版の実際の処理時間
-  console.log('\n一括版実行中...');
-  const startTime = new Date();
-  const inventoryDataMap = getBatchInventoryData(goodsCodeList, tokens);
-  const endTime = new Date();
-  const batchTime = (endTime - startTime) / 1000;
-  
-  // 結果比較
-  const speedImprovement = conventionalEstimatedTime / batchTime;
-  
-  console.log('\n=== 性能比較結果 ===');
-  console.log(`従来版推定時間: ${conventionalEstimatedTime.toFixed(1)}秒（${sampleSize} × 2秒/件）`);
-  console.log(`一括版実際時間: ${batchTime.toFixed(1)}秒`);
-  console.log(`高速化倍率: ${speedImprovement.toFixed(1)}倍`);
-  console.log(`取得成功率: ${(inventoryDataMap.size / goodsCodeList.length * 100).toFixed(1)}%`);
-  
-  // 数千件での推定効果
-  const estimatedFor1000 = {
-    conventional: 1000 * 2 / 60, // 分
-    batch: 1000 / goodsCodeList.length * batchTime / 60 // 分
-  };
-  
-  console.log('\n=== 1000件処理時の推定時間 ===');
-  console.log(`従来版: ${estimatedFor1000.conventional.toFixed(1)}分`);
-  console.log(`一括版: ${estimatedFor1000.batch.toFixed(1)}分`);
-  console.log(`時間短縮: ${(estimatedFor1000.conventional - estimatedFor1000.batch).toFixed(1)}分`);
-}
-
-/**
- * 使用方法ガイド
- */
-function showBatchUsageGuide() {
-  console.log('=== 一括処理版 使用方法ガイド ===');
+function showSingleApiUsageGuide() {
+  console.log('=== 単一API版使用方法ガイド ===');
   console.log('');
-  console.log('【主要関数】');
-  console.log('1. updateInventoryDataBatch()');
-  console.log('   - 全商品の在庫情報を一括処理で更新');
-  console.log('   - 100件ずつのバッチで自動分割処理');
-  console.log('   - 従来版より大幅に高速化');
+  console.log('【事前調査】');
+  console.log('1. testApiFieldInvestigation()');
+  console.log('   - 在庫マスタAPIで商品名が取得可能かを調査');
+  console.log('   - 単一API処理の可否を判定');
   console.log('');
-  console.log('2. testBatchProcessing(件数)');
-  console.log('   - 小規模テスト用（デフォルト10件）');
-  console.log('   - 例: testBatchProcessing(5)');
+  console.log('【性能テスト】');
+  console.log('2. compareApiVersions(件数)');
+  console.log('   - 二重API版と単一API版の性能比較');
+  console.log('   - 例: compareApiVersions(20)');
   console.log('');
-  console.log('3. comparePerformance(件数)');
-  console.log('   - 従来版との性能比較テスト');
-  console.log('   - 例: comparePerformance(20)');
+  console.log('【実行】');
+  console.log('3. updateInventoryDataSingleApi()');
+  console.log('   - 在庫マスタAPIのみで全件更新');
+  console.log('   - APIコール数を約50%削減');
   console.log('');
-  console.log('【期待される改善効果】');
-  console.log('- APIコール数: 1/50～1/100に削減');
-  console.log('- 処理速度: 10～50倍の高速化');
-  console.log('- 実行時間制限: 数千件でも制限内で完了');
-  console.log('- API制限: レート制限に引っかかりにくい');
-  console.log('');
-  console.log('【推奨実行手順】');
-  console.log('1. testBatchProcessing(10) で動作確認');
-  console.log('2. comparePerformance(20) で性能確認');
-  console.log('3. updateInventoryDataBatch() で全件更新');
-  console.log('');
-  console.log('【設定変更可能項目】');
-  console.log('- BATCH_SIZE: バッチサイズ（現在100件）');
-  console.log('- API_WAIT_TIME: API間隔（現在500ms）');
+  console.log('【期待効果】');
+  console.log('- APIサーバー負荷: 50%削減');
+  console.log('- 処理時間: さらなる短縮');
+  console.log('- 安定性: APIエラーリスクの軽減');
 }
