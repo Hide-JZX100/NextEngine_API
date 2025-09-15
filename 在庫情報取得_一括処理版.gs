@@ -40,7 +40,7 @@ const COLUMNS = {
 // 設定値
 const MAX_ITEMS_PER_CALL = 1000;  // 1回のAPIコールで処理する最大件数（上限1000件）
 const API_WAIT_TIME = 500;        // APIコール間の待機時間（ミリ秒）
-const NE_API_URL = 'https://api.next-engine.org';  // ネクストエンジンAPI URL
+//const NE_API_URL = 'https://api.next-engine.org';  // ネクストエンジンAPI URL
 
 /**
  * スクリプトプロパティの初期設定
