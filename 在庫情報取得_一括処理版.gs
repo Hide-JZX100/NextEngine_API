@@ -252,32 +252,26 @@ function updateInventoryDataBatch() {
   try {
     console.log('=== 在庫情報一括更新開始 ===');
     const startTime = new Date();
-
     // スプレッドシートを取得
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = spreadsheet.getSheetByName(SHEET_NAME);
     if (!sheet) {
       throw new Error(`シート "${SHEET_NAME}" が見つかりません`);
     }
-
     // データ範囲を取得
     const lastRow = sheet.getLastRow();
     if (lastRow <= 1) {
       console.log('データが存在しません');
       return;
     }
-
     const dataRange = sheet.getRange(2, 1, lastRow - 1, 12);
     const values = dataRange.getValues();
     console.log(`処理対象: ${values.length}行`);
-
     // トークンを取得
     const tokens = getStoredTokens();
-
     // 商品コードのリストを作成（空でないもののみ）
     const goodsCodeList = [];
     const rowIndexMap = new Map(); // 商品コード → 行インデックスのマッピング
-
     for (let i = 0; i < values.length; i++) {
       const goodsCode = values[i][COLUMNS.GOODS_CODE];
       if (goodsCode && goodsCode.toString().trim()) {
@@ -285,73 +279,100 @@ function updateInventoryDataBatch() {
         rowIndexMap.set(goodsCode.toString().trim(), i + 2); // 実際の行番号（1ベース）
       }
     }
-
     console.log(`有効な商品コード: ${goodsCodeList.length}件`);
     if (goodsCodeList.length === 0) {
       console.log('処理対象の商品コードがありません');
       return;
     }
-
     // バッチ処理で在庫情報を取得・更新
     let totalUpdated = 0;
     let totalErrors = 0;
-
+    const errorDetails = []; // ★エラー詳細を収集
+    
     for (let i = 0; i < goodsCodeList.length; i += MAX_ITEMS_PER_CALL) {
       const batch = goodsCodeList.slice(i, i + MAX_ITEMS_PER_CALL);
       console.log(`\n--- バッチ ${Math.floor(i / MAX_ITEMS_PER_CALL) + 1}: ${batch.length}件 ---`);
-
       try {
         // バッチで在庫情報を取得
         const inventoryDataMap = getBatchInventoryData(batch, tokens);
-
         // スプレッドシートを更新
         for (const goodsCode of batch) {
           const inventoryData = inventoryDataMap.get(goodsCode);
           const rowIndex = rowIndexMap.get(goodsCode);
-
           if (inventoryData && rowIndex) {
             try {
               updateRowWithInventoryData(sheet, rowIndex, inventoryData);
               totalUpdated++;
               console.log(` ✓ ${goodsCode}: 更新完了`);
             } catch (error) {
+              // ★個別更新エラーの詳細を記録
+              const errorInfo = {
+                goodsCode: goodsCode,
+                errorType: '更新エラー',
+                errorMessage: error.message,
+                timestamp: new Date(),
+                batchNumber: Math.floor(i / MAX_ITEMS_PER_CALL) + 1
+              };
+              errorDetails.push(errorInfo);
               console.error(` ✗ ${goodsCode}: 更新エラー - ${error.message}`);
               totalErrors++;
             }
           } else {
+            // ★データなしの場合も記録
+            const errorInfo = {
+              goodsCode: goodsCode,
+              errorType: 'データなし',
+              errorMessage: inventoryData ? 'rowIndex not found' : 'inventory data not found',
+              timestamp: new Date(),
+              batchNumber: Math.floor(i / MAX_ITEMS_PER_CALL) + 1
+            };
+            errorDetails.push(errorInfo);
             console.log(` - ${goodsCode}: データなし`);
           }
         }
-
         // バッチ間の待機（APIレート制限対策）
         if (i + MAX_ITEMS_PER_CALL < goodsCodeList.length) {
           console.log(`次のバッチまで ${API_WAIT_TIME}ms 待機...`);
           Utilities.sleep(API_WAIT_TIME);
         }
-
       } catch (error) {
+        // ★バッチ全体のエラーを記録
+        batch.forEach(goodsCode => {
+          const errorInfo = {
+            goodsCode: goodsCode,
+            errorType: 'バッチエラー',
+            errorMessage: error.message,
+            timestamp: new Date(),
+            batchNumber: Math.floor(i / MAX_ITEMS_PER_CALL) + 1
+          };
+          errorDetails.push(errorInfo);
+        });
         console.error(`バッチ処理エラー:`, error.message);
         totalErrors += batch.length;
       }
     }
-
+    
     const endTime = new Date();
     const duration = (endTime - startTime) / 1000;
-
+    
+    // ★エラーレポートの作成
+    if (errorDetails.length > 0) {
+      logErrorsToSheet(errorDetails);
+      console.log(`\n--- エラーレポート ---`);
+      console.log(`エラーレポートをシートに記録しました: ${errorDetails.length}件`);
+    }
+    
     console.log('\n=== 一括更新完了 ===');
     console.log(`処理時間: ${duration.toFixed(1)}秒`);
     console.log(`更新成功: ${totalUpdated}件`);
     console.log(`エラー: ${totalErrors}件`);
     console.log(`処理速度: ${(goodsCodeList.length / duration).toFixed(1)}件/秒`);
-
     // 従来版との比較情報を表示
     const conventionalTime = goodsCodeList.length * 2; // 従来版の推定時間（2秒/件）
     const speedImprovement = conventionalTime / duration;
-
     console.log(`\n--- 性能改善結果 ---`);
     console.log(`従来版推定時間: ${conventionalTime.toFixed(1)}秒`);
     console.log(`高速化倍率: ${speedImprovement.toFixed(1)}倍`);
-
   } catch (error) {
     console.error('一括更新エラー:', error.message);
     throw error;
@@ -715,6 +736,58 @@ function showCurrentProperties() {
   console.log('認証情報:');
   console.log(`ACCESS_TOKEN: ${properties.getProperty('ACCESS_TOKEN') ? '設定済み' : '未設定'}`);
   console.log(`REFRESH_TOKEN: ${properties.getProperty('REFRESH_TOKEN') ? '設定済み' : '未設定'}`);
+}
+
+/**
+ * エラー詳細をスプレッドシートに記録
+ * @param {Array} errorDetails - エラー詳細の配列
+ */
+function logErrorsToSheet(errorDetails) {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    let errorSheet = spreadsheet.getSheetByName('エラーログ');
+    
+    // エラーログシートが存在しない場合は作成
+    if (!errorSheet) {
+      errorSheet = spreadsheet.insertSheet('エラーログ');
+      // ヘッダー行を設定
+      const headers = [
+        '発生日時', '商品コード', 'エラー種別', 
+        'エラー内容', 'バッチ番号', '処理日時'
+      ];
+      errorSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      errorSheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    }
+    
+    // エラーデータを準備
+    const errorRows = errorDetails.map(error => [
+      error.timestamp,
+      error.goodsCode,
+      error.errorType,
+      error.errorMessage,
+      error.batchNumber,
+      new Date()
+    ]);
+    
+    // データを追加
+    if (errorRows.length > 0) {
+      const lastRow = errorSheet.getLastRow();
+      const range = errorSheet.getRange(lastRow + 1, 1, errorRows.length, 6);
+      range.setValues(errorRows);
+      
+      // 日時列のフォーマット設定
+      errorSheet.getRange(lastRow + 1, 1, errorRows.length, 1)
+                .setNumberFormat('yyyy/mm/dd hh:mm:ss');
+      errorSheet.getRange(lastRow + 1, 6, errorRows.length, 1)
+                .setNumberFormat('yyyy/mm/dd hh:mm:ss');
+    }
+    
+    console.log(`エラーログに${errorRows.length}件を記録しました`);
+    
+  } catch (error) {
+    console.error('エラーログ記録中にエラーが発生:', error.message);
+    // エラーログの記録に失敗してもメイン処理は継続
+  }
 }
 
 /**
