@@ -21,6 +21,24 @@
 const SPREADSHEET_ID = '1noQTPM0EMlyBNDdX4JDPZcBvh-3RT1VtWzNDA85SIkM';
 const SHEET_NAME = 'GAS';
 
+/**
+ * スプレッドシート設定を取得
+ */
+function getSpreadsheetConfig() {
+  const properties = PropertiesService.getScriptProperties();
+  const SPREADSHEET_ID = properties.getProperty('SPREADSHEET_ID');
+  const SHEET_NAME = properties.getProperty('SHEET_NAME');
+
+  if (!SPREADSHEET_ID || !SHEET_NAME) {
+    throw new Error('スプレッドシート設定が不完全です。スクリプトプロパティにSPREADSHEET_IDとSHEET_NAMEを設定してください。');
+  }
+
+  return {
+    SPREADSHEET_ID,
+    SHEET_NAME
+  };
+}
+
 // 列のマッピング（既存と同じ）
 const COLUMNS = {
   GOODS_CODE: 0,        // A列: 商品コード
@@ -41,39 +59,6 @@ const COLUMNS = {
 const MAX_ITEMS_PER_CALL = 1000;  // 1回のAPIコールで処理する最大件数（上限1000件）
 const API_WAIT_TIME = 500;        // APIコール間の待機時間（ミリ秒）
 //const NE_API_URL = 'https://api.next-engine.org';  // ネクストエンジンAPI URL
-
-/**
- * スクリプトプロパティの初期設定
- * 初回実行時に使用してください
- */
-function setupBatchProperties() {
-  const properties = PropertiesService.getScriptProperties();
-  
-  // 既存の認証情報は保持して、新しい設定のみ追加
-  const newProperties = {
-    'SPREADSHEET_ID': '1noQTPM0EMlyBNDdX4JDPZcBvh-3RT1VtWzNDA85SIkM',
-    'SHEET_NAME': 'GAS',
-    'BATCH_SIZE': '1000',
-    'API_WAIT_TIME': '500'
-  };
-
-  console.log('=== スクリプトプロパティ設定 ===');
-  for (const [key, value] of Object.entries(newProperties)) {
-    const currentValue = properties.getProperty(key);
-    if (currentValue) {
-      console.log(`${key}: ${currentValue} (既存値を保持)`);
-    } else {
-      properties.setProperty(key, value);
-      console.log(`${key}: ${value} (新規設定)`);
-    }
-  }
-  
-  console.log('');
-  console.log('設定完了！以下の関数でテストを開始できます：');
-  console.log('- compareAPIVersions(10)');
-  console.log('- testBatchProcessing(10)');
-  console.log('- updateInventoryDataBatch()');
-}
 
 /**
  * API版本比較テスト：二重API版 vs 単一API版
@@ -249,6 +234,7 @@ function fetchInventoryWithSingleAPI(goodsCodes, tokens) {
  * メイン関数：一括処理による在庫情報更新
  */
 function updateInventoryDataBatch() {
+  const config = getSpreadsheetConfig();
   try {
     console.log('=== 在庫情報一括更新開始 ===');
     const startTime = new Date();
@@ -617,6 +603,7 @@ function updateStoredTokens(accessToken, refreshToken) {
  * @param {number} maxItems - テスト対象の最大商品数（デフォルト: 10）
  */
 function testBatchProcessing(maxItems = 10) {
+  const config = getSpreadsheetConfig();
   try {
     console.log(`=== バッチ処理テスト（最大${maxItems}件） ===`);
     
@@ -668,6 +655,7 @@ function testBatchProcessing(maxItems = 10) {
  * @param {number} sampleSize - 比較対象のサンプル数（デフォルト: 10）
  */
 function comparePerformance(sampleSize = 10) {
+  const config = getSpreadsheetConfig();
   console.log(`=== パフォーマンス比較テスト（${sampleSize}件） ===`);
   
   // スプレッドシートから商品コードを取得
