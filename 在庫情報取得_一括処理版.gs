@@ -15,11 +15,7 @@
  * - 認証スクリプトで事前にトークンを取得済みである必要があります
  * - 一度に処理できる商品数は最大1000件です
  * - 大量データの場合は自動的にバッチ分割します
- */
-
-// スプレッドシートの設定（既存と同じ）
-const SPREADSHEET_ID = '1noQTPM0EMlyBNDdX4JDPZcBvh-3RT1VtWzNDA85SIkM';
-const SHEET_NAME = 'GAS';
+*/
 
 /**
  * スプレッドシート設定を取得
@@ -239,6 +235,7 @@ function updateInventoryDataBatch() {
     console.log('=== 在庫情報一括更新開始 ===');
     const startTime = new Date();
     // スプレッドシートを取得
+    const { SPREADSHEET_ID, SHEET_NAME } = getSpreadsheetConfig();
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = spreadsheet.getSheetByName(SHEET_NAME);
     if (!sheet) {
@@ -608,6 +605,7 @@ function testBatchProcessing(maxItems = 10) {
     console.log(`=== バッチ処理テスト（最大${maxItems}件） ===`);
     
     // スプレッドシートから商品コードを取得
+    const { SPREADSHEET_ID, SHEET_NAME } = getSpreadsheetConfig();
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = spreadsheet.getSheetByName(SHEET_NAME);
     const lastRow = sheet.getLastRow();
@@ -659,6 +657,7 @@ function comparePerformance(sampleSize = 10) {
   console.log(`=== パフォーマンス比較テスト（${sampleSize}件） ===`);
   
   // スプレッドシートから商品コードを取得
+  const { SPREADSHEET_ID, SHEET_NAME } = getSpreadsheetConfig();
   const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = spreadsheet.getSheetByName(SHEET_NAME);
   const lastRow = sheet.getLastRow();
