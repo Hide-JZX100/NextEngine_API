@@ -230,7 +230,7 @@ function fetchInventoryWithSingleAPI(goodsCodes, tokens) {
  * メイン関数：一括処理による在庫情報更新
  */
 function updateInventoryDataBatch() {
-  const config = getSpreadsheetConfig();
+
   try {
     console.log('=== 在庫情報一括更新開始 ===');
     const startTime = new Date();
@@ -600,7 +600,7 @@ function updateStoredTokens(accessToken, refreshToken) {
  * @param {number} maxItems - テスト対象の最大商品数（デフォルト: 10）
  */
 function testBatchProcessing(maxItems = 10) {
-  const config = getSpreadsheetConfig();
+
   try {
     console.log(`=== バッチ処理テスト（最大${maxItems}件） ===`);
     
@@ -653,7 +653,7 @@ function testBatchProcessing(maxItems = 10) {
  * @param {number} sampleSize - 比較対象のサンプル数（デフォルト: 10）
  */
 function comparePerformance(sampleSize = 10) {
-  const config = getSpreadsheetConfig();
+
   console.log(`=== パフォーマンス比較テスト（${sampleSize}件） ===`);
   
   // スプレッドシートから商品コードを取得
