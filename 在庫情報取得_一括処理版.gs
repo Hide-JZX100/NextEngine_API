@@ -453,50 +453,50 @@ function updateInventoryDataBatch() {
  * @param {Object} tokens - アクセストークンとリフレッシュトークン
  * @returns {Map<string, Object>} 商品コード → 在庫情報のマップ
  */
+/**
+ * バッチで在庫情報を取得（在庫APIのみ版）
+ * @param {string[]} goodsCodeList - 商品コードの配列
+ * @param {Object} tokens - アクセストークンとリフレッシュトークン
+ * @returns {Map<string, Object>} 商品コード → 在庫情報のマップ
+ */
 function getBatchInventoryData(goodsCodeList, tokens) {
   const inventoryDataMap = new Map();
 
   try {
-    console.log(`  商品マスタ一括検索: ${goodsCodeList.length}件`);
+    console.log(`  在庫マスタ一括検索: ${goodsCodeList.length}件`);
     
-    // ステップ1: 商品マスタAPIで複数商品を一括検索
-    const goodsDataMap = getBatchGoodsData(goodsCodeList, tokens);
-    console.log(`  商品マスタ取得完了: ${goodsDataMap.size}件`);
+    // 在庫マスタAPIのみで在庫情報を直接取得
+    const stockDataMap = getBatchStockData(goodsCodeList, tokens);
+    console.log(`  在庫マスタ取得完了: ${stockDataMap.size}件`);
 
-    if (goodsDataMap.size === 0) {
-      console.log('  商品が見つかりませんでした');
+    if (stockDataMap.size === 0) {
+      console.log('  在庫データが見つかりませんでした');
       return inventoryDataMap;
     }
 
-    // ステップ2: 在庫マスタAPIで複数商品の在庫を一括取得
-    console.log(`  在庫マスタ一括検索: ${goodsDataMap.size}件`);
-    const stockDataMap = getBatchStockData(Array.from(goodsDataMap.keys()), tokens);
-    console.log(`  在庫マスタ取得完了: ${stockDataMap.size}件`);
-
-    // ステップ3: 商品情報と在庫情報を結合
-    for (const [goodsCode, goodsData] of goodsDataMap) {
-      const stockData = stockDataMap.get(goodsCode);
-      const completeInventoryData = {
-        goods_id: goodsData.goods_id,
-        goods_name: goodsData.goods_name,
-        stock_quantity: stockData ? parseInt(stockData.stock_quantity) || 0 : parseInt(goodsData.stock_quantity) || 0,
-        stock_allocated_quantity: stockData ? parseInt(stockData.stock_allocation_quantity) || 0 : 0,
-        stock_free_quantity: stockData ? parseInt(stockData.stock_free_quantity) || 0 : 0,
-        stock_defective_quantity: stockData ? parseInt(stockData.stock_defective_quantity) || 0 : 0,
-        stock_advance_order_quantity: stockData ? parseInt(stockData.stock_advance_order_quantity) || 0 : 0,
-        stock_advance_order_allocation_quantity: stockData ? parseInt(stockData.stock_advance_order_allocation_quantity) || 0 : 0,
-        stock_advance_order_free_quantity: stockData ? parseInt(stockData.stock_advance_order_free_quantity) || 0 : 0,
-        stock_remaining_order_quantity: stockData ? parseInt(stockData.stock_remaining_order_quantity) || 0 : 0,
-        stock_out_quantity: stockData ? parseInt(stockData.stock_out_quantity) || 0 : 0
+    // 在庫情報のみでデータを構築（商品名は空文字）
+    for (const [goodsCode, stockData] of stockDataMap) {
+      const inventoryData = {
+        goods_id: stockData.stock_goods_id,
+        goods_name: '', // 商品名は更新しない（空文字で統一）
+        stock_quantity: parseInt(stockData.stock_quantity) || 0,
+        stock_allocated_quantity: parseInt(stockData.stock_allocation_quantity) || 0,
+        stock_free_quantity: parseInt(stockData.stock_free_quantity) || 0,
+        stock_defective_quantity: parseInt(stockData.stock_defective_quantity) || 0,
+        stock_advance_order_quantity: parseInt(stockData.stock_advance_order_quantity) || 0,
+        stock_advance_order_allocation_quantity: parseInt(stockData.stock_advance_order_allocation_quantity) || 0,
+        stock_advance_order_free_quantity: parseInt(stockData.stock_advance_order_free_quantity) || 0,
+        stock_remaining_order_quantity: parseInt(stockData.stock_remaining_order_quantity) || 0,
+        stock_out_quantity: parseInt(stockData.stock_out_quantity) || 0
       };
-      inventoryDataMap.set(goodsCode, completeInventoryData);
+      inventoryDataMap.set(goodsCode, inventoryData);
     }
 
-    console.log(`  結合完了: ${inventoryDataMap.size}件`);
+    console.log(`  在庫情報構築完了: ${inventoryDataMap.size}件`);
     return inventoryDataMap;
 
   } catch (error) {
-    console.error(`バッチ在庫取得エラー:`, error.message);
+    console.error(`在庫情報取得エラー:`, error.message);
     return inventoryDataMap;
   }
 }
