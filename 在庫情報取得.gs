@@ -688,7 +688,7 @@ function showUsageGuide() {
   console.log('【実行推奨順序】');
   console.log('1. まず checkScriptConfiguration() で設定確認');
   console.log('2. 次に testStockMasterFields("商品コード") でAPIの動作確認');
-  console.log('3. 次に updateSingleProduct("商品コード") で詳細在庫取得をテスト');
+  console.log('3. 次に testSingleUpdate() で詳細在庫取得をテスト');
   console.log('4. 問題なければ updateInventoryData() で全更新');
 }
 
