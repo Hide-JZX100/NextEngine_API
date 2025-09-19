@@ -17,14 +17,11 @@
  * - 大量データの場合は自動的にバッチ分割します
 */
 
-<<<<<<< HEAD
-=======
 // ファイルトップに（既に定義されているなら上書きしない）
 if (typeof NE_API_URL === 'undefined') {
   const NE_API_URL = PropertiesService.getScriptProperties().getProperty('NE_API_URL') || 'https://api.next-engine.org';
 }
 
->>>>>>> Gemini
 /**
  * スプレッドシート設定を取得
  */
