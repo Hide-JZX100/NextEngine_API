@@ -60,11 +60,6 @@ const COLUMNS = {
 const MAX_ITEMS_PER_CALL = 1000;  // 1回のAPIコールで処理する最大件数（上限1000件）
 const API_WAIT_TIME = 500;        // APIコール間の待機時間（ミリ秒）
 
-<<<<<<< HEAD
-// ネクストエンジンAPIのエンドポイントは認証.gsで定義済み
-
-=======
->>>>>>> Gemini
 /**
  * API版本比較テスト：二重API版 vs 単一API版
  * @param {number} sampleSize - テスト対象のサンプル数（デフォルト: 10）
