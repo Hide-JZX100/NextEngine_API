@@ -39,8 +39,18 @@
 ・初回実行時は完全更新が実行されます
 ・PropertiesServiceを使用して更新履歴を管理しています
 
+予備関数
+・Master_SuperFast：一番シンプルで高速
+・Master_Optimized：大容量データ処理時の安全策として用意した関数
+
+使い分けの想定
+データ量___推奨関数___理由
+~15,000行___Master_HybridUpdate___一括処理で高速
+15,000~30,000行___Master_Optimized___バッチ処理で安全
+30,000行~___Master_Optimized + 分割実行___確実な処理
+
 【作成日】2025年9月19日
-【最終更新】2025年9月19日
+【最終更新】2025年9月20日
 =============================================================================
 */
 
@@ -76,95 +86,6 @@ function getSheets() {
     ss_copyTo: ss_copyTo,
     sheet_copyTo: sheet_copyTo
   };
-}
-
-// バッチ処理版（元のコード）
-function Master_Optimized() {
-  try {
-    const startTime = new Date();
-    const sheets = getSheets();
-    const sheet_copyFrom = sheets.sheet_copyFrom;
-    const sheet_copyTo = sheets.sheet_copyTo;
-    
-    const lastRow_From = sheet_copyFrom.getLastRow();
-    const lastColumn_From = sheet_copyFrom.getLastColumn();
-    
-    Logger.log(`コピー元データ範囲: ${lastRow_From}行 × ${lastColumn_From}列`);
-    
-    if (lastRow_From === 0 || lastColumn_From === 0) {
-      Logger.log('コピー元にデータが存在しません');
-      return;
-    }
-    
-    sheet_copyTo.clear();
-    
-    const batchSize = 5000;
-    
-    for (let startRow = 1; startRow <= lastRow_From; startRow += batchSize) {
-      const endRow = Math.min(startRow + batchSize - 1, lastRow_From);
-      const numRows = endRow - startRow + 1;
-      
-      Logger.log(`処理中: ${startRow}行目から${endRow}行目まで（${numRows}行）`);
-      
-      const copyValue = sheet_copyFrom.getRange(startRow, 1, numRows, lastColumn_From).getValues();
-      
-      if (lastColumn_From >= 9) {
-        sheet_copyTo.getRange(startRow, 9, numRows, Math.min(2, lastColumn_From - 8))
-                    .setNumberFormat("@");
-      }
-      
-      sheet_copyTo.getRange(startRow, 1, numRows, lastColumn_From).setValues(copyValue);
-      
-      Utilities.sleep(100);
-    }
-    
-    const endTime = new Date();
-    const executionTime = (endTime - startTime) / 1000;
-    Logger.log(`処理完了: 実行時間 ${executionTime}秒`);
-    
-  } catch (error) {
-    Logger.log(`エラー発生: ${error.toString()}`);
-    throw error;
-  }
-}
-
-// より高速な代替案：値のみコピー（元のコード）
-function Master_SuperFast() {
-  try {
-    const startTime = new Date();
-    const sheets = getSheets();
-    const sheet_copyFrom = sheets.sheet_copyFrom;
-    const sheet_copyTo = sheets.sheet_copyTo;
-    
-    const lastRow_From = sheet_copyFrom.getLastRow();
-    const lastColumn_From = sheet_copyFrom.getLastColumn();
-    
-    Logger.log(`データ範囲: ${lastRow_From}行 × ${lastColumn_From}列`);
-    
-    if (lastRow_From === 0 || lastColumn_From === 0) {
-      Logger.log('データが存在しません');
-      return;
-    }
-    
-    const allData = sheet_copyFrom.getRange(1, 1, lastRow_From, lastColumn_From).getValues();
-    
-    sheet_copyTo.clear();
-    
-    sheet_copyTo.getRange(1, 1, lastRow_From, lastColumn_From).setValues(allData);
-    
-    if (lastColumn_From >= 9) {
-      sheet_copyTo.getRange(1, 9, lastRow_From, Math.min(2, lastColumn_From - 8))
-                  .setNumberFormat("@");
-    }
-    
-    const endTime = new Date();
-    const executionTime = (endTime - startTime) / 1000;
-    Logger.log(`Super Fast完了: 実行時間 ${executionTime}秒`);
-    
-  } catch (error) {
-    Logger.log(`エラー発生: ${error.toString()}`);
-    throw error;
-  }
 }
 
 // ハイブリッド更新版（追加メイン + 低頻度更新に最適）
@@ -259,6 +180,95 @@ function Master_ForceFullUpdate() {
     const endTime = new Date();
     const executionTime = (endTime - startTime) / 1000;
     Logger.log(`強制完全更新完了: 実行時間 ${executionTime}秒`);
+    
+  } catch (error) {
+    Logger.log(`エラー発生: ${error.toString()}`);
+    throw error;
+  }
+}
+
+// バッチ処理版（元のコード）
+function Master_Optimized() {
+  try {
+    const startTime = new Date();
+    const sheets = getSheets();
+    const sheet_copyFrom = sheets.sheet_copyFrom;
+    const sheet_copyTo = sheets.sheet_copyTo;
+    
+    const lastRow_From = sheet_copyFrom.getLastRow();
+    const lastColumn_From = sheet_copyFrom.getLastColumn();
+    
+    Logger.log(`コピー元データ範囲: ${lastRow_From}行 × ${lastColumn_From}列`);
+    
+    if (lastRow_From === 0 || lastColumn_From === 0) {
+      Logger.log('コピー元にデータが存在しません');
+      return;
+    }
+    
+    sheet_copyTo.clear();
+    
+    const batchSize = 5000;
+    
+    for (let startRow = 1; startRow <= lastRow_From; startRow += batchSize) {
+      const endRow = Math.min(startRow + batchSize - 1, lastRow_From);
+      const numRows = endRow - startRow + 1;
+      
+      Logger.log(`処理中: ${startRow}行目から${endRow}行目まで（${numRows}行）`);
+      
+      const copyValue = sheet_copyFrom.getRange(startRow, 1, numRows, lastColumn_From).getValues();
+      
+      if (lastColumn_From >= 9) {
+        sheet_copyTo.getRange(startRow, 9, numRows, Math.min(2, lastColumn_From - 8))
+                    .setNumberFormat("@");
+      }
+      
+      sheet_copyTo.getRange(startRow, 1, numRows, lastColumn_From).setValues(copyValue);
+      
+      Utilities.sleep(100);
+    }
+    
+    const endTime = new Date();
+    const executionTime = (endTime - startTime) / 1000;
+    Logger.log(`処理完了: 実行時間 ${executionTime}秒`);
+    
+  } catch (error) {
+    Logger.log(`エラー発生: ${error.toString()}`);
+    throw error;
+  }
+}
+
+// より高速な代替案：値のみコピー（元のコード）
+function Master_SuperFast() {
+  try {
+    const startTime = new Date();
+    const sheets = getSheets();
+    const sheet_copyFrom = sheets.sheet_copyFrom;
+    const sheet_copyTo = sheets.sheet_copyTo;
+    
+    const lastRow_From = sheet_copyFrom.getLastRow();
+    const lastColumn_From = sheet_copyFrom.getLastColumn();
+    
+    Logger.log(`データ範囲: ${lastRow_From}行 × ${lastColumn_From}列`);
+    
+    if (lastRow_From === 0 || lastColumn_From === 0) {
+      Logger.log('データが存在しません');
+      return;
+    }
+    
+    const allData = sheet_copyFrom.getRange(1, 1, lastRow_From, lastColumn_From).getValues();
+    
+    sheet_copyTo.clear();
+    
+    sheet_copyTo.getRange(1, 1, lastRow_From, lastColumn_From).setValues(allData);
+    
+    if (lastColumn_From >= 9) {
+      sheet_copyTo.getRange(1, 9, lastRow_From, Math.min(2, lastColumn_From - 8))
+                  .setNumberFormat("@");
+    }
+    
+    const endTime = new Date();
+    const executionTime = (endTime - startTime) / 1000;
+    Logger.log(`Super Fast完了: 実行時間 ${executionTime}秒`);
     
   } catch (error) {
     Logger.log(`エラー発生: ${error.toString()}`);
