@@ -17,9 +17,18 @@
  * - 大量データの場合は自動的にバッチ分割します
 */
 
-// ファイルトップに（既に定義されているなら上書きしない）
+/**
+ * ファイルトップに（既に定義されているなら上書きしない）
+ * スクリプトの実行に必要なAPI URLの定数を定義します。
+ * 既に定義されている場合はスキップし、未定義の場合はプロパティサービスから取得するか、
+ * デフォルトのURLを使用します。
+ */
 if (typeof NE_API_URL === 'undefined') {
   const NE_API_URL = PropertiesService.getScriptProperties().getProperty('NE_API_URL') || 'https://api.next-engine.org';
+}
+
+if (typeof NE_BASE_URL === 'undefined') {
+  const NE_BASE_URL = PropertiesService.getScriptProperties().getProperty('NE_BASE_URL') || 'https://base.next-engine.org';
 }
 
 /**
