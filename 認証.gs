@@ -1,29 +1,114 @@
-/**
- * ネクストエンジンAPI認証テスト用スクリプト
- * 
- * 【目的】
- * ネクストエンジンAPIとの認証を確立し、アクセストークンの取得を行う
- * 
- * 【機能】
- * 1. OAuth2認証フローの実行
- * 2. アクセストークンとリフレッシュトークンの取得・保存
- * 3. トークンの有効性確認
- * 
- * 【設定方法】
- * スクリプトプロパティに以下の値を設定してください：
- * - CLIENT_ID: ネクストエンジンのクライアントID
- * - CLIENT_SECRET: ネクストエンジンのクライアントシークレット
- * - REDIRECT_URI: リダイレクトURI（スクリーンショット参照）
- * 
- * 【注意事項】
- * - テスト環境での動作確認を前提としています
- * - 本番環境での使用前に十分なテストを行ってください
- * - アクセストークンは安全に管理してください
+/*
+=============================================================================
+ネクストエンジンAPI認証テスト用スクリプト
+=============================================================================
+
+* 【目的】
+* ネクストエンジンAPIとの認証を確立し、アクセストークンの取得を行う
+* 
+* 【機能】
+* 1. OAuth2認証フローの実行
+* 2. アクセストークンとリフレッシュトークンの取得・保存
+* 3. トークンの有効性確認
+
+【スクリプトプロパティの設定方法】
+1. GASエディタで「プロジェクトの設定」を開く（歯車のアイコン）
+2. 「スクリプトプロパティ」セクションまでスクロール
+3. 「スクリプトプロパティの追加」をクリックし、以下のキーと値を設定
+
+   キー                     | 値
+   -------------------------|------------------------------------
+   CLIENT_ID                | ネクストエンジンのクライアントID
+   CLIENT_SECRET            | ネクストエンジンのクライアントシークレット
+   REDIRECT_URI             | ネクストエンジンのリダイレクトURI
+
+* 
+* 【注意事項】
+* - テスト環境での動作確認を前提としています
+* - 本番環境での使用前に十分なテストを行ってください
+* - アクセストークンは安全に管理してください
+
+使用方法
+showAuthGuide関数を実行してユーザーガイドを確認してください。
+
+認証フローの主要な関数
+generateAuthUrl() 🔗
+この関数は、ネクストエンジンに認証を要求するためのURLを生成します。
+ユーザーがこのURLをブラウザで開いてネクストエンジンにログインすると、認証が完了し、
+設定されたリダイレクトURIに戻されます。
+この関数は認証フローの最初のステップです。
+
+doGet(e) 🌐
+Webアプリケーションとしてデプロイされたスクリプトが、
+ネクストエンジンからのリダイレクトを受け取った際に自動的に実行されます。
+URLパラメータからuidとstateを受け取り、
+これらを使って次のステップであるアクセストークンの取得処理を呼び出します。
+認証成功/失敗に応じたHTMLページを表示する役割も持っています。
+
+getAccessToken(uid, state) 🔑
+doGet関数から呼び出され、ネクストエンジンから受け取ったuidとstateを使用して、
+アクセストークンとリフレッシュトークンをAPI経由で取得します。
+取得したトークンは、その後のAPIリクエストで使用するためにスクリプトプロパティに保存されます。
+
+テストおよびユーティリティ関数
+testApiConnection() ✅
+認証が成功したことを確認するために、保存されたアクセストークンを使ってネクストエンジンのAPIに接続を試みます。
+具体的には、ログインユーザー情報を取得するAPIを呼び出し、レスポンスが正常か確認します。
+トークンの自動更新機能も含まれています。
+
+testInventoryApi() 📦
+こちらは、最終的な目標である在庫情報取得のAPI接続をテストするための関数です。
+testApiConnectionと同様に、保存されたトークンを使用して商品マスタ検索APIを呼び出します。
+API権限が不足している場合に、その解決方法をコンソールに出力する機能も含まれており、デバッグに役立ちます。
+
+その他の補助関数
+getScriptProperties() ⚙️
+スクリプトプロパティに設定されたCLIENT_IDやCLIENT_SECRETなどの認証に必要な情報を取得します。
+設定が不足している場合はエラーを発生させます。
+
+showStoredTokens() ℹ️
+現在スクリプトプロパティに保存されているアクセストークンやリフレッシュトークンの情報をコンソールに表示し、
+状態を確認するためのものです。
+
+clearProperties() 🧹
+スクリプトプロパティに保存されたすべてのトークン情報を削除します。
+認証プロセスを最初からやり直したい場合などに使用します。
+
+showAuthGuide() 📖
+このスクリプトをどのように使用すればよいか、全体的な手順を分かりやすく説明するためのガイドをコンソールに出力します。
+
+=============================================================================
 */
 
 // ネクストエンジンAPIのエンドポイント
 const NE_BASE_URL = 'https://base.next-engine.org';
 const NE_API_URL = 'https://api.next-engine.org';
+
+/**
+ * ステップ1: 認証URLを生成してログ出力
+ * 手動でブラウザでアクセスして認証を行う
+ */
+function generateAuthUrl() {
+  try {
+    const config = getScriptProperties();
+    
+    // ネクストエンジンの認証URL
+    const authUrl = `${NE_BASE_URL}/users/sign_in?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(config.redirectUri)}`;
+    
+    console.log('=== ネクストエンジン認証URL ===');
+    console.log(authUrl);
+    console.log('');
+    console.log('上記URLをブラウザでアクセスしてください');
+    console.log('認証後、リダイレクトURLに uid と state パラメータが付与されて戻ってきます');
+    console.log('例: https://your-redirect-uri?uid=XXXXX&state=YYYYY');
+    
+    return authUrl;
+    
+  } catch (error) {
+    console.error('認証URL生成エラー:', error.message);
+    throw error;
+  }
+}
 
 /**
  * WebアプリとしてのGETリクエスト処理
@@ -158,32 +243,6 @@ function getScriptProperties() {
     clientSecret,
     redirectUri
   };
-}
-
-/**
- * ステップ1: 認証URLを生成してログ出力
- * 手動でブラウザでアクセスして認証を行う
- */
-function generateAuthUrl() {
-  try {
-    const config = getScriptProperties();
-    
-    // ネクストエンジンの認証URL
-    const authUrl = `${NE_BASE_URL}/users/sign_in?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(config.redirectUri)}`;
-    
-    console.log('=== ネクストエンジン認証URL ===');
-    console.log(authUrl);
-    console.log('');
-    console.log('上記URLをブラウザでアクセスしてください');
-    console.log('認証後、リダイレクトURLに uid と state パラメータが付与されて戻ってきます');
-    console.log('例: https://your-redirect-uri?uid=XXXXX&state=YYYYY');
-    
-    return authUrl;
-    
-  } catch (error) {
-    console.error('認証URL生成エラー:', error.message);
-    throw error;
-  }
 }
 
 /**
