@@ -57,7 +57,7 @@
 /**
  * スクリプトプロパティからスプレッドシートとシートオブジェクトを取得するヘルパー関数
  * @returns {Object} 必要なスプレッドシートとシートのオブジェクト
- */
+*/
 function getSheets() {
   const scriptProperties = PropertiesService.getScriptProperties();
   
