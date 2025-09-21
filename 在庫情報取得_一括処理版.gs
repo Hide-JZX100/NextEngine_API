@@ -17,6 +17,7 @@
 * - 一度に処理できる商品数は最大1000件です
 * - 大量データの場合は自動的にバッチ分割します
 
+
 使用方法
 showAuthGuide関数を実行してユーザーガイドを確認してください。
 
@@ -51,12 +52,12 @@ APIを2回呼び出す従来の方式をシミュレートします。
 APIコール数削減による性能向上が評価されます。
 
 getBatchGoodsData(goodsCodeList, tokens)
-商品マスタAPI（/api_v1_master_goods/search）を呼び出し、
+商品マスタAPI（／api_v1_master_goods／search）を呼び出し、
 複数の商品について基本情報（商品ID、商品名など）をまとめて取得します。
 goods_id-inというパラメータを使って、複数の商品を一度に検索する点が特徴です。
 
 getBatchStockData(goodsCodeList, tokens)
-在庫マスタAPI（/api_v1_master_stock/search）を呼び出し、
+在庫マスタAPI（／api_v1_master_stock／search）を呼び出し、
 複数の商品について在庫情報（在庫数、引当数など）をまとめて取得します。
 これもstock_goods_id-inパラメータを利用して、効率的な一括検索を行います。
 
