@@ -74,6 +74,10 @@ clearProperties() 🧹
 スクリプトプロパティに保存されたすべてのトークン情報を削除します。
 認証プロセスを最初からやり直したい場合などに使用します。
 
+checkCurrentDeployment() ℹ️
+本番環境並行した際にエラーが発生する原因の切り分けを行うために、
+REDIRECT_URI、CLIENT_IDが間違っていないかの確認に使用します。
+
 showAuthGuide() 📖
 このスクリプトをどのように使用すればよいか、全体的な手順を分かりやすく説明するためのガイドをコンソールに出力します。
 
@@ -87,7 +91,7 @@ const NE_API_URL = 'https://api.next-engine.org';
 /**
  * ステップ1: 認証URLを生成してログ出力
  * 手動でブラウザでアクセスして認証を行う
- */
+*/
 function generateAuthUrl() {
   try {
     const config = getScriptProperties();
@@ -113,7 +117,7 @@ function generateAuthUrl() {
 /**
  * WebアプリとしてのGETリクエスト処理
  * ネクストエンジンからのリダイレクト時にuidとstateを受け取る
- */
+*/
 function doGet(e) {
   const uid = e.parameter.uid;
   const state = e.parameter.state;
@@ -226,7 +230,7 @@ function doGet(e) {
 
 /**
  * スクリプトプロパティから設定値を取得
- */
+*/
 function getScriptProperties() {
   const properties = PropertiesService.getScriptProperties();
   
@@ -249,7 +253,7 @@ function getScriptProperties() {
  * ステップ2: uidとstateを使用してアクセストークンを取得
  * @param {string} uid - 認証後に取得されるuid
  * @param {string} state - 認証後に取得されるstate
- */
+*/
 function getAccessToken(uid, state) {
   try {
     if (!uid || !state) {
@@ -320,7 +324,7 @@ function getAccessToken(uid, state) {
 /**
  * ステップ3: 保存されたトークンでAPI接続をテスト
  * ユーザー情報を取得して認証が正常に動作しているか確認
- */
+*/
 function testApiConnection() {
   try {
     const properties = PropertiesService.getScriptProperties();
@@ -389,7 +393,7 @@ function testApiConnection() {
 /**
  * 在庫APIのテスト（最終目標に向けて）
  * 商品マスタ情報の取得をテスト
- */
+*/
 function testInventoryApi() {
   try {
     const properties = PropertiesService.getScriptProperties();
@@ -468,7 +472,7 @@ function testInventoryApi() {
 
 /**
  * 保存されているトークン情報を表示
- */
+*/
 function showStoredTokens() {
   const properties = PropertiesService.getScriptProperties();
   
@@ -481,7 +485,7 @@ function showStoredTokens() {
 
 /**
  * スクリプトプロパティをクリア（テスト用）
- */
+*/
 function clearProperties() {
   const properties = PropertiesService.getScriptProperties();
   properties.deleteProperty('ACCESS_TOKEN');
@@ -493,8 +497,40 @@ function clearProperties() {
 }
 
 /**
+ * 現在のデプロイURLとスクリプトプロパティを確認
+*/
+function checkCurrentDeployment() {
+  console.log('=== 現在のデプロイ情報確認 ===');
+  
+  // スクリプトプロパティの確認
+  const properties = PropertiesService.getScriptProperties();
+  const clientId = properties.getProperty('CLIENT_ID');
+  const redirectUri = properties.getProperty('REDIRECT_URI');
+  const clientSecret = properties.getProperty('CLIENT_SECRET');
+  
+  console.log('CLIENT_ID:', clientId || '未設定');
+  console.log('REDIRECT_URI:', redirectUri || '未設定');
+  console.log('CLIENT_SECRET:', clientSecret ? '設定済み' : '未設定');
+  
+  console.log('');
+  console.log('=== 確認ポイント ===');
+  console.log('1. GASのデプロイメニューで最新のWebアプリURLを確認');
+  console.log('2. そのURLがREDIRECT_URIと完全一致しているか');
+  console.log('3. ネクストエンジンの本番環境設定でリダイレクトURIが同じか');
+  console.log('4. クライアントIDが本番環境用になっているか');
+  
+  // 認証URL生成（デバッグ用）
+  if (clientId && redirectUri) {
+    const authUrl = `https://base.next-engine.org/users/sign_in?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    console.log('');
+    console.log('生成される認証URL:');
+    console.log(authUrl);
+  }
+}
+
+/**
  * 認証フロー全体のガイド表示
- */
+*/
 function showAuthGuide() {
   console.log('=== ネクストエンジンAPI認証ガイド ===');
   console.log('');
