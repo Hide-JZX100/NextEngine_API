@@ -21,7 +21,7 @@
 
 
 使用方法
-showAuthGuide関数を実行してユーザーガイドを確認してください。
+showUsageGuide関数を実行してユーザーガイドを確認してください。
 
 主要な処理を実行する関数
 updateInventoryDataBatch()
