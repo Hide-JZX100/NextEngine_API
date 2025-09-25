@@ -1,4 +1,4 @@
-/*
+/** */
 =============================================================================
 ネクストエンジン在庫情報取得スクリプト（一括処理版 + 単一API版テスト）
 =============================================================================
@@ -914,6 +914,7 @@ function showCurrentProperties() {
  */
 function logErrorsToSheet(errorDetails) {
   try {
+    const { SPREADSHEET_ID, SHEET_NAME } = getSpreadsheetConfig();
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
     let errorSheet = spreadsheet.getSheetByName('エラーログ');
     
