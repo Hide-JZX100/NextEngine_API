@@ -19,6 +19,7 @@
    TRIGGER_FUNCTION_NAME    | 実行したい関数名
  * 4. 実行したい時刻を executionTimes 配列に [時, 分] の形式で追加・編集します。
  * 5. この setTrigger() 関数を、**設定変更時または初回に限り**手動で一度実行してください。
+ * (一度実行すれば、永続的な日次トリガーが設定されるため、毎日実行する必要はありません)
 */
 
 // スクリプトプロパティから関数名を取得するためのキー
@@ -39,7 +40,7 @@ function setTrigger() {
   deleteTriggersForFunction(functionToTrigger);
 
   // 2. 実行したい時刻（[時, 分]）の配列を定義します。
-  // ここに新しい時刻を自由に追加できます。
+  // ここに新しい時刻を自由に追加できます。（分は切り捨てられるため、00分以外を設定する場合は everyDays() の代わりに at() を使用し、かつ daily トリガーであることを確認する必要があります。）
   const executionTimes = [
     [9, 0],   // 09:00
     [13, 50], // 13:50
@@ -50,7 +51,13 @@ function setTrigger() {
   // 3. 配列をループしてトリガーを作成します。
   executionTimes.forEach(([hour, minute]) => {
     
-    // 実行時刻を設定するためのDateオブジェクトを作成
+    // everyDays(1).atHour(hour) は「時」単位でしか設定できないため、
+    // 「分」単位の正確な設定には at(Dateオブジェクト) を使用する必要があります。
+    // ただし、 at(Date) はワンタイム実行と誤解されやすいため、
+    // ここでは「日次」が明確な atHour() を使わず、
+    // 確実な日次実行を意図した at() の記述に戻し、
+    // その代わり **everyDays(1)** を追加します。
+
     const triggerTime = new Date();
     triggerTime.setHours(hour);
     triggerTime.setMinutes(minute);
