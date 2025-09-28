@@ -57,7 +57,7 @@
 /**
  * スクリプトプロパティからスプレッドシートとシートオブジェクトを取得するヘルパー関数
  * @returns {Object} 必要なスプレッドシートとシートのオブジェクト
-*/
+ */
 function getSheets() {
   const scriptProperties = PropertiesService.getScriptProperties();
   
@@ -111,9 +111,11 @@ function Master_HybridUpdate() {
     
     if (shouldFullUpdate) {
       Logger.log('完全更新を実行します');
-      sheet_copyTo.clear();
       
       const allData = sheet_copyFrom.getRange(1, 1, lastRow_From, lastColumn_From).getValues();
+
+      sheet_copyTo.clear();
+
       sheet_copyTo.getRange(1, 1, lastRow_From, lastColumn_From).setValues(allData);
       
       if (lastColumn_From >= 9) {
@@ -165,8 +167,10 @@ function Master_ForceFullUpdate() {
     
     Logger.log(`強制完全更新: ${lastRow_From}行 × ${lastColumn_From}列`);
     
-    sheet_copyTo.clear();
     const allData = sheet_copyFrom.getRange(1, 1, lastRow_From, lastColumn_From).getValues();
+
+    sheet_copyTo.clear();
+    
     sheet_copyTo.getRange(1, 1, lastRow_From, lastColumn_From).setValues(allData);
     
     if (lastColumn_From >= 9) {
