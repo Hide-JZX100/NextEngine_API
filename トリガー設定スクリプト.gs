@@ -71,7 +71,7 @@ function setTrigger() {
  * 現在のスクリプトプロジェクトに設定されている、
  * 特定の関数に紐づく既存のトリガーのみを削除します。
  * @param {string} functionName 削除対象のトリガーが実行する関数名
- */
+*/
 function deleteTriggersForFunction(functionName) {
   const triggers = ScriptApp.getProjectTriggers();
   let deletedCount = 0;
