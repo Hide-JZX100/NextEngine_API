@@ -566,7 +566,12 @@ function getBatchInventoryData(goodsCodeList, tokens) {
   try {
     console.log(`  在庫マスタ一括検索: ${goodsCodeList.length}件`);
     
-    // 在庫マスタAPIのみで在庫情報を直接取得
+    // ★元の商品コードとの対応マップを作成
+    const codeMapping = new Map();
+    for (const code of goodsCodeList) {
+      codeMapping.set(code.toLowerCase(), code); // 小文字 → 元のコード
+    }
+    
     const stockDataMap = getBatchStockData(goodsCodeList, tokens);
     console.log(`  在庫マスタ取得完了: ${stockDataMap.size}件`);
 
@@ -575,11 +580,19 @@ function getBatchInventoryData(goodsCodeList, tokens) {
       return inventoryDataMap;
     }
 
-    // 在庫情報のみでデータを構築（商品名は空文字）
+    // ★ネクストエンジンから返ってきた商品IDを元のコードに変換
     for (const [goodsCode, stockData] of stockDataMap) {
+      // ネクストエンジンの商品IDを小文字化して元のコードを取得
+      const originalCode = codeMapping.get(goodsCode.toLowerCase());
+      
+      if (!originalCode) {
+        console.log(`  警告: ${goodsCode} に対応する元のコードが見つかりません`);
+        continue;
+      }
+      
       const inventoryData = {
         goods_id: stockData.stock_goods_id,
-        goods_name: '', // 商品名は更新しない（空文字で統一）
+        goods_name: '',
         stock_quantity: parseInt(stockData.stock_quantity) || 0,
         stock_allocated_quantity: parseInt(stockData.stock_allocation_quantity) || 0,
         stock_free_quantity: parseInt(stockData.stock_free_quantity) || 0,
@@ -590,7 +603,9 @@ function getBatchInventoryData(goodsCodeList, tokens) {
         stock_remaining_order_quantity: parseInt(stockData.stock_remaining_order_quantity) || 0,
         stock_out_quantity: parseInt(stockData.stock_out_quantity) || 0
       };
-      inventoryDataMap.set(goodsCode, inventoryData);
+      
+      // ★元のコード（スプレッドシートの値）をキーとして設定
+      inventoryDataMap.set(originalCode, inventoryData);
     }
 
     console.log(`  在庫情報構築完了: ${inventoryDataMap.size}件`);
