@@ -105,6 +105,9 @@ logErrorsToSheet(errorDetails)
 showCurrentProperties()
 現在のスクリプトプロパティの設定内容をログに出力します。
 
+debugSpecificProducts()
+大文字、小文字の表記ゆれがある場合に在庫情報が取得できない場合があるので、テスト関数を作成してその原因の特定を行う。
+
 showUsageGuide()
 スクリプトの主要な機能、使用方法、そして期待される効果について説明します。
 
@@ -958,6 +961,46 @@ function logErrorsToSheet(errorDetails) {
   } catch (error) {
     console.error('エラーログ記録中にエラーが発生:', error.message);
     // エラーログの記録に失敗してもメイン処理は継続
+  }
+}
+
+/**
+ * 特定商品の詳細調査
+ */
+function debugSpecificProducts() {
+  const testCodes = ['*****', '******'];
+  const tokens = getStoredTokens();
+  
+  console.log('=== 商品コード調査開始 ===');
+  
+  for (const code of testCodes) {
+    console.log(`\n--- ${code} の調査 ---`);
+    
+    // 小文字版も試す
+    const lowerCode = code.toLowerCase();
+    console.log(`小文字版: ${lowerCode}`);
+    
+    // 在庫マスタAPIで検索
+    const result = getBatchStockData([code], tokens);
+    console.log(`在庫マスタ検索結果: ${result.size}件`);
+    
+    if (result.size > 0) {
+      for (const [key, value] of result) {
+        console.log(`  商品ID: ${key}`);
+        console.log(`  在庫数: ${value.stock_quantity}`);
+      }
+    }
+    
+    // 小文字でも検索
+    const resultLower = getBatchStockData([lowerCode], tokens);
+    console.log(`在庫マスタ検索結果(小文字): ${resultLower.size}件`);
+    
+    if (resultLower.size > 0) {
+      for (const [key, value] of resultLower) {
+        console.log(`  商品ID: ${key}`);
+        console.log(`  在庫数: ${value.stock_quantity}`);
+      }
+    }
   }
 }
 
