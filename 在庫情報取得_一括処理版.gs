@@ -19,6 +19,16 @@
 * - 一度に処理できる商品数は最大1000件です
 * - 大量データの場合は自動的にバッチ分割します
 
+実行時間を任意のシートのA1セルに記載するようにしました。
+スクリプトプロパティの設定を行ってください。
+【スクリプトプロパティの設定方法】
+1. GASエディタで「プロジェクトの設定」を開く（歯車のアイコン）
+2. 「スクリプトプロパティ」セクションまでスクロール
+3. 「スクリプトプロパティの追加」をクリックし、以下のキーと値を設定
+   キー                     | 値
+   -------------------------|------------------------------------
+   LOG_SHEET_NAME           | 実行時間を記載したいシート名
+*
 
 使用方法
 showUsageGuide関数を実行してユーザーガイドを確認してください。
@@ -37,9 +47,6 @@ getBatchInventoryData(goodsCodeList, tokens)
 複数の商品コードに対応する在庫情報を一括で取得し、
 商品コードをキーとした在庫情報のマップ（Map）を返します。
 内部ではgetBatchStockDataを呼び出し、在庫マスタAPIから直接データを取得します。
-ネクストエンジンAPIは大文字小文字を区別せず検索
-戻り値の商品IDとスプレッドシートの商品コードが不一致の場合あり
-小文字正規化によるマッピングで元のコードを保持
 
 API呼び出しを担当する関数
 fetchInventoryWithSingleAPI(goodsCodes, tokens)
@@ -111,13 +118,14 @@ showCurrentProperties()
 debugSpecificProducts()
 大文字、小文字の表記ゆれがある場合に在庫情報が取得できない場合があるので、テスト関数を作成してその原因の特定を行う。
 
+recordExecutionTimestamp()
+実行完了日時を指定されたシートに記録する関数
+シート名はスクリプトプロパティに保存するので、任意のシート名を設定してください。
+また、実行完了日時はそのシートのA1セルに記録するようにしていますので、
+A1セルには他の情報を入力しないようにしてください。
+
 showUsageGuide()
 スクリプトの主要な機能、使用方法、そして期待される効果について説明します。
-
-【更新履歴】
-2025年9月: 初版作成（二重API版）
-2025年10月: 在庫APIのみ化、性能向上（25.6%短縮）
-2025年10月: 商品コード正規化処理追加（大文字小文字不一致対応）
 
 =============================================================================
 */
@@ -550,6 +558,12 @@ function updateInventoryDataBatch() {
     console.log(`\n--- 性能改善結果 ---`);
     console.log(`従来版推定時間: ${conventionalTime.toFixed(1)}秒`);
     console.log(`高速化倍率: ${speedImprovement.toFixed(1)}倍`);
+
+    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    // ★ ここで新しい関数を呼び出し、実行日時を記録します ★
+    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    recordExecutionTimestamp();
+
   } catch (error) {
     console.error('一括更新エラー:', error.message);
     throw error;
@@ -1024,6 +1038,38 @@ function debugSpecificProducts() {
         console.log(`  在庫数: ${value.stock_quantity}`);
       }
     }
+  }
+}
+
+/**
+ * 実行完了日時を指定されたシートに記録する関数
+*/
+function recordExecutionTimestamp() {
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const spreadsheetId = properties.getProperty('SPREADSHEET_ID');
+    const sheetName = properties.getProperty('LOG_SHEET_NAME'); // 新しく追加したプロパティ
+
+    if (!spreadsheetId || !sheetName) {
+      throw new Error('スクリプトプロパティ SPREADSHEET_ID または LOG_SHEET_NAME が設定されていません。');
+    }
+
+    const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    const sheet = spreadsheet.getSheetByName(sheetName);
+
+    if (!sheet) {
+      console.error(`シート "${sheetName}" が見つかりません。日時の記録をスキップします。`);
+      return;
+    }
+    
+    // A1セルに現在日時を書き込む
+    sheet.getRange(1, 1).setValue(
+      Utilities.formatDate(new Date(), 'JST', 'MM月dd日HH時mm分ss秒')
+    );
+    console.log(`実行日時をシート "${sheetName}" のA1セルに記録しました。`);
+
+  } catch (error) {
+    console.error('実行日時の記録中にエラーが発生しました:', error.message);
   }
 }
 
