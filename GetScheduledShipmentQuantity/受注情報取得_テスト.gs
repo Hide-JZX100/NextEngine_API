@@ -74,8 +74,29 @@ function testFetchShippingData() {
       'refresh_token': refreshToken,
       // テスト用に1件のみ取得
       'limit': '1',
-      // 取得する項目を指定（受注明細のフィールド名に修正）
-      'fields': 'receive_order_row_receive_order_id,receive_order_row_goods_id,receive_order_row_goods_name,receive_order_row_quantity,receive_order_row_unit_price'
+      // Shipping_piece.csv の全項目を取得
+      // 受注明細、商品マスタ、受注伝票の情報を1回のAPIコールで取得
+      'fields': [
+        // 受注明細の基本情報
+        'receive_order_row_receive_order_id',        // 伝票番号
+        'receive_order_row_goods_id',                // 商品コード
+        'receive_order_row_goods_name',              // 商品名
+        'receive_order_row_quantity',                // 受注数
+        'receive_order_row_stock_allocation_quantity', // 引当数
+        
+        // 商品マスタの寸法・重量情報
+        'goods_length',                              // 奥行き（cm）
+        'goods_width',                               // 幅（cm）
+        'goods_height',                              // 高さ（cm）
+        'goods_weight',                              // 重さ（g）
+        
+        // 受注伝票の情報
+        'receive_order_send_plan_date',              // 出荷予定日
+        'receive_order_delivery_id',                 // 発送方法コード
+        'receive_order_delivery_name',               // 発送方法
+        'receive_order_order_status_id',             // 受注状態区分
+        'receive_order_consignee_address1'           // 送り先住所1
+      ].join(',')
     };
     
     // HTTPリクエストのオプション
