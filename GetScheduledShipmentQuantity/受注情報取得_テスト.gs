@@ -51,7 +51,7 @@
  * 2. 必要なパラメータが正しく設定できているか確認
  * 3. レスポンスの構造を理解する
  * 4. どんなフィールドが取得できるか確認
- */
+*/
 function testFetchShippingData() {
   try {
     console.log('=== 出荷明細取得テスト開始 ===');
@@ -214,7 +214,7 @@ function testFetchShippingData() {
  * - receive_order_row_goods_weight: 重量
  * 
  * など、多数のフィールドが取得可能です
- */
+*/
 function showAvailableFields() {
   console.log('=== 受注明細検索APIで取得可能な主なフィールド ===');
   console.log('');
@@ -240,7 +240,193 @@ function showAvailableFields() {
 }
 
 /**
- * ステップ1: 日付指定で出荷明細を取得
+ * ステップ3: ページング処理で全データを取得
+ * 
+ * @param {string} startDate - 開始日（YYYY-MM-DD形式）
+ * @param {string} endDate - 終了日（YYYY-MM-DD形式）
+ * 
+ * このテストの目的:
+ * 1. 指定期間の全データを取得（最大3000件程度を想定）
+ * 2. 1回のAPIコールで1000件ずつ取得
+ * 3. offsetを変更しながらループ処理
+ * 4. 全データを配列に蓄積
+*/
+function fetchAllShippingData(startDate = '2025-10-03', endDate = '2025-10-05') {
+  try {
+    console.log('=== 全データ取得開始 ===');
+    console.log(`期間: ${startDate} ～ ${endDate}`);
+    console.log('');
+    
+    // ネクストエンジンAPIのエンドポイント（スクリプトプロパティから取得、なければデフォルト）
+    const NE_API_URL = PropertiesService.getScriptProperties().getProperty('NE_API_URL') || 'https://api.next-engine.org';
+    
+    // スクリプトプロパティからトークンを取得
+    const properties = PropertiesService.getScriptProperties();
+    let accessToken = properties.getProperty('ACCESS_TOKEN');
+    let refreshToken = properties.getProperty('REFRESH_TOKEN');
+    
+    if (!accessToken || !refreshToken) {
+      throw new Error('アクセストークンが見つかりません。先に認証.gsのtestApiConnection()を実行してください。');
+    }
+    
+    console.log('トークン取得完了');
+    console.log('');
+    
+    // 全データを格納する配列
+    const allData = [];
+    
+    // ページング用の変数
+    let offset = 0;
+    const limit = 1000; // 1回のAPIコールで最大1000件取得
+    let hasMoreData = true;
+    let apiCallCount = 0;
+    
+    // 受注明細検索APIのエンドポイント
+    const url = `${NE_API_URL}/api_v1_receiveorder_row/search`;
+    
+    // 日付をネクストエンジンAPI用のフォーマットに変換
+    const formattedStartDate = `${startDate} 00:00:00`;
+    const formattedEndDate = `${endDate} 23:59:59`;
+    
+    // ページングループ
+    while (hasMoreData) {
+      apiCallCount++;
+      
+      console.log(`--- APIコール ${apiCallCount}回目 ---`);
+      console.log(`offset: ${offset}, limit: ${limit}`);
+      
+      // APIリクエストのパラメータ
+      const payload = {
+        'access_token': accessToken,
+        'refresh_token': refreshToken,
+        'limit': limit.toString(),
+        'offset': offset.toString(),
+        // 出荷予定日で絞り込む
+        'receive_order_send_plan_date-gte': formattedStartDate,
+        'receive_order_send_plan_date-lte': formattedEndDate,
+        // Shipping_piece.csv の全項目を取得
+        'fields': [
+          // 受注明細の基本情報
+          'receive_order_row_receive_order_id',        // 伝票番号
+          'receive_order_row_goods_id',                // 商品コード
+          'receive_order_row_goods_name',              // 商品名
+          'receive_order_row_quantity',                // 受注数
+          'receive_order_row_stock_allocation_quantity', // 引当数
+          
+          // 商品マスタの寸法・重量情報
+          'goods_length',                              // 奥行き（cm）
+          'goods_width',                               // 幅（cm）
+          'goods_height',                              // 高さ（cm）
+          'goods_weight',                              // 重さ（g）
+          
+          // 受注伝票の情報
+          'receive_order_date',                        // 受注日
+          'receive_order_send_plan_date',              // 出荷予定日
+          'receive_order_delivery_id',                 // 発送方法コード
+          'receive_order_delivery_name',               // 発送方法
+          'receive_order_order_status_id',             // 受注状態区分
+          'receive_order_consignee_address1'           // 送り先住所1
+        ].join(',')
+      };
+      
+      // HTTPリクエストのオプション
+      const options = {
+        'method': 'POST',
+        'headers': {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        'payload': Object.keys(payload).map(key => 
+          encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
+        ).join('&')
+      };
+      
+      // APIリクエスト実行
+      const response = UrlFetchApp.fetch(url, options);
+      const responseText = response.getContentText();
+      const responseData = JSON.parse(responseText);
+      
+      // トークンが更新された場合は保存して、次のループで使用
+      if (responseData.access_token && responseData.refresh_token) {
+        accessToken = responseData.access_token;
+        refreshToken = responseData.refresh_token;
+        properties.setProperties({
+          'ACCESS_TOKEN': accessToken,
+          'REFRESH_TOKEN': refreshToken,
+          'TOKEN_UPDATED_AT': new Date().getTime().toString()
+        });
+      }
+      
+      // 結果の確認
+      if (responseData.result === 'success') {
+        const fetchedCount = parseInt(responseData.count);
+        console.log(`取得件数: ${fetchedCount}件`);
+        
+        // データを配列に追加
+        if (responseData.data && responseData.data.length > 0) {
+          allData.push(...responseData.data);
+          console.log(`累積取得件数: ${allData.length}件`);
+        }
+        
+        // 取得件数がlimit未満なら、これ以上データはない
+        if (fetchedCount < limit) {
+          hasMoreData = false;
+          console.log('全データ取得完了');
+        } else {
+          // 次のページへ
+          offset += limit;
+          console.log('');
+        }
+        
+      } else {
+        console.error('API エラー:', responseData.code, responseData.message);
+        throw new Error(`API エラー: ${responseData.message}`);
+      }
+    }
+    
+    console.log('');
+    console.log('=== 全データ取得成功 ===');
+    console.log(`総APIコール回数: ${apiCallCount}回`);
+    console.log(`総取得件数: ${allData.length}件`);
+    console.log('');
+    
+    // 最初の3件と最後の3件を表示
+    if (allData.length > 0) {
+      console.log('--- 最初の3件 ---');
+      for (let i = 0; i < Math.min(3, allData.length); i++) {
+        console.log(`${i + 1}件目:`);
+        console.log(`  伝票番号: ${allData[i].receive_order_row_receive_order_id}`);
+        console.log(`  商品コード: ${allData[i].receive_order_row_goods_id}`);
+        console.log(`  出荷予定日: ${allData[i].receive_order_send_plan_date}`);
+      }
+      
+      if (allData.length > 6) {
+        console.log('');
+        console.log('--- 最後の3件 ---');
+        for (let i = Math.max(0, allData.length - 3); i < allData.length; i++) {
+          console.log(`${i + 1}件目:`);
+          console.log(`  伝票番号: ${allData[i].receive_order_row_receive_order_id}`);
+          console.log(`  商品コード: ${allData[i].receive_order_row_goods_id}`);
+          console.log(`  出荷予定日: ${allData[i].receive_order_send_plan_date}`);
+        }
+      }
+    }
+    
+    console.log('');
+    console.log('=== 次のステップ ===');
+    console.log('1. 総取得件数が期待通りか確認してください');
+    console.log('2. APIコール回数が適切か確認してください（3000件なら3〜4回）');
+    console.log('3. 次はスプレッドシートへの書き込み機能を実装します');
+    
+    return allData;
+    
+  } catch (error) {
+    console.error('全データ取得エラー:', error.message);
+    console.error('エラー詳細:', error);
+    throw error;
+  }
+}
+
+/**
  * 
  * @param {string} startDate - 開始日（YYYY-MM-DD形式）
  * @param {string} endDate - 終了日（YYYY-MM-DD形式）
@@ -250,7 +436,7 @@ function showAvailableFields() {
  * 1. 日付範囲でフィルタリングできるか確認
  * 2. 出荷予定日での絞り込みが正しく動作するか確認
  * 3. サンドボックス・本番環境で同じロジックを使用
- */
+*/
 function fetchShippingDataByDate(startDate = '2025-10-03', endDate = '2025-10-05', limit = 10) {
   try {
     console.log('=== 日付指定出荷明細取得テスト開始 ===');
