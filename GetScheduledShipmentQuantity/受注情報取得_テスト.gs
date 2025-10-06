@@ -286,9 +286,9 @@ function fetchShippingDataByDate(startDate = '2025-10-03', endDate = '2025-10-05
       // 取得件数を指定
       'limit': limit.toString(),
       // 【重要】日付フィルタ
-      // 本番環境同様に出荷予定日で絞り込む
-      'receive_order_send_plan_date-start': formattedStartDate,
-      'receive_order_send_plan_date-end': formattedEndDate,
+      // 出荷予定日で絞り込む（-gte: 以上、-lte: 以下）
+      'receive_order_send_plan_date-gte': formattedStartDate,
+      'receive_order_send_plan_date-lte': formattedEndDate,
       
       // Shipping_piece.csv の全項目を取得
       'fields': [
