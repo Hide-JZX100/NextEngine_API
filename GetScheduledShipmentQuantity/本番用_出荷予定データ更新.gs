@@ -114,20 +114,30 @@ function updateShippingData(startDate, endDate) {
     console.log('');
     
     // 日付が指定されていない場合は、本日から3日分をデフォルトとする
-    if (!startDate) {
+    // ★★★ 修正ポイント: トリガー実行時も正しく動作するように改善 ★★★
+    if (!startDate || typeof startDate !== 'string') {
       const today = new Date();
-      startDate = Utilities.formatDate(today, 'Asia/Tokyo', 'yyyy-MM-dd');
+      // タイムゾーンを考慮して日付文字列を生成
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      startDate = `${year}-${month}-${day}`;
     }
     
-    if (!endDate) {
+    if (!endDate || typeof endDate !== 'string') {
       const today = new Date();
       const threeDaysLater = new Date(today.getTime() + (2 * 24 * 60 * 60 * 1000)); // 本日+2日
-      endDate = Utilities.formatDate(threeDaysLater, 'Asia/Tokyo', 'yyyy-MM-dd');
+      // タイムゾーンを考慮して日付文字列を生成
+      const year = threeDaysLater.getFullYear();
+      const month = String(threeDaysLater.getMonth() + 1).padStart(2, '0');
+      const day = String(threeDaysLater.getDate()).padStart(2, '0');
+      endDate = `${year}-${month}-${day}`;
     }
     
     console.log(`取得期間: ${startDate} ～ ${endDate}`);
     console.log('');
     
+  
     // ========================================
     // 2. データ取得（リトライ処理付き）
     // ========================================
