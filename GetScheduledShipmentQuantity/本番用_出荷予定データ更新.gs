@@ -142,8 +142,7 @@ function updateShippingData(startDate, endDate) {
       console.log('期間内に出荷予定データが存在しない可能性があります');
       console.log('');
       
-      // データ0件でも正常終了として扱う
-      logExecution(startDate, endDate, 0, 0, 'success', '取得データ0件');
+      // データ0件でも正常終了として扱う（ログは記録しない）
       return {
         success: true,
         startDate: startDate,
@@ -200,9 +199,9 @@ function updateShippingData(startDate, endDate) {
     console.log('');
     
     // ========================================
-    // 6. 実行ログを記録
+    // 6. 正常終了（ログは記録しない）
     // ========================================
-    logExecution(startDate, endDate, apiData.length, elapsedTime, 'success');
+    // エラー時のみログを記録するため、成功時のログ記録は行わない
     
     return {
       success: true,
@@ -227,7 +226,7 @@ function updateShippingData(startDate, endDate) {
     console.error(`発生時刻: ${Utilities.formatDate(endTime, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss')}`);
     console.error('');
     
-    // エラーログを記録
+    // エラーログを記録（エラー時のみ）
     const errorMessage = `[${currentStep}] ${error.message}`;
     logExecution(startDate || 'N/A', endDate || 'N/A', 0, elapsedTime, 'error', errorMessage);
     
@@ -309,7 +308,7 @@ function convertAllDataToSheetRows(apiData) {
 }
 
 /**
- * スプレッドシート書き込み（改善版：空白行問題解決）
+ * スプレッドシート書き込み（改善版：空白行問題解決 + 固定行対応）
  * 
  * @param {Array} convertedData - 変換済みデータ（2次元配列）
  */
@@ -337,12 +336,29 @@ function writeDataToSheet(convertedData) {
     // ヘッダー行の存在確認
     ensureHeaderExists(sheet);
     
-    // 既存データ行を完全に削除（ヘッダー行は残す）
-    // ★★★ 改善ポイント: 空白行が残らないように物理削除 ★★★
+    // 既存データ行を削除または内容クリア
+    // ★★★ 改善ポイント: 固定行対応 ★★★
     const lastRow = sheet.getLastRow();
     if (lastRow > 1) {
-      console.log(`既存データ行を削除: ${lastRow - 1}行`);
-      sheet.deleteRows(2, lastRow - 1); // 2行目から最終行まで物理的に削除
+      const rowsToDelete = lastRow - 1; // ヘッダーを除く行数
+      console.log(`既存データ行を処理: ${rowsToDelete}行`);
+      
+      if (convertedData.length === 0) {
+        // 新しいデータが0件の場合は、内容だけクリア（行は残す）
+        console.log('データ0件のため、内容のみクリアします');
+        sheet.getRange(2, 1, rowsToDelete, sheet.getLastColumn()).clearContent();
+      } else if (rowsToDelete > 1) {
+        // 新しいデータがある場合は、最後の1行を残して物理削除
+        console.log(`既存データ行を削除: ${rowsToDelete - 1}行（1行は残します）`);
+        sheet.deleteRows(2, rowsToDelete - 1); // 2行目から (最終行-1) まで削除
+        
+        // 残った1行（2行目）の内容をクリア
+        sheet.getRange(2, 1, 1, sheet.getLastColumn()).clearContent();
+      } else {
+        // 既存データが1行のみの場合は、内容だけクリア
+        console.log('既存データ1行のため、内容のみクリアします');
+        sheet.getRange(2, 1, 1, sheet.getLastColumn()).clearContent();
+      }
     }
     
     // データを書き込み
@@ -351,7 +367,7 @@ function writeDataToSheet(convertedData) {
       const range = sheet.getRange(2, 1, convertedData.length, convertedData[0].length);
       range.setValues(convertedData);
     } else {
-      console.log('書き込むデータがありません');
+      console.log('書き込むデータがありません（データ行は空になります）');
     }
     
   } catch (error) {
