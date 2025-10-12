@@ -132,10 +132,8 @@ showUsageGuide()
 =============================================================================
 */
 
-// ファイルトップに（既に定義されているなら上書きしない）
-if (typeof NE_API_URL === 'undefined') {
-  const NE_API_URL = PropertiesService.getScriptProperties().getProperty('NE_API_URL') || 'https://api.next-engine.org';
-}
+// ネクストエンジンAPIのエンドポイント（スクリプトプロパティから取得、なければデフォルト）
+const NE_API_URL = PropertiesService.getScriptProperties().getProperty('NE_API_URL') || 'https://api.next-engine.org';
 
 /**
  * スプレッドシート設定を取得
