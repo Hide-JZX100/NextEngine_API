@@ -86,7 +86,6 @@ showAuthGuide() 📖
 
 // ネクストエンジンAPIのエンドポイント
 const NE_BASE_URL = 'https://base.next-engine.org';
-const NE_API_URL = 'https://api.next-engine.org';
 
 /**
  * ステップ1: 認証URLを生成してログ出力
