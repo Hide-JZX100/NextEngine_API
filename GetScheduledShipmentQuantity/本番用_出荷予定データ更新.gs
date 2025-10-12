@@ -98,7 +98,7 @@ testErrorHandling(): 遠い未来の日付を指定するなどして、デー�
  * 
  * @param {string} startDate - 開始日（YYYY-MM-DD形式）省略時は本日
  * @param {string} endDate - 終了日（YYYY-MM-DD形式）省略時は本日+2日
- */
+*/
 function updateShippingData(startDate, endDate) {
   const startTime = new Date();
   let currentStep = '初期化';
@@ -252,7 +252,7 @@ function updateShippingData(startDate, endDate) {
  * @param {string} endDate - 終了日
  * @param {number} maxRetries - 最大リトライ回数（デフォルト: 3）
  * @return {Array} 取得データ
- */
+*/
 function fetchAllShippingDataWithRetry(startDate, endDate, maxRetries = 3) {
   let lastError = null;
   
@@ -287,7 +287,7 @@ function fetchAllShippingDataWithRetry(startDate, endDate, maxRetries = 3) {
  * 
  * @param {Array} apiData - APIから取得したデータ
  * @return {Array} 変換後のデータ（2次元配列）
- */
+*/
 function convertAllDataToSheetRows(apiData) {
   const convertedData = [];
   
@@ -321,7 +321,7 @@ function convertAllDataToSheetRows(apiData) {
  * スプレッドシート書き込み（改善版：空白行問題解決 + 固定行対応）
  * 
  * @param {Array} convertedData - 変換済みデータ（2次元配列）
- */
+*/
 function writeDataToSheet(convertedData) {
   try {
     // スクリプトプロパティから設定を取得
@@ -391,7 +391,7 @@ function writeDataToSheet(convertedData) {
  * @param {Spreadsheet} spreadsheet - スプレッドシートオブジェクト
  * @param {string} sheetName - シート名
  * @return {Sheet} 作成したシート
- */
+*/
 function createSheetWithHeaders(spreadsheet, sheetName) {
   const sheet = spreadsheet.insertSheet(sheetName);
   
@@ -418,7 +418,7 @@ function createSheetWithHeaders(spreadsheet, sheetName) {
  * ヘッダー行の存在を確認し、なければ作成
  * 
  * @param {Sheet} sheet - シートオブジェクト
- */
+*/
 function ensureHeaderExists(sheet) {
   const headers = [
     '出荷予定日', '伝票番号', '商品コード', '商品名', '受注数', '引当数',
@@ -451,7 +451,7 @@ function ensureHeaderExists(sheet) {
  * @param {number} elapsedTime - 処理時間（秒）
  * @param {string} status - 実行ステータス（success/error）
  * @param {string} errorMessage - エラーメッセージ（エラー時のみ）
- */
+*/
 function logExecution(startDate, endDate, recordCount, elapsedTime, status, errorMessage) {
   try {
     // スクリプトプロパティから設定を取得
@@ -510,7 +510,7 @@ function logExecution(startDate, endDate, recordCount, elapsedTime, status, erro
 
 /**
  * テスト実行: デフォルト（本日から3日分）
- */
+*/
 function testUpdateShippingDataDefault() {
   console.log('=== デフォルト実行テスト ===');
   console.log('本日から3日分のデータを取得します');
@@ -521,7 +521,7 @@ function testUpdateShippingDataDefault() {
 
 /**
  * テスト実行: 期間指定
- */
+*/
 function testUpdateShippingDataCustom() {
   console.log('=== 期間指定実行テスト ===');
   console.log('');
@@ -532,7 +532,7 @@ function testUpdateShippingDataCustom() {
 /**
  * テスト実行: エラーハンドリングのテスト
  * 存在しない日付を指定してエラー処理を確認
- */
+*/
 function testErrorHandling() {
   console.log('=== エラーハンドリングテスト ===');
   console.log('存在しない未来の日付を指定してエラー処理を確認します');
