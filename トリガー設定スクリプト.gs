@@ -77,13 +77,14 @@ function setTrigger() {
   
   // 実行したい時刻（[時, 分]）の配列
   const executionTimes = [
+    [0, 10],    // 0:10
     [8, 0],    // 8:00
-    [10, 0],   // 10:00
+    //[10, 0],   // 10:00はネクストエンジンのカスタムデータCSVでの更新に修正
     [12, 0],   // 12:00
     [14, 0],   // 14:00
-    [17, 0],   // 17:00
+    [16, 0],   // 16:00
+    [19, 0],   // 19:00
     [21, 0],   // 21:00
-    [23, 0]    // 23:00
   ];
   
   // 現在時刻を取得
@@ -92,7 +93,9 @@ function setTrigger() {
   let skippedCount = 0;
   
   // 各時刻に対してトリガーを作成
-  executionTimes.forEach(([hour, minute]) => {
+  executionTimes.forEach(function(time) {
+    const hour = time[0];
+    const minute = time[1];
     
     // トリガー実行時刻を設定
     const triggerTime = new Date();
@@ -141,7 +144,7 @@ function deleteTriggersForFunction(functionName) {
   const triggers = ScriptApp.getProjectTriggers();
   let deletedCount = 0;
   
-  triggers.forEach(trigger => {
+  triggers.forEach(function(trigger) {
     if (trigger.getHandlerFunction() === functionName) { 
       ScriptApp.deleteTrigger(trigger);
       deletedCount++;
