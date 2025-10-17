@@ -323,10 +323,119 @@ function logBatchErrorSummary(batchNumber, errorList) {
   console.error('========================================\n');
 }
 
+
+/**
+ * バッチ単位で在庫データを一括更新する関数（最適化版）
+ */
+function updateBatchInventoryData(sheet, batch, inventoryDataMap, rowIndexMap) {
+  const updateData = [];
+  const results = [];
+  
+  // ステップ1: 行番号でソートして連続した範囲を特定
+  const sortedItems = [];
+  
+  for (const goodsCode of batch) {
+    const inventoryData = inventoryDataMap.get(goodsCode);
+    const rowIndex = rowIndexMap.get(goodsCode);
+    
+    if (inventoryData && rowIndex) {
+      sortedItems.push({
+        goodsCode: goodsCode,
+        rowIndex: rowIndex,
+        inventoryData: inventoryData
+      });
+    } else {
+      results.push({
+        goodsCode: goodsCode,
+        status: 'no_data'
+      });
+    }
+  }
+  
+  // 行番号でソート
+  sortedItems.sort((a, b) => a.rowIndex - b.rowIndex);
+  
+  // ステップ2: 連続した範囲をグループ化
+  const rangeGroups = [];
+  let currentGroup = null;
+  
+  for (const item of sortedItems) {
+    if (!currentGroup || item.rowIndex !== currentGroup.endRow + 1) {
+      if (currentGroup) {
+        rangeGroups.push(currentGroup);
+      }
+      currentGroup = {
+        startRow: item.rowIndex,
+        endRow: item.rowIndex,
+        items: [item]
+      };
+    } else {
+      currentGroup.endRow = item.rowIndex;
+      currentGroup.items.push(item);
+    }
+  }
+  
+  if (currentGroup) {
+    rangeGroups.push(currentGroup);
+  }
+  
+  // ステップ3: 各グループごとに一括更新
+  let totalUpdated = 0;
+  
+  for (const group of rangeGroups) {
+    try {
+      const updateValues = group.items.map(item => [
+        item.inventoryData.stock_quantity || 0,
+        item.inventoryData.stock_allocated_quantity || 0,
+        item.inventoryData.stock_free_quantity || 0,
+        item.inventoryData.stock_advance_order_quantity || 0,
+        item.inventoryData.stock_advance_order_allocation_quantity || 0,
+        item.inventoryData.stock_advance_order_free_quantity || 0,
+        item.inventoryData.stock_defective_quantity || 0,
+        item.inventoryData.stock_remaining_order_quantity || 0,
+        item.inventoryData.stock_out_quantity || 0
+      ]);
+      
+      const range = sheet.getRange(
+        group.startRow,
+        COLUMNS.STOCK_QTY + 1,
+        updateValues.length,
+        9
+      );
+      range.setValues(updateValues);
+      
+      totalUpdated += group.items.length;
+      
+      for (const item of group.items) {
+        results.push({
+          goodsCode: item.goodsCode,
+          status: 'success',
+          stock: item.inventoryData.stock_quantity
+        });
+      }
+      
+    } catch (error) {
+      for (const item of group.items) {
+        results.push({
+          goodsCode: item.goodsCode,
+          status: 'error',
+          error: error.message
+        });
+      }
+      
+      logError(`グループ更新エラー (行 ${group.startRow}-${group.endRow}): ${error.message}`);
+    }
+  }
+  
+  return {
+    updated: totalUpdated,
+    results: results
+  };
+}
+
 // ============================================================================
 // メイン処理関数
 // ============================================================================
-
 function updateInventoryDataBatch() {
   try {
     const currentLogLevel = getCurrentLogLevel();
@@ -394,6 +503,12 @@ function updateInventoryDataBatch() {
         const batchEndTime = new Date();
         const batchDuration = (batchEndTime - batchStartTime) / 1000;
         
+        // ========================================================
+        // ★★★ ここから変更（旧コードを削除して新コードに置き換え）★★★
+        // ========================================================
+        
+        // 【旧コード - この部分を削除】
+        /*
         let batchUpdated = 0;
         let batchErrorCount = 0;
         const updateResults = [];
@@ -460,6 +575,62 @@ function updateInventoryDataBatch() {
             });
           }
         }
+        */
+        
+        // 【新コード - これに置き換え】
+        // バッチ単位で一括更新
+        const updateResult = updateBatchInventoryData(
+          sheet, 
+          batch, 
+          inventoryDataMap, 
+          rowIndexMap
+        );
+        
+        const batchUpdated = updateResult.updated;
+        const updateResults = updateResult.results;
+        const batchErrorCount = updateResults.filter(r => r.status === 'error' || r.status === 'no_data').length;
+        
+        totalUpdated += batchUpdated;
+        
+        // エラー詳細を収集
+        for (const result of updateResults) {
+          if (result.status === 'error') {
+            logErrorDetail(result.goodsCode, '更新エラー', result.error, {
+              'バッチ番号': batchNumber
+            });
+            
+            const errorInfo = {
+              goodsCode: result.goodsCode,
+              errorType: '更新エラー',
+              errorMessage: result.error,
+              timestamp: new Date(),
+              batchNumber: batchNumber
+            };
+            errorDetails.push(errorInfo);
+            batchErrors.push(errorInfo);
+            totalErrors++;
+          } else if (result.status === 'no_data') {
+            logErrorDetail(result.goodsCode, 'データなし', 'inventory data not found', {
+              'バッチ番号': batchNumber
+            });
+            
+            const errorInfo = {
+              goodsCode: result.goodsCode,
+              errorType: 'データなし',
+              errorMessage: 'inventory data not found',
+              timestamp: new Date(),
+              batchNumber: batchNumber
+            };
+            errorDetails.push(errorInfo);
+            batchErrors.push(errorInfo);
+          }
+        }
+        
+        // ========================================================
+        // ★★★ ここまで変更 ★★★
+        // ========================================================
+        
+        // ↓↓↓ 以降は既存のコードをそのまま維持 ↓↓↓
         
         logWithLevel(LOG_LEVEL.SUMMARY, `処理時間: ${batchDuration.toFixed(1)}秒 | 成功: ${batchUpdated}件 | エラー: ${batchErrorCount}件`);
         
