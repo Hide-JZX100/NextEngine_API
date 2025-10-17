@@ -1147,7 +1147,7 @@ function showCurrentProperties() {
 /**
  * クイックスタートガイド
  * 初めて使用する際に実行してください
- */
+*/
 function quickStartGuide() {
   console.log('==========================================================');
   console.log('   在庫情報取得スクリプト v2.0 クイックスタートガイド');
