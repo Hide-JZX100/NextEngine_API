@@ -151,18 +151,18 @@ const NE_API_URL = PropertiesService.getScriptProperties().getProperty('NE_API_U
 
 // 列のマッピング
 const COLUMNS = {
-  GOODS_CODE: 0,        // A列: 商品コード
-  GOODS_NAME: 1,        // B列: 商品名
-  STOCK_QTY: 2,        // C列: 在庫数
-  ALLOCATED_QTY: 3,    // D列: 引当数
-  FREE_QTY: 4,         // E列: フリー在庫数
-  RESERVE_QTY: 5,      // F列: 予約在庫数
-  RESERVE_ALLOCATED_QTY: 6,  // G列: 予約引当数
-  RESERVE_FREE_QTY: 7, // H列: 予約フリー在庫数
-  DEFECTIVE_QTY: 8,    // I列: 不良在庫数
-  ORDER_REMAINING_QTY: 9,    // J列: 発注残数
-  SHORTAGE_QTY: 10,    // K列: 欠品数
-  JAN_CODE: 11         // L列: JANコード
+  GOODS_CODE: 0,        // A列: 商品コード(GAS Index: 1)
+  GOODS_NAME: 1,        // B列: 商品名(GAS Index: 2)
+  STOCK_QTY: 2,        // C列: 在庫数(GAS Index: 3)
+  ALLOCATED_QTY: 3,    // D列: 引当数(GAS Index: 4)
+  FREE_QTY: 4,         // E列: フリー在庫数(GAS Index: 5)
+  RESERVE_QTY: 5,      // F列: 予約在庫数(GAS Index: 6)
+  RESERVE_ALLOCATED_QTY: 6,  // G列: 予約引当数(GAS Index: 7)
+  RESERVE_FREE_QTY: 7, // H列: 予約フリー在庫数(GAS Index: 8)
+  DEFECTIVE_QTY: 8,    // I列: 不良在庫数(GAS Index: 9)
+  ORDER_REMAINING_QTY: 9,    // J列: 発注残数(GAS Index: 10)
+  SHORTAGE_QTY: 10,    // K列: 欠品数(GAS Index: 11)
+  JAN_CODE: 11         // L列: JANコード(GAS Index: 12)
 };
 
 // 設定値
