@@ -130,213 +130,7 @@ showUsageGuide()
 スクリプトの主要な機能、使用方法、そして期待される効果について説明します。
 
 =============================================================================
-ネクストエンジン在庫情報取得スクリプト（一括処理版 + ログ簡略化版）
-=============================================================================
-* 【Step 1.1 改善内容】
-* 1. ログレベル管理機能の追加（DEBUG/INFO/ERROR）
-* 2. 共通ログ関数（log関数）の導入
-* 3. 個別商品ログの簡略化（最初3件・最後3件のみ詳細表示）
-* 4. 処理時間計測用Timerクラスの追加
-* 5. バッチ処理のサマリー表示強化
-
-* 【期待される効果】
-* - ログ行数: 3000行以上 → 100行程度
-* - 実行時間: 5-10%短縮（ログ出力時間削減）
-* - 可読性: 大幅向上
-* - デバッグ: DEBUGモードで詳細確認可能
-
-=============================================================================
 */
-
-// ============================================
-// Step 1.1 追加: ログレベル管理
-// ============================================
-
-const LOG_LEVEL = {
-  DEBUG: 3,
-  INFO: 2,
-  ERROR: 1,
-  NONE: 0
-};
-
-/**
- * 現在のログレベルを取得
- * スクリプトプロパティから取得、未設定の場合はINFO
- */
-function getCurrentLogLevel() {
-  const scriptProperties = PropertiesService.getScriptProperties();
-  const level = scriptProperties.getProperty('LOG_LEVEL');
-  
-  if (level === null || level === undefined) {
-    return LOG_LEVEL.INFO; // デフォルトはINFO
-  }
-  
-  return parseInt(level);
-}
-
-/**
- * ログレベルを設定
- * @param {number} level - ログレベル（LOG_LEVEL.DEBUG, LOG_LEVEL.INFO等）
- */
-function setLogLevel(level) {
-  const scriptProperties = PropertiesService.getScriptProperties();
-  scriptProperties.setProperty('LOG_LEVEL', level.toString());
-  Logger.log(`ログレベルを ${level} に設定しました`);
-}
-
-/**
- * 共通ログ関数
- * @param {string} level - ログレベル（'DEBUG', 'INFO', 'ERROR'）
- * @param {string} message - ログメッセージ
- */
-function log(level, message) {
-  const levels = {
-    'DEBUG': LOG_LEVEL.DEBUG,
-    'INFO': LOG_LEVEL.INFO,
-    'ERROR': LOG_LEVEL.ERROR
-  };
-  
-  const currentLevel = getCurrentLogLevel();
-  
-  if (levels[level] <= currentLevel) {
-    const timestamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
-    Logger.log(`[${timestamp}] [${level}] ${message}`);
-  }
-}
-
-// ============================================
-// 処理時間計測用クラス
-// ============================================
-
-class Timer {
-  constructor(processName) {
-    this.processName = processName;
-    this.startTime = new Date();
-    log('INFO', `=== ${processName} 開始 ===`);
-  }
-  
-  end(additionalInfo = '') {
-    const endTime = new Date();
-    const elapsedTime = ((endTime - this.startTime) / 1000).toFixed(2);
-    log('INFO', `=== ${this.processName} 完了 ===`);
-    log('INFO', `処理時間: ${elapsedTime}秒 ${additionalInfo}`);
-    return parseFloat(elapsedTime);
-  }
-  
-  getElapsedTime() {
-    const currentTime = new Date();
-    return ((currentTime - this.startTime) / 1000).toFixed(2);
-  }
-}
-
-// ============================================
-// サンプルログ出力用関数
-// ============================================
-
-/**
- * 配列データのサンプルログ出力
- * @param {Array} dataArray - データ配列
- * @param {number} sampleSize - サンプル数（デフォルト3）
- * @param {string} label - ラベル
- */
-function logSampleData(dataArray, sampleSize = 3, label = 'データ') {
-  const totalCount = dataArray.length;
-  
-  if (totalCount === 0) {
-    log('INFO', `${label}: 0件`);
-    return;
-  }
-  
-  log('DEBUG', `--- ${label} サンプル（全${totalCount}件中） ---`);
-  
-  // 最初のN件
-  for (let i = 0; i < Math.min(sampleSize, totalCount); i++) {
-    log('DEBUG', `[${i + 1}] ${JSON.stringify(dataArray[i])}`);
-  }
-  
-  // 中間は省略メッセージ
-  if (totalCount > sampleSize * 2) {
-    log('DEBUG', `... (中間 ${totalCount - sampleSize * 2} 件省略) ...`);
-  }
-  
-  // 最後のN件（データが十分にある場合のみ）
-  if (totalCount > sampleSize) {
-    for (let i = Math.max(sampleSize, totalCount - sampleSize); i < totalCount; i++) {
-      log('DEBUG', `[${i + 1}] ${JSON.stringify(dataArray[i])}`);
-    }
-  }
-}
-
-// ============================================
-// ログレベル設定用の補助関数
-// ============================================
-
-/**
- * ログレベルをDEBUGに設定（開発・デバッグ時）
- */
-function setLogLevelDebug() {
-  setLogLevel(LOG_LEVEL.DEBUG);
-  log('INFO', 'ログレベルをDEBUGに変更しました（詳細ログモード）');
-}
-
-/**
- * ログレベルをINFOに設定（通常運用時）
- */
-function setLogLevelInfo() {
-  setLogLevel(LOG_LEVEL.INFO);
-  log('INFO', 'ログレベルをINFOに変更しました（通常モード）');
-}
-
-/**
- * ログレベルをERRORに設定（エラーのみ）
- */
-function setLogLevelError() {
-  setLogLevel(LOG_LEVEL.ERROR);
-  log('INFO', 'ログレベルをERRORに変更しました（エラーのみモード）');
-}
-
-/**
- * 現在のログレベルを確認
- */
-function checkCurrentLogLevel() {
-  const level = getCurrentLogLevel();
-  const levelNames = {
-    [LOG_LEVEL.DEBUG]: 'DEBUG（詳細ログモード）',
-    [LOG_LEVEL.INFO]: 'INFO（通常モード）',
-    [LOG_LEVEL.ERROR]: 'ERROR（エラーのみモード）',
-    [LOG_LEVEL.NONE]: 'NONE（ログなし）'
-  };
-  Logger.log(`現在のログレベル: ${levelNames[level] || level}`);
-  return level;
-}
-
-// ============================================
-// 初期設定用関数（初回のみ実行）
-// ============================================
-
-/**
- * Step 1.1の初期設定
- * この関数を1度だけ実行してください
- */
-function initStep1_1() {
-  Logger.log('========================================');
-  Logger.log('Step 1.1 初期設定を開始します');
-  Logger.log('========================================');
-  
-  // ログレベルをINFOに設定
-  setLogLevelInfo();
-  
-  // 設定確認
-  checkCurrentLogLevel();
-  
-  Logger.log('========================================');
-  Logger.log('初期設定完了');
-  Logger.log('========================================');
-  Logger.log('');
-  Logger.log('次のステップ:');
-  Logger.log('1. 既存のreceiveStockInfo関数を改善版に置き換えてください');
-  Logger.log('2. testStockInfoOnly() を実行してテストしてください');
-}
 
 // ネクストエンジンAPIのエンドポイント（スクリプトプロパティから取得、なければデフォルト）
 const NE_API_URL = PropertiesService.getScriptProperties().getProperty('NE_API_URL') || 'https://api.next-engine.org';
@@ -635,110 +429,206 @@ function fetchInventoryWithSingleAPI(goodsCodes, tokens) {
 }
 
 /**
- * メイン関数：一括処理による在庫情報更新
+ * 改善版: updateInventoryDataBatch関数
+ * ログを最適化し、処理速度を向上
  */
 function updateInventoryDataBatch() {
-
   try {
-    console.log('=== 在庫情報一括更新開始 ===');
+    const currentLogLevel = getCurrentLogLevel();
+    
+    logWithLevel(LOG_LEVEL.MINIMAL, '=== 在庫情報一括更新開始 ===');
     const startTime = new Date();
+    
     // スプレッドシートを取得
     const { SPREADSHEET_ID, SHEET_NAME } = getSpreadsheetConfig();
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = spreadsheet.getSheetByName(SHEET_NAME);
+    
     if (!sheet) {
       throw new Error(`シート "${SHEET_NAME}" が見つかりません`);
     }
+    
     // データ範囲を取得
     const lastRow = sheet.getLastRow();
     if (lastRow <= 1) {
-      console.log('データが存在しません');
+      logWithLevel(LOG_LEVEL.MINIMAL, 'データが存在しません');
       return;
     }
+    
     const dataRange = sheet.getRange(2, 1, lastRow - 1, 12);
     const values = dataRange.getValues();
-    console.log(`処理対象: ${values.length}行`);
+    logWithLevel(LOG_LEVEL.MINIMAL, `処理対象: ${values.length}行`);
+    
     // トークンを取得
     const tokens = getStoredTokens();
-    // 商品コードのリストを作成（空でないもののみ）
+    
+    // 商品コードのリストを作成
     const goodsCodeList = [];
-    const rowIndexMap = new Map(); // 商品コード → 行インデックスのマッピング
+    const rowIndexMap = new Map();
+    
     for (let i = 0; i < values.length; i++) {
       const goodsCode = values[i][COLUMNS.GOODS_CODE];
       if (goodsCode && goodsCode.toString().trim()) {
         goodsCodeList.push(goodsCode.toString().trim());
-        rowIndexMap.set(goodsCode.toString().trim(), i + 2); // 実際の行番号（1ベース）
+        rowIndexMap.set(goodsCode.toString().trim(), i + 2);
       }
     }
-    console.log(`有効な商品コード: ${goodsCodeList.length}件`);
+    
+    logWithLevel(LOG_LEVEL.MINIMAL, `有効な商品コード: ${goodsCodeList.length}件`);
+    
     if (goodsCodeList.length === 0) {
-      console.log('処理対象の商品コードがありません');
+      logWithLevel(LOG_LEVEL.MINIMAL, '処理対象の商品コードがありません');
       return;
     }
+    
     // バッチ処理で在庫情報を取得・更新
     let totalUpdated = 0;
     let totalErrors = 0;
-    const errorDetails = []; // ★エラー詳細を収集
+    const errorDetails = [];
+    const batchCount = Math.ceil(goodsCodeList.length / MAX_ITEMS_PER_CALL);
+    
+    logWithLevel(LOG_LEVEL.SUMMARY, `バッチ数: ${batchCount}個（${MAX_ITEMS_PER_CALL}件/バッチ）`);
     
     for (let i = 0; i < goodsCodeList.length; i += MAX_ITEMS_PER_CALL) {
       const batch = goodsCodeList.slice(i, i + MAX_ITEMS_PER_CALL);
-      console.log(`\n--- バッチ ${Math.floor(i / MAX_ITEMS_PER_CALL) + 1}: ${batch.length}件 ---`);
+      const batchNumber = Math.floor(i / MAX_ITEMS_PER_CALL) + 1;
+      
+      logWithLevel(LOG_LEVEL.SUMMARY, `\n--- バッチ ${batchNumber}/${batchCount}: ${batch.length}件 ---`);
+      
+      const batchStartTime = new Date();
+      
       try {
         // バッチで在庫情報を取得
         const inventoryDataMap = getBatchInventoryData(batch, tokens);
+        
+        const batchEndTime = new Date();
+        const batchDuration = (batchEndTime - batchStartTime) / 1000;
+        
+        // バッチの処理結果を集計
+        let batchUpdated = 0;
+        let batchErrors = 0;
+        const updateResults = []; // 更新結果を一時保存
+        
         // スプレッドシートを更新
         for (const goodsCode of batch) {
           const inventoryData = inventoryDataMap.get(goodsCode);
           const rowIndex = rowIndexMap.get(goodsCode);
+          
           if (inventoryData && rowIndex) {
             try {
               updateRowWithInventoryData(sheet, rowIndex, inventoryData);
+              batchUpdated++;
               totalUpdated++;
-              console.log(` ✓ ${goodsCode}: 更新完了`);
+              updateResults.push({
+                goodsCode: goodsCode,
+                status: 'success',
+                stock: inventoryData.stock_quantity
+              });
             } catch (error) {
-              // ★個別更新エラーの詳細を記録
               const errorInfo = {
                 goodsCode: goodsCode,
                 errorType: '更新エラー',
                 errorMessage: error.message,
                 timestamp: new Date(),
-                batchNumber: Math.floor(i / MAX_ITEMS_PER_CALL) + 1
+                batchNumber: batchNumber
               };
               errorDetails.push(errorInfo);
-              console.error(` ✗ ${goodsCode}: 更新エラー - ${error.message}`);
+              batchErrors++;
               totalErrors++;
+              updateResults.push({
+                goodsCode: goodsCode,
+                status: 'error',
+                error: error.message
+              });
             }
           } else {
-            // ★データなしの場合も記録
             const errorInfo = {
               goodsCode: goodsCode,
               errorType: 'データなし',
               errorMessage: inventoryData ? 'rowIndex not found' : 'inventory data not found',
               timestamp: new Date(),
-              batchNumber: Math.floor(i / MAX_ITEMS_PER_CALL) + 1
+              batchNumber: batchNumber
             };
             errorDetails.push(errorInfo);
-            console.log(` - ${goodsCode}: データなし`);
+            updateResults.push({
+              goodsCode: goodsCode,
+              status: 'no_data'
+            });
           }
         }
-        // バッチ間の待機（APIレート制限対策）
+        
+        // バッチサマリーを表示
+        logWithLevel(LOG_LEVEL.SUMMARY, `処理時間: ${batchDuration.toFixed(1)}秒 | 成功: ${batchUpdated}件 | エラー: ${batchErrors}件`);
+        
+        // 最初の3件と最後の3件を表示（SUMMARY以上）
+        if (currentLogLevel >= LOG_LEVEL.SUMMARY && updateResults.length > 0) {
+          const displayCount = Math.min(3, updateResults.length);
+          
+          logWithLevel(LOG_LEVEL.SUMMARY, '【最初の3件】');
+          for (let j = 0; j < displayCount; j++) {
+            const result = updateResults[j];
+            if (result.status === 'success') {
+              logWithLevel(LOG_LEVEL.SUMMARY, ` ✓ ${result.goodsCode}: 在庫${result.stock}`);
+            } else if (result.status === 'error') {
+              logWithLevel(LOG_LEVEL.SUMMARY, ` ✗ ${result.goodsCode}: ${result.error}`);
+            } else {
+              logWithLevel(LOG_LEVEL.SUMMARY, ` - ${result.goodsCode}: データなし`);
+            }
+          }
+          
+          if (updateResults.length > 6) {
+            logWithLevel(LOG_LEVEL.SUMMARY, ` ... 中間 ${updateResults.length - 6}件 省略 ...`);
+          }
+          
+          if (updateResults.length > 3) {
+            logWithLevel(LOG_LEVEL.SUMMARY, '【最後の3件】');
+            const startIdx = Math.max(displayCount, updateResults.length - 3);
+            for (let j = startIdx; j < updateResults.length; j++) {
+              const result = updateResults[j];
+              if (result.status === 'success') {
+                logWithLevel(LOG_LEVEL.SUMMARY, ` ✓ ${result.goodsCode}: 在庫${result.stock}`);
+              } else if (result.status === 'error') {
+                logWithLevel(LOG_LEVEL.SUMMARY, ` ✗ ${result.goodsCode}: ${result.error}`);
+              } else {
+                logWithLevel(LOG_LEVEL.SUMMARY, ` - ${result.goodsCode}: データなし`);
+              }
+            }
+          }
+        }
+        
+        // DETAILED レベルでは全件表示
+        if (currentLogLevel >= LOG_LEVEL.DETAILED) {
+          logWithLevel(LOG_LEVEL.DETAILED, '\n【全件詳細】');
+          for (const result of updateResults) {
+            if (result.status === 'success') {
+              logWithLevel(LOG_LEVEL.DETAILED, ` ✓ ${result.goodsCode}: 在庫${result.stock}`);
+            } else if (result.status === 'error') {
+              logWithLevel(LOG_LEVEL.DETAILED, ` ✗ ${result.goodsCode}: ${result.error}`);
+            } else {
+              logWithLevel(LOG_LEVEL.DETAILED, ` - ${result.goodsCode}: データなし`);
+            }
+          }
+        }
+        
+        // バッチ間の待機
         if (i + MAX_ITEMS_PER_CALL < goodsCodeList.length) {
-          console.log(`次のバッチまで ${API_WAIT_TIME}ms 待機...`);
+          logWithLevel(LOG_LEVEL.SUMMARY, `次のバッチまで ${API_WAIT_TIME}ms 待機...`);
           Utilities.sleep(API_WAIT_TIME);
         }
+        
       } catch (error) {
-        // ★バッチ全体のエラーを記録
+        // バッチ全体のエラー
         batch.forEach(goodsCode => {
           const errorInfo = {
             goodsCode: goodsCode,
             errorType: 'バッチエラー',
             errorMessage: error.message,
             timestamp: new Date(),
-            batchNumber: Math.floor(i / MAX_ITEMS_PER_CALL) + 1
+            batchNumber: batchNumber
           };
           errorDetails.push(errorInfo);
         });
-        console.error(`バッチ処理エラー:`, error.message);
+        logError(`バッチ処理エラー: ${error.message}`);
         totalErrors += batch.length;
       }
     }
@@ -746,32 +636,31 @@ function updateInventoryDataBatch() {
     const endTime = new Date();
     const duration = (endTime - startTime) / 1000;
     
-    // ★エラーレポートの作成
+    // エラーレポートの作成
     if (errorDetails.length > 0) {
       logErrorsToSheet(errorDetails);
-      console.log(`\n--- エラーレポート ---`);
-      console.log(`エラーレポートをシートに記録しました: ${errorDetails.length}件`);
+      logWithLevel(LOG_LEVEL.SUMMARY, `\nエラーレポートをシートに記録: ${errorDetails.length}件`);
     }
     
-    console.log('\n=== 一括更新完了 ===');
-    console.log(`処理時間: ${duration.toFixed(1)}秒`);
-    console.log(`更新成功: ${totalUpdated}件`);
-    console.log(`エラー: ${totalErrors}件`);
-    console.log(`処理速度: ${(goodsCodeList.length / duration).toFixed(1)}件/秒`);
-    // 従来版との比較情報を表示
-    const conventionalTime = goodsCodeList.length * 2; // 従来版の推定時間（2秒/件）
+    // 最終サマリー（常に表示）
+    logWithLevel(LOG_LEVEL.MINIMAL, '\n=== 一括更新完了 ===');
+    logWithLevel(LOG_LEVEL.MINIMAL, `処理時間: ${duration.toFixed(1)}秒`);
+    logWithLevel(LOG_LEVEL.MINIMAL, `更新成功: ${totalUpdated}件`);
+    logWithLevel(LOG_LEVEL.MINIMAL, `エラー: ${totalErrors}件`);
+    logWithLevel(LOG_LEVEL.MINIMAL, `処理速度: ${(goodsCodeList.length / duration).toFixed(1)}件/秒`);
+    
+    // 従来版との比較（SUMMARY以上）
+    const conventionalTime = goodsCodeList.length * 2;
     const speedImprovement = conventionalTime / duration;
-    console.log(`\n--- 性能改善結果 ---`);
-    console.log(`従来版推定時間: ${conventionalTime.toFixed(1)}秒`);
-    console.log(`高速化倍率: ${speedImprovement.toFixed(1)}倍`);
-
-    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-    // ★ ここで新しい関数を呼び出し、実行日時を記録します ★
-    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    logWithLevel(LOG_LEVEL.SUMMARY, `\n--- 性能改善結果 ---`);
+    logWithLevel(LOG_LEVEL.SUMMARY, `従来版推定時間: ${conventionalTime.toFixed(1)}秒`);
+    logWithLevel(LOG_LEVEL.SUMMARY, `高速化倍率: ${speedImprovement.toFixed(1)}倍`);
+    
+    // 実行日時を記録
     recordExecutionTimestamp();
-
+    
   } catch (error) {
-    console.error('一括更新エラー:', error.message);
+    logError('一括更新エラー:', error.message);
     throw error;
   }
 }
@@ -781,40 +670,34 @@ function updateInventoryDataBatch() {
  * @param {string[]} goodsCodeList - 商品コードの配列
  * @param {Object} tokens - アクセストークンとリフレッシュトークン
  * @returns {Map<string, Object>} 商品コード → 在庫情報のマップ
- */
-/**
- * バッチで在庫情報を取得（在庫APIのみ版）
- * @param {string[]} goodsCodeList - 商品コードの配列
- * @param {Object} tokens - アクセストークンとリフレッシュトークン
- * @returns {Map<string, Object>} 商品コード → 在庫情報のマップ
- */
+ * ログを最適化し、パフォーマンスを向上
+*/
 function getBatchInventoryData(goodsCodeList, tokens) {
   const inventoryDataMap = new Map();
 
   try {
-    console.log(`  在庫マスタ一括検索: ${goodsCodeList.length}件`);
+    logWithLevel(LOG_LEVEL.DETAILED, `  在庫マスタ一括検索: ${goodsCodeList.length}件`);
     
-    // ★元の商品コードとの対応マップを作成
+    // 元の商品コードとの対応マップを作成
     const codeMapping = new Map();
     for (const code of goodsCodeList) {
-      codeMapping.set(code.toLowerCase(), code); // 小文字 → 元のコード
+      codeMapping.set(code.toLowerCase(), code);
     }
     
     const stockDataMap = getBatchStockData(goodsCodeList, tokens);
-    console.log(`  在庫マスタ取得完了: ${stockDataMap.size}件`);
+    logWithLevel(LOG_LEVEL.DETAILED, `  在庫マスタ取得完了: ${stockDataMap.size}件`);
 
     if (stockDataMap.size === 0) {
-      console.log('  在庫データが見つかりませんでした');
+      logWithLevel(LOG_LEVEL.SUMMARY, '  在庫データが見つかりませんでした');
       return inventoryDataMap;
     }
 
-    // ★ネクストエンジンから返ってきた商品IDを元のコードに変換
+    // ネクストエンジンから返ってきた商品IDを元のコードに変換
     for (const [goodsCode, stockData] of stockDataMap) {
-      // ネクストエンジンの商品IDを小文字化して元のコードを取得
       const originalCode = codeMapping.get(goodsCode.toLowerCase());
       
       if (!originalCode) {
-        console.log(`  警告: ${goodsCode} に対応する元のコードが見つかりません`);
+        logWithLevel(LOG_LEVEL.DETAILED, `  警告: ${goodsCode} に対応する元のコードが見つかりません`);
         continue;
       }
       
@@ -832,15 +715,14 @@ function getBatchInventoryData(goodsCodeList, tokens) {
         stock_out_quantity: parseInt(stockData.stock_out_quantity) || 0
       };
       
-      // ★元のコード（スプレッドシートの値）をキーとして設定
       inventoryDataMap.set(originalCode, inventoryData);
     }
 
-    console.log(`  在庫情報構築完了: ${inventoryDataMap.size}件`);
+    logWithLevel(LOG_LEVEL.DETAILED, `  在庫情報構築完了: ${inventoryDataMap.size}件`);
     return inventoryDataMap;
 
   } catch (error) {
-    console.error(`在庫情報取得エラー:`, error.message);
+    logError(`在庫情報取得エラー: ${error.message}`);
     return inventoryDataMap;
   }
 }
@@ -850,7 +732,7 @@ function getBatchInventoryData(goodsCodeList, tokens) {
  * @param {string[]} goodsCodeList - 商品コードの配列
  * @param {Object} tokens - トークン情報
  * @returns {Map<string, Object>} 商品コード → 商品情報のマップ
- */
+*/
 function getBatchGoodsData(goodsCodeList, tokens) {
   const url = `${NE_API_URL}/api_v1_master_goods/search`;
   
@@ -916,17 +798,16 @@ function getBatchGoodsData(goodsCodeList, tokens) {
  * @param {string[]} goodsCodeList - 商品コードの配列
  * @param {Object} tokens - トークン情報
  * @returns {Map<string, Object>} 商品コード → 在庫情報のマップ
- */
+*/
 function getBatchStockData(goodsCodeList, tokens) {
   const url = `${NE_API_URL}/api_v1_master_stock/search`;
   
-  // 複数の商品IDを検索条件に設定
   const goodsIdCondition = goodsCodeList.join(',');
   
   const payload = {
     'access_token': tokens.accessToken,
     'refresh_token': tokens.refreshToken,
-    'stock_goods_id-in': goodsIdCondition, // IN条件で複数商品の在庫を一括検索
+    'stock_goods_id-in': goodsIdCondition,
     'fields': 'stock_goods_id,stock_quantity,stock_allocation_quantity,stock_defective_quantity,stock_remaining_order_quantity,stock_out_quantity,stock_free_quantity,stock_advance_order_quantity,stock_advance_order_allocation_quantity,stock_advance_order_free_quantity',
     'limit': MAX_ITEMS_PER_CALL.toString()
   };
@@ -951,7 +832,6 @@ function getBatchStockData(goodsCodeList, tokens) {
     // トークンが更新された場合は保存
     if (responseData.access_token && responseData.refresh_token) {
       updateStoredTokens(responseData.access_token, responseData.refresh_token);
-      // トークンを更新
       tokens.accessToken = responseData.access_token;
       tokens.refreshToken = responseData.refresh_token;
     }
@@ -960,15 +840,15 @@ function getBatchStockData(goodsCodeList, tokens) {
       responseData.data.forEach(stockData => {
         stockDataMap.set(stockData.stock_goods_id, stockData);
       });
-      console.log(`  API応答: ${responseData.data.length}件取得`);
+      logWithLevel(LOG_LEVEL.DETAILED, `  API応答: ${responseData.data.length}件取得`);
     } else {
-      console.error(`  在庫マスタAPI エラー:`, responseData.message || 'Unknown error');
+      logError(`  在庫マスタAPI エラー: ${responseData.message || 'Unknown error'}`);
     }
 
     return stockDataMap;
 
   } catch (error) {
-    console.error(`在庫マスタ一括取得エラー:`, error.message);
+    logError(`在庫マスタ一括取得エラー: ${error.message}`);
     return stockDataMap;
   }
 }
@@ -1318,4 +1198,145 @@ function showUsageGuide() {
   console.log('【設定変更可能項目】');
   console.log('- MAX_ITEMS_PER_CALL: バッチサイズ（現在1000件）');
   console.log('- API_WAIT_TIME: API間隔（現在500ms）');
+}
+
+/**
+ * ログレベルの定義と設定
+ */
+
+// ログレベルの定数定義
+const LOG_LEVEL = {
+  MINIMAL: 1,    // 最小限: 開始/終了/サマリーのみ
+  SUMMARY: 2,    // サマリー: バッチごとの集計 + 最初/最後の3件
+  DETAILED: 3    // 詳細: 全商品コードを出力（デバッグ用）
+};
+
+/**
+ * 現在のログレベルを取得
+ * スクリプトプロパティから取得、未設定の場合はSUMMARY(2)をデフォルトとする
+ */
+function getCurrentLogLevel() {
+  const properties = PropertiesService.getScriptProperties();
+  const logLevel = properties.getProperty('LOG_LEVEL');
+  
+  if (!logLevel) {
+    // 未設定の場合はSUMMARYをデフォルトとして設定
+    properties.setProperty('LOG_LEVEL', '2');
+    return LOG_LEVEL.SUMMARY;
+  }
+  
+  return parseInt(logLevel);
+}
+
+/**
+ * ログレベルを設定
+ * @param {number} level - ログレベル (1: MINIMAL, 2: SUMMARY, 3: DETAILED)
+ */
+function setLogLevel(level) {
+  if (![1, 2, 3].includes(level)) {
+    throw new Error('ログレベルは1(MINIMAL)、2(SUMMARY)、3(DETAILED)のいずれかを指定してください');
+  }
+  
+  const properties = PropertiesService.getScriptProperties();
+  properties.setProperty('LOG_LEVEL', level.toString());
+  
+  const levelName = Object.keys(LOG_LEVEL).find(key => LOG_LEVEL[key] === level);
+  console.log(`ログレベルを ${levelName}(${level}) に設定しました`);
+}
+
+/**
+ * 条件付きログ出力関数
+ * @param {number} requiredLevel - このログを表示するために必要なログレベル
+ * @param {string} message - ログメッセージ
+ * @param {...any} args - 追加の引数
+ */
+function logWithLevel(requiredLevel, message, ...args) {
+  const currentLevel = getCurrentLogLevel();
+  
+  if (currentLevel >= requiredLevel) {
+    if (args.length > 0) {
+      console.log(message, ...args);
+    } else {
+      console.log(message);
+    }
+  }
+}
+
+/**
+ * エラーログは常に出力（ログレベルに関係なく）
+ * @param {string} message - エラーメッセージ
+ * @param {...any} args - 追加の引数
+ */
+function logError(message, ...args) {
+  if (args.length > 0) {
+    console.error(message, ...args);
+  } else {
+    console.error(message);
+  }
+}
+
+/**
+ * 現在のログレベルを表示
+ */
+function showCurrentLogLevel() {
+  const currentLevel = getCurrentLogLevel();
+  const levelName = Object.keys(LOG_LEVEL).find(key => LOG_LEVEL[key] === currentLevel);
+  
+  console.log('=== 現在のログレベル設定 ===');
+  console.log(`レベル: ${levelName} (${currentLevel})`);
+  console.log('');
+  console.log('【ログレベルの説明】');
+  console.log('1. MINIMAL  : 開始/終了/サマリーのみ（本番運用推奨）');
+  console.log('2. SUMMARY  : バッチ集計 + 最初/最後3件（デフォルト）');
+  console.log('3. DETAILED : 全商品コード出力（デバッグ用）');
+  console.log('');
+  console.log('【変更方法】');
+  console.log('setLogLevel(1) // MINIMALに変更');
+  console.log('setLogLevel(2) // SUMMARYに変更');
+  console.log('setLogLevel(3) // DETAILEDに変更');
+}
+
+/**
+ * ログレベル設定のクイックセットアップ
+ */
+function setupLogLevel() {
+  console.log('=== ログレベル設定ガイド ===');
+  console.log('');
+  console.log('以下のいずれかを実行してログレベルを設定してください:');
+  console.log('');
+  console.log('1. 本番運用モード（最小限のログ）');
+  console.log('   → setLogLevel(1)');
+  console.log('');
+  console.log('2. 通常運用モード（推奨、デフォルト）');
+  console.log('   → setLogLevel(2)');
+  console.log('');
+  console.log('3. デバッグモード（詳細ログ）');
+  console.log('   → setLogLevel(3)');
+  console.log('');
+  console.log('現在の設定を確認:');
+  console.log('   → showCurrentLogLevel()');
+}
+
+/**
+ * テスト用: 各ログレベルでの出力をテスト
+ */
+function testLogLevels() {
+  console.log('=== ログレベルテスト ===');
+  console.log('各レベルでのログ出力をテストします\n');
+  
+  const testLevels = [1, 2, 3];
+  
+  for (const level of testLevels) {
+    setLogLevel(level);
+    const levelName = Object.keys(LOG_LEVEL).find(key => LOG_LEVEL[key] === level);
+    
+    console.log(`\n--- ${levelName}モードでのテスト ---`);
+    logWithLevel(LOG_LEVEL.MINIMAL, '✓ MINIMAL: これは常に表示されます');
+    logWithLevel(LOG_LEVEL.SUMMARY, '✓ SUMMARY: サマリーレベル以上で表示');
+    logWithLevel(LOG_LEVEL.DETAILED, '✓ DETAILED: 詳細レベルのみ表示');
+    logError('✓ ERROR: エラーは常に表示されます');
+  }
+  
+  console.log('\n=== テスト完了 ===');
+  console.log('元の設定に戻す場合は setLogLevel(2) を実行してください');
 }
