@@ -271,7 +271,7 @@ function fetchAllShippingDataWithRetry(startDate, endDate, maxRetries = 3) {
       
       // 最後の試行でなければ、少し待ってからリトライ
       if (attempt < maxRetries) {
-        const waitSeconds = Math.pow(2, attempt - 1); // 1秒、2秒、4秒...と待機時間を指数関数的に増やす
+        const waitSeconds = Math.pow(2, attempt - 1); // 1秒、2秒、4秒...と待機時間を指数関数的に増やすように修正
         console.log(`${waitSeconds}秒後にリトライします...`);
         Utilities.sleep(waitSeconds * 1000);
       }
