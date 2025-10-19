@@ -351,6 +351,8 @@ function fetchAllShippingData(startDate = '2025-10-03', endDate = '2025-10-05') 
         // 出荷予定日で絞り込む
         'receive_order_send_plan_date-gte': formattedStartDate,
         'receive_order_send_plan_date-lte': formattedEndDate,
+        // キャンセル行を除外（★★★ここを追加★★★）
+        'receive_order_row_cancel_flag-eq': '0',
         // Shipping_piece.csv の全項目を取得
         'fields': [
           // 受注明細の基本情報
