@@ -52,7 +52,10 @@ fetchAllShippingDataで指定期間の全データ（例では123件を想定）
  * APIデータを1行分のスプレッドシートデータに変換
  * 
  * @param {Object} apiRowData - APIから取得した1行分のデータ
- * @return {Array} 14列の配列(スプレッドシートの1行分)
+ * @param {string} apiRowData.receive_order_send_plan_date - 出荷予定日
+ * @param {number|string} apiRowData.receive_order_row_receive_order_id - 伝票番号
+ * @return {Array<string|number>} 14列の配列（スプレッドシートの1行分）
+ * @throws {Error} データ変換に失敗した場合
  * 
  * 【修正履歴】
  * 2025-10-19: || 演算子から ?? (null合体演算子) に変更
