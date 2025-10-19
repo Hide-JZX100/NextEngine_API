@@ -52,53 +52,73 @@ fetchAllShippingDataで指定期間の全データ（例では123件を想定）
  * APIデータを1行分のスプレッドシートデータに変換
  * 
  * @param {Object} apiRowData - APIから取得した1行分のデータ
- * @return {Array} 14列の配列（スプレッドシートの1行分）
+ * @return {Array} 14列の配列(スプレッドシートの1行分)
+ * 
+ * 【修正履歴】
+ * 2025-10-19: || 演算子から ?? (null合体演算子) に変更
+ * 理由: || 演算子は 0 を falsy として扱うため、
+ *       キャンセル明細の数量0や、商品マスタ未入力時の重さ0が
+ *       意図せず空文字やデフォルト値に置き換わる問題を修正
  */
 function convertApiDataToSheetRow(apiRowData) {
   try {
     // Shipping_piece.csvの14列に対応する配列を作成
     return [
-      // 列1: 出荷予定日（日付型）
-      apiRowData.receive_order_send_plan_date || '',
+      // 列1: 出荷予定日(日付型)
+      // 修正: || → ?? (null/undefinedのみを判定、空文字も有効な値として扱う)
+      apiRowData.receive_order_send_plan_date ?? '',
       
-      // 列2: 伝票番号（整数）
-      apiRowData.receive_order_row_receive_order_id || '',
+      // 列2: 伝票番号(整数)
+      // 修正: || → ?? (0番の伝票は通常ないが、厳密な判定のため)
+      apiRowData.receive_order_row_receive_order_id ?? '',
       
-      // 列3: 商品コード（文字列）
-      apiRowData.receive_order_row_goods_id || '',
+      // 列3: 商品コード(文字列)
+      // 修正: || → ?? (空文字も有効な値として扱う)
+      apiRowData.receive_order_row_goods_id ?? '',
       
-      // 列4: 商品名（文字列）
-      apiRowData.receive_order_row_goods_name || '',
+      // 列4: 商品名(文字列)
+      // 修正: || → ?? (空文字も有効な値として扱う)
+      apiRowData.receive_order_row_goods_name ?? '',
       
-      // 列5: 受注数（整数）
-      apiRowData.receive_order_row_quantity || 0,
+      // 列5: 受注数(整数)
+      // 修正: || → ?? (キャンセル明細の場合、0が有効な値として出現)
+      apiRowData.receive_order_row_quantity ?? 0,
       
-      // 列6: 引当数（整数）
-      apiRowData.receive_order_row_stock_allocation_quantity || 0,
+      // 列6: 引当数(整数)
+      // 修正: || → ?? (キャンセル明細の場合、0が有効な値として出現)
+      apiRowData.receive_order_row_stock_allocation_quantity ?? 0,
       
-      // 列7: 奥行き(cm)（浮動小数点）
-      apiRowData.goods_length || 0,
+      // 列7: 奥行き(cm)(浮動小数点)
+      // 修正: || → ?? (0cmは通常ないが、厳密な判定のため)
+      apiRowData.goods_length ?? 0,
       
-      // 列8: 幅(cm)（浮動小数点）
-      apiRowData.goods_width || 0,
+      // 列8: 幅(cm)(浮動小数点)
+      // 修正: || → ?? (0cmは通常ないが、厳密な判定のため)
+      apiRowData.goods_width ?? 0,
       
-      // 列9: 高さ(cm)（浮動小数点）
-      apiRowData.goods_height || 0,
+      // 列9: 高さ(cm)(浮動小数点)
+      // 修正: || → ?? (0cmは通常ないが、厳密な判定のため)
+      apiRowData.goods_height ?? 0,
       
-      // 列10: 発送方法コード（整数）
-      apiRowData.receive_order_delivery_id || '',
+      // 列10: 発送方法コード(整数)
+      // 修正: || → ?? (コード0が有効な場合に備えて厳密な判定)
+      apiRowData.receive_order_delivery_id ?? '',
       
-      // 列11: 発送方法（文字列）
-      apiRowData.receive_order_delivery_name || '',
+      // 列11: 発送方法(文字列)
+      // 修正: || → ?? (空文字も有効な値として扱う)
+      apiRowData.receive_order_delivery_name ?? '',
       
-      // 列12: 重さ(g)（浮動小数点）
-      apiRowData.goods_weight || 0,
+      // 列12: 重さ(g)(浮動小数点)
+      // 修正: || → ?? (商品マスタ未入力時に0が出力されるため、0を有効な値として扱う)
+      apiRowData.goods_weight ?? 0,
       
-      // 列13: 受注状態区分（整数）
-      apiRowData.receive_order_order_status_id || '',
+      // 列13: 受注状態区分(整数)
+      // 修正: || → ?? (区分0が有効な場合に備えて厳密な判定)
+      apiRowData.receive_order_order_status_id ?? '',
       
-      // 列14: 送り先住所1（文字列）
-      apiRowData.receive_order_consignee_address1 || ''
+      // 列14: 送り先住所1(文字列)
+      // 修正: || → ?? (空文字も有効な値として扱う)
+      apiRowData.receive_order_consignee_address1 ?? ''
     ];
     
   } catch (error) {
@@ -251,4 +271,9 @@ function testConvertAllRows() {
     console.error('エラー詳細:', error);
     throw error;
   }
+}
+
+function testNullishCoalescing() {
+  const test = 0 ?? 'default';
+  console.log(test); // 0 が表示されればサポートされている
 }
