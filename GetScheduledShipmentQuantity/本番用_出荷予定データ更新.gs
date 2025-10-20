@@ -81,6 +81,12 @@ logExecution(startDate, endDate, recordCount, elapsedTime, status, errorMessage)
 実行日時、期間、件数、時間、ステータス、エラー内容をログ行として記録します。
 エラーログの記録失敗がメイン処理を妨げないよう、この関数自体にもtry...catchを設けています。
 
+recordExecutionTimestamp()
+💡 実行完了日時を指定されたシートに記録する関数
+シート名はスクリプトプロパティに保存するので、任意のシート名を設定してください。
+また、実行完了日時はそのシートのA1セルに記録するようにしていますので、
+A1セルには他の情報を入力しないようにしてください。
+
 =============================================================================
 テスト関数
 =============================================================================
@@ -208,6 +214,9 @@ function updateShippingData(startDate, endDate) {
     console.log(`完了時刻: ${Utilities.formatDate(endTime, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss')}`);
     console.log('');
     
+    // 実行完了日時を記録
+    recordExecutionTimestamp();
+
     // ========================================
     // 6. 正常終了（ログは記録しない）
     // ========================================
@@ -505,6 +514,34 @@ function logExecution(startDate, endDate, recordCount, elapsedTime, status, erro
   } catch (error) {
     console.error('ログ記録エラー:', error.message);
     // ログ記録のエラーは処理を止めない
+  }
+}
+
+function recordExecutionTimestamp() {
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const spreadsheetId = properties.getProperty('SPREADSHEET_ID');
+    const sheetName = properties.getProperty('OPERATION_LOG_SHEET_NAME');
+
+    if (!spreadsheetId || !sheetName) {
+      throw new Error('スクリプトプロパティ SPREADSHEET_ID または OPERATION_LOG_SHEET_NAME が設定されていません。');
+    }
+
+    const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    const sheet = spreadsheet.getSheetByName(sheetName);
+
+    if (!sheet) {
+      console.error(`シート "${sheetName}" が見つかりません。日時の記録をスキップします。`);
+      return;
+    }
+    
+    sheet.getRange(1, 1).setValue(
+      Utilities.formatDate(new Date(), 'JST', 'MM月dd日HH時mm分ss秒')
+    );
+    console.log(`実行日時をシート "${sheetName}" のA1セルに記録しました。`);
+
+  } catch (error) {
+    console.error('実行日時の記録中にエラーが発生しました:', error.message);
   }
 }
 
