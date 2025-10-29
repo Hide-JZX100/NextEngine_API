@@ -1,6 +1,7 @@
 /**
  * =============================================================================
  * 【トリガー設定スクリプト 改良版】 当日/翌日選択可能なスケジュール管理
+ * ステップ1：トリガー作成を try-catch で個別にラップ
  * =============================================================================
  *
  * 【目的】
@@ -13,6 +14,9 @@
  * - TRIGGER_MODE に応じて、当日または翌日にトリガーを設定します。
  *   - TODAY: 現在時刻より後の時刻を当日に設定
  *   - TOMORROW: すべての時刻を翌日に設定
+ * - 【改修】各トリガー作成を try-catch で個別に保護し、
+ *   1つの失敗が他のトリガー作成に影響しないようにしました。
+ * - 失敗したトリガー情報を個別に記録します。
  * 
  * 【スクリプトプロパティの設定方法】
  * 1. GASエディタで「プロジェクトの設定」を開く（歯車のアイコン）
@@ -36,6 +40,12 @@
  * 【推奨運用】
  * - TODAY モード: 毎日早朝（例:0:30）に実行
  * - TOMORROW モード: 毎日夜（例:23:00）に実行
+ * 
+ * 【改修内容（ステップ1）】
+ * - 各トリガー作成を try-catch で個別に保護
+ * - 失敗したトリガー情報を配列に記録
+ * - 失敗の詳細情報（時刻、エラーメッセージ、スケジュール時刻）をログ出力
+ * - 成功/失敗の統計情報を最終ログで表示
  */
 
 // スクリプトプロパティのキー定義
@@ -92,6 +102,9 @@ function setTrigger() {
   let createdCount = 0;
   let skippedCount = 0;
   
+  // 失敗したトリガー情報を保存する配列
+  const failedTriggers = [];
+  
   // 各時刻に対してトリガーを作成
   executionTimes.forEach(function(time) {
     const hour = time[0];
@@ -117,27 +130,53 @@ function setTrigger() {
       }
     }
     
-    // トリガーを作成
-    ScriptApp.newTrigger(functionToTrigger)
-      .timeBased()
-      .at(triggerTime)
-      .create();
-    
-    const dateStr = `${triggerTime.getMonth() + 1}/${triggerTime.getDate()}`;
-    const timeStr = `${hour}:${String(minute).padStart(2, '0')}`;
-    Logger.log(`  作成: ${dateStr} ${timeStr}`);
-    createdCount++;
+    // ★【改修】トリガー作成を try-catch で個別に保護
+    try {
+      ScriptApp.newTrigger(functionToTrigger)
+        .timeBased()
+        .at(triggerTime)
+        .create();
+      
+      const dateStr = `${triggerTime.getMonth() + 1}/${triggerTime.getDate()}`;
+      const timeStr = `${hour}:${String(minute).padStart(2, '0')}`;
+      Logger.log(`  ✓ 作成: ${dateStr} ${timeStr}`);
+      createdCount++;
+      
+    } catch (error) {
+      // ★【改修】失敗情報を個別に記録
+      const timeStr = `${hour}:${String(minute).padStart(2, '0')}`;
+      const dateStr = `${triggerTime.getMonth() + 1}/${triggerTime.getDate()}`;
+      
+      Logger.log(`  ✗ 失敗: ${dateStr} ${timeStr} - ${error.message}`);
+      
+      failedTriggers.push({
+        time: timeStr,
+        date: dateStr,
+        scheduledTime: triggerTime,
+        errorMessage: error.message
+      });
+    }
   });
   
   Logger.log(`=== トリガー設定完了 ===`);
   Logger.log(`作成: ${createdCount} 件`);
+  
   if (skippedCount > 0) {
     Logger.log(`スキップ: ${skippedCount} 件`);
+  }
+  
+  // ★【改修】失敗したトリガーの統計情報を表示
+  if (failedTriggers.length > 0) {
+    Logger.log(`失敗: ${failedTriggers.length} 件`);
+    failedTriggers.forEach(function(failed, index) {
+      Logger.log(`  [失敗${index + 1}] ${failed.date} ${failed.time} - ${failed.errorMessage}`);
+    });
   }
 }
 
 /**
  * 特定の関数に紐づく既存のトリガーをすべて削除します。
+ * 削除対象のトリガーが実行する関数名を指定します。
  * @param {string} functionName 削除対象のトリガーが実行する関数名
  */
 function deleteTriggersForFunction(functionName) {
