@@ -81,6 +81,12 @@ logExecution(startDate, endDate, recordCount, elapsedTime, status, errorMessage)
 実行日時、期間、件数、時間、ステータス、エラー内容をログ行として記録します。
 エラーログの記録失敗がメイン処理を妨げないよう、この関数自体にもtry...catchを設けています。
 
+recordExecutionTimestamp()
+💡 実行完了日時を指定されたシートに記録する関数
+シート名はスクリプトプロパティに保存するので、任意のシート名を設定してください。
+また、実行完了日時はそのシートのA1セルに記録するようにしていますので、
+A1セルには他の情報を入力しないようにしてください。
+
 =============================================================================
 テスト関数
 =============================================================================
@@ -188,9 +194,12 @@ function updateShippingData(startDate, endDate) {
     currentStep = 'スプレッドシート書き込み';
     console.log('--- ステップ3: スプレッドシート書き込み ---');
     
+    const writeStartTime = new Date(); // ←追加
     writeDataToSheet(convertedData);
+    const writeEndTime = new Date(); // ←追加
+    const writeElapsedTime = (writeEndTime - writeStartTime) / 1000; // ←追加
     
-    console.log('✓ 書き込み完了');
+    console.log(`✓ 書き込み完了: ${writeElapsedTime.toFixed(2)}秒`); // ←修正
     console.log('');
     
     // ========================================
@@ -208,6 +217,9 @@ function updateShippingData(startDate, endDate) {
     console.log(`完了時刻: ${Utilities.formatDate(endTime, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss')}`);
     console.log('');
     
+    // 実行完了日時を記録
+    recordExecutionTimestamp();
+
     // ========================================
     // 6. 正常終了（ログは記録しない）
     // ========================================
@@ -271,7 +283,7 @@ function fetchAllShippingDataWithRetry(startDate, endDate, maxRetries = 3) {
       
       // 最後の試行でなければ、少し待ってからリトライ
       if (attempt < maxRetries) {
-        const waitSeconds = Math.pow(2, attempt - 1); // 1秒、2秒、4秒...と待機時間を指数関数的に増やす
+        const waitSeconds = Math.pow(2, attempt - 1); // 1秒、2秒、4秒...と待機時間を指数関数的に増やすように修正
         console.log(`${waitSeconds}秒後にリトライします...`);
         Utilities.sleep(waitSeconds * 1000);
       }
@@ -348,9 +360,13 @@ function writeDataToSheet(convertedData) {
     
     // 既存データ行を削除または内容クリア
     // ★★★ 改善ポイント: 固定行対応 ★★★
+    const deleteStartTime = new Date(); // ←追加
     const lastRow = sheet.getLastRow();
+    console.log(`現在の行数: ${lastRow}行`); // ←追加
+
     if (lastRow > 1) {
       const rowsToDelete = lastRow - 1; // ヘッダーを除く行数
+      console.log(`削除対象: ${rowsToDelete}行`); // ←追加
       console.log(`既存データ行を処理: ${rowsToDelete}行`);
       
       if (convertedData.length === 0) {
@@ -371,11 +387,21 @@ function writeDataToSheet(convertedData) {
       }
     }
     
+    const deleteEndTime = new Date(); // ←追加
+    const deleteElapsedTime = (deleteEndTime - deleteStartTime) / 1000; // ←追加
+    console.log(`削除処理完了: ${deleteElapsedTime.toFixed(2)}秒`); // ←追加
+
     // データを書き込み
+    const insertStartTime = new Date(); // ←追加
     if (convertedData.length > 0) {
       console.log(`データを書き込み中: ${convertedData.length}件`);
       const range = sheet.getRange(2, 1, convertedData.length, convertedData[0].length);
       range.setValues(convertedData);
+
+      const insertEndTime = new Date(); // ←追加
+      const insertElapsedTime = (insertEndTime - insertStartTime) / 1000; // ←追加
+      console.log(`データ書き込み完了: ${insertElapsedTime.toFixed(2)}秒`); // ←追加
+
     } else {
       console.log('書き込むデータがありません（データ行は空になります）');
     }
@@ -505,6 +531,34 @@ function logExecution(startDate, endDate, recordCount, elapsedTime, status, erro
   } catch (error) {
     console.error('ログ記録エラー:', error.message);
     // ログ記録のエラーは処理を止めない
+  }
+}
+
+function recordExecutionTimestamp() {
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const spreadsheetId = properties.getProperty('SPREADSHEET_ID');
+    const sheetName = properties.getProperty('OPERATION_LOG_SHEET_NAME');
+
+    if (!spreadsheetId || !sheetName) {
+      throw new Error('スクリプトプロパティ SPREADSHEET_ID または OPERATION_LOG_SHEET_NAME が設定されていません。');
+    }
+
+    const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    const sheet = spreadsheet.getSheetByName(sheetName);
+
+    if (!sheet) {
+      console.error(`シート "${sheetName}" が見つかりません。日時の記録をスキップします。`);
+      return;
+    }
+    
+    sheet.getRange(1, 1).setValue(
+      Utilities.formatDate(new Date(), 'JST', 'MM月dd日HH時mm分ss秒')
+    );
+    console.log(`実行日時をシート "${sheetName}" のA1セルに記録しました。`);
+
+  } catch (error) {
+    console.error('実行日時の記録中にエラーが発生しました:', error.message);
   }
 }
 
