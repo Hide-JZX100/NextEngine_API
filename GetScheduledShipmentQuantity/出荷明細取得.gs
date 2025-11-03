@@ -288,7 +288,7 @@ function showAvailableFields() {
 }
 
 /**
- * ステップ3: ページング処理で全データを取得
+ * ステップ3: ページング処理で全データを取得（計測コード統合版）
  * 
  * @param {string} startDate - 開始日（YYYY-MM-DD形式）
  * @param {string} endDate - 終了日（YYYY-MM-DD形式）
@@ -298,8 +298,12 @@ function showAvailableFields() {
  * 2. 1回のAPIコールで1000件ずつ取得
  * 3. offsetを変更しながらループ処理
  * 4. 全データを配列に蓄積
-*/
+ * 5. 各処理の実行時間を計測
+ */
 function fetchAllShippingData(startDate = '2025-10-03', endDate = '2025-10-05') {
+  // ★★★ 全体の実行時間計測開始 ★★★
+  const overallStartTime = new Date();
+  
   try {
     console.log('=== 全データ取得開始 ===');
     console.log(`期間: ${startDate} ～ ${endDate}`);
@@ -317,7 +321,11 @@ function fetchAllShippingData(startDate = '2025-10-03', endDate = '2025-10-05') 
       throw new Error('アクセストークンが見つかりません。先に認証.gsのtestApiConnection()を実行してください。');
     }
     
-    console.log('トークン取得完了');
+    // ★★★ 認証処理の時間計測（トークン取得は一瞬なので計測は参考程度）★★★
+    const authEndTime = new Date();
+    const authElapsedTime = (authEndTime - overallStartTime) / 1000;
+    
+    console.log(`トークン取得完了: ${authElapsedTime.toFixed(2)}秒`);
     console.log('');
     
     // 全データを格納する配列
@@ -327,7 +335,7 @@ function fetchAllShippingData(startDate = '2025-10-03', endDate = '2025-10-05') 
     let offset = 0;
     const limit = 1000; // 1回のAPIコールで最大1000件取得
     let hasMoreData = true;
-    let apiCallCount = 0;
+    let callCount = 0;
     
     // 受注明細検索APIのエンドポイント
     const url = `${NE_API_URL}/api_v1_receiveorder_row/search`;
@@ -336,12 +344,18 @@ function fetchAllShippingData(startDate = '2025-10-03', endDate = '2025-10-05') 
     const formattedStartDate = `${startDate} 00:00:00`;
     const formattedEndDate = `${endDate} 23:59:59`;
     
+    // ★★★ API呼び出し開始時刻 ★★★
+    const apiCallsStartTime = new Date();
+    
     // ページングループ
     while (hasMoreData) {
-      apiCallCount++;
+      callCount++;
       
-      console.log(`--- APIコール ${apiCallCount}回目 ---`);
+      console.log(`--- APIコール ${callCount}回目 ---`);
       console.log(`offset: ${offset}, limit: ${limit}`);
+      
+      // ★★★ 個別APIコールの時間計測開始 ★★★
+      const apiCallStartTime = new Date();
       
       // APIリクエストのパラメータ
       const payload = {
@@ -352,7 +366,7 @@ function fetchAllShippingData(startDate = '2025-10-03', endDate = '2025-10-05') 
         // 出荷予定日で絞り込む
         'receive_order_send_plan_date-gte': formattedStartDate,
         'receive_order_send_plan_date-lte': formattedEndDate,
-        // キャンセル行を除外（★★★ここを追加★★★）
+        // キャンセル行を除外
         'receive_order_row_cancel_flag-eq': '0',
         // Shipping_piece.csv の全項目を取得
         'fields': [
@@ -395,6 +409,10 @@ function fetchAllShippingData(startDate = '2025-10-03', endDate = '2025-10-05') 
       const responseText = response.getContentText();
       const responseData = JSON.parse(responseText);
       
+      // ★★★ 個別APIコールの時間計測終了 ★★★
+      const apiCallEndTime = new Date();
+      const apiCallElapsedTime = (apiCallEndTime - apiCallStartTime) / 1000;
+      
       // トークンが更新された場合は保存して、次のループで使用
       if (responseData.access_token && responseData.refresh_token) {
         accessToken = responseData.access_token;
@@ -410,6 +428,7 @@ function fetchAllShippingData(startDate = '2025-10-03', endDate = '2025-10-05') 
       if (responseData.result === 'success') {
         const fetchedCount = parseInt(responseData.count);
         console.log(`取得件数: ${fetchedCount}件`);
+        console.log(`APIコール時間: ${apiCallElapsedTime.toFixed(2)}秒`); // ★★★ 追加 ★★★
         
         // データを配列に追加
         if (responseData.data && responseData.data.length > 0) {
@@ -433,10 +452,18 @@ function fetchAllShippingData(startDate = '2025-10-03', endDate = '2025-10-05') 
       }
     }
     
+    // ★★★ 全体の実行時間計測終了 ★★★
+    const overallEndTime = new Date();
+    const overallElapsedTime = (overallEndTime - overallStartTime) / 1000;
+    const apiCallsElapsedTime = (overallEndTime - apiCallsStartTime) / 1000;
+    
     console.log('');
     console.log('=== 全データ取得成功 ===');
-    console.log(`総APIコール回数: ${apiCallCount}回`);
+    console.log(`総APIコール回数: ${callCount}回`);
     console.log(`総取得件数: ${allData.length}件`);
+    console.log(`データ取得総時間: ${overallElapsedTime.toFixed(2)}秒`); // ★★★ 追加 ★★★
+    console.log(`  - 認証: ${authElapsedTime.toFixed(2)}秒`); // ★★★ 追加 ★★★
+    console.log(`  - API呼び出し: ${apiCallsElapsedTime.toFixed(2)}秒`); // ★★★ 追加 ★★★
     console.log('');
     
     // 最初の3件と最後の3件を表示
