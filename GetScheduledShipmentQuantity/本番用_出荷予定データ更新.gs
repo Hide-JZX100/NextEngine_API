@@ -194,9 +194,12 @@ function updateShippingData(startDate, endDate) {
     currentStep = 'スプレッドシート書き込み';
     console.log('--- ステップ3: スプレッドシート書き込み ---');
     
+    const writeStartTime = new Date(); // ←追加
     writeDataToSheet(convertedData);
+    const writeEndTime = new Date(); // ←追加
+    const writeElapsedTime = (writeEndTime - writeStartTime) / 1000; // ←追加
     
-    console.log('✓ 書き込み完了');
+    console.log(`✓ 書き込み完了: ${writeElapsedTime.toFixed(2)}秒`); // ←修正
     console.log('');
     
     // ========================================
@@ -357,9 +360,13 @@ function writeDataToSheet(convertedData) {
     
     // 既存データ行を削除または内容クリア
     // ★★★ 改善ポイント: 固定行対応 ★★★
+    const deleteStartTime = new Date(); // ←追加
     const lastRow = sheet.getLastRow();
+    console.log(`現在の行数: ${lastRow}行`); // ←追加
+
     if (lastRow > 1) {
       const rowsToDelete = lastRow - 1; // ヘッダーを除く行数
+      console.log(`削除対象: ${rowsToDelete}行`); // ←追加
       console.log(`既存データ行を処理: ${rowsToDelete}行`);
       
       if (convertedData.length === 0) {
@@ -380,11 +387,21 @@ function writeDataToSheet(convertedData) {
       }
     }
     
+    const deleteEndTime = new Date(); // ←追加
+    const deleteElapsedTime = (deleteEndTime - deleteStartTime) / 1000; // ←追加
+    console.log(`削除処理完了: ${deleteElapsedTime.toFixed(2)}秒`); // ←追加
+
     // データを書き込み
+    const insertStartTime = new Date(); // ←追加
     if (convertedData.length > 0) {
       console.log(`データを書き込み中: ${convertedData.length}件`);
       const range = sheet.getRange(2, 1, convertedData.length, convertedData[0].length);
       range.setValues(convertedData);
+
+      const insertEndTime = new Date(); // ←追加
+      const insertElapsedTime = (insertEndTime - insertStartTime) / 1000; // ←追加
+      console.log(`データ書き込み完了: ${insertElapsedTime.toFixed(2)}秒`); // ←追加
+
     } else {
       console.log('書き込むデータがありません（データ行は空になります）');
     }
