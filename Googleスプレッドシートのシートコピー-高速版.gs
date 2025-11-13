@@ -1,4 +1,4 @@
-/**
+/*
 =============================================================================
 商品マスタ ハイブリッド更新スクリプト
 =============================================================================
@@ -88,6 +88,35 @@ function getSheets() {
   };
 }
 
+/**
+ * 実データの最終行を取得する関数（ArrayFormula対策）
+ * 指定列（通常はA列など主キー列）で実データがある最終行を検出
+ * @param {Sheet} sheet - 対象シート
+ * @param {number} checkColumn - チェックする列番号（1=A列）
+ * @returns {number} 実データの最終行
+ */
+function getActualLastRow(sheet, checkColumn = 1) {
+  const lastRow = sheet.getLastRow();
+  
+  if (lastRow === 0) {
+    return 0;
+  }
+  
+  // 指定列のデータを全て取得
+  const values = sheet.getRange(1, checkColumn, lastRow, 1).getValues();
+  
+  // 下から順に空でないセルを探す
+  for (let i = values.length - 1; i >= 0; i--) {
+    const cellValue = values[i][0];
+    // 空文字、null、undefinedでない場合は実データ
+    if (cellValue !== "" && cellValue !== null && cellValue !== undefined) {
+      return i + 1; // 配列は0始まりなので+1
+    }
+  }
+  
+  return 0; // 全て空の場合
+}
+
 // ハイブリッド更新版（追加メイン + 低頻度更新に最適）
 function Master_HybridUpdate() {
   try {
@@ -96,9 +125,10 @@ function Master_HybridUpdate() {
     const sheet_copyFrom = sheets.sheet_copyFrom;
     const sheet_copyTo = sheets.sheet_copyTo;
     
-    const lastRow_From = sheet_copyFrom.getLastRow();
+    // ArrayFormula対策：実データの最終行を取得（A列をチェック）
+    const lastRow_From = getActualLastRow(sheet_copyFrom, 1);
     const lastColumn_From = sheet_copyFrom.getLastColumn();
-    const lastRow_To = sheet_copyTo.getLastRow();
+    const lastRow_To = getActualLastRow(sheet_copyTo, 1);
     
     Logger.log(`コピー元: ${lastRow_From}行, コピー先: ${lastRow_To}行`);
     
@@ -112,10 +142,17 @@ function Master_HybridUpdate() {
     if (shouldFullUpdate) {
       Logger.log('完全更新を実行します');
       
+      // 行数変化または月曜日の場合のみclear()を実行
+      const needsClear = (lastRow_From !== lastRow_To) || (dayOfWeek === 1);
+      
+      if (needsClear) {
+        Logger.log('シートをクリアします');
+        sheet_copyTo.clear();
+      } else {
+        Logger.log('行数変化なし - セル内容のみ更新');
+      }
+      
       const allData = sheet_copyFrom.getRange(1, 1, lastRow_From, lastColumn_From).getValues();
-
-      sheet_copyTo.clear();
-
       sheet_copyTo.getRange(1, 1, lastRow_From, lastColumn_From).setValues(allData);
       
       if (lastColumn_From >= 9) {
@@ -162,15 +199,14 @@ function Master_ForceFullUpdate() {
     const sheet_copyFrom = sheets.sheet_copyFrom;
     const sheet_copyTo = sheets.sheet_copyTo;
     
-    const lastRow_From = sheet_copyFrom.getLastRow();
+    // ArrayFormula対策：実データの最終行を取得
+    const lastRow_From = getActualLastRow(sheet_copyFrom, 1);
     const lastColumn_From = sheet_copyFrom.getLastColumn();
     
     Logger.log(`強制完全更新: ${lastRow_From}行 × ${lastColumn_From}列`);
     
-    const allData = sheet_copyFrom.getRange(1, 1, lastRow_From, lastColumn_From).getValues();
-
     sheet_copyTo.clear();
-    
+    const allData = sheet_copyFrom.getRange(1, 1, lastRow_From, lastColumn_From).getValues();
     sheet_copyTo.getRange(1, 1, lastRow_From, lastColumn_From).setValues(allData);
     
     if (lastColumn_From >= 9) {
@@ -249,7 +285,8 @@ function Master_SuperFast() {
     const sheet_copyFrom = sheets.sheet_copyFrom;
     const sheet_copyTo = sheets.sheet_copyTo;
     
-    const lastRow_From = sheet_copyFrom.getLastRow();
+    // ArrayFormula対策：実データの最終行を取得
+    const lastRow_From = getActualLastRow(sheet_copyFrom, 1);
     const lastColumn_From = sheet_copyFrom.getLastColumn();
     
     Logger.log(`データ範囲: ${lastRow_From}行 × ${lastColumn_From}列`);
