@@ -1,60 +1,65 @@
 /**
 =============================================================================
-ネクストエンジンAPI認証ライブラリ v2.0
+ネクストエンジン認証ライブラリ (NEAuth)
 =============================================================================
-
-* 【目的】
-* ネクストエンジンAPIとの認証を確立し、アクセストークンの取得を行う
-* ライブラリとして他のプロジェクトから呼び出し可能
-* 
-* 【機能】
-* 1. OAuth2認証フローの実行
-* 2. アクセストークンとリフレッシュトークンの取得・保存
-* 3. トークンの有効性確認
-* 4. 外部プロジェクトのスクリプトプロパティに対応
-
-【v2.0の変更点】
-* - 全関数で外部プロパティを受け取れるように改良
-* - 後方互換性を維持(引数なしでも動作)
-* - ライブラリとして使用する際の利便性向上
-
-【スクリプトプロパティの設定方法】
-呼び出し元のGASプロジェクトで以下を設定:
-1. GASエディタで「プロジェクトの設定」を開く（歯車のアイコン）
-2. 「スクリプトプロパティ」セクションまでスクロール
-3. 「スクリプトプロパティの追加」をクリックし、以下のキーと値を設定
-
-   キー                     | 値
-   -------------------------|------------------------------------
-   CLIENT_ID                | ネクストエンジンのクライアントID
-   CLIENT_SECRET            | ネクストエンジンのクライアントシークレット
-   REDIRECT_URI             | ネクストエンジンのリダイレクトURI
-
-* 
-* 【注意事項】
-* - テスト環境での動作確認を前提としています
-* - 本番環境での使用前に十分なテストを行ってください
-* - アクセストークンは安全に管理してください
-
-【ライブラリとしての使用方法】
-呼び出し元プロジェクトで:
-```javascript
-function myFunction() {
-  const props = PropertiesService.getScriptProperties();
-  const authUrl = NEAuth.generateAuthUrl(props);
-  console.log(authUrl);
-}
-```
-
-【スタンドアロンでの使用方法】
-このプロジェクト内で直接実行する場合:
-```javascript
-function test() {
-  const authUrl = generateAuthUrl();  // 引数なしで自身のプロパティを使用
-  console.log(authUrl);
-}
-```
-
+ * バージョン: 4.0
+ * 
+ * 【概要】
+ * Google Apps Script (GAS) からネクストエンジンAPIを利用する際の認証プロセスを補助するライブラリです。
+ * 認証URLの生成やトークンの有効性検証など、共通化できる処理を提供します。
+ * 
+ * このライブラリは認証フローの一部を簡略化しますが、トークンを取得するための
+ * `doGet(e)` 関数の実装とWebアプリとしてのデプロイは、各プロジェクト側で行う必要があります。
+ * 
+ * ---
+ * 
+ * 【前提条件】
+ * このライブラリを利用するGASプロジェクトで、以下の設定が必要です。
+ * 
+ * 1. Webアプリとしてデプロイ
+ *    - GASエディタの「デプロイ」>「新しいデプロイ」からWebアプリとしてデプロイし、デプロイURLを取得します。
+ * 
+ * 2. スクリプトプロパティの設定
+ *    - GASエディタの「プロジェクトの設定」(歯車アイコン) >「スクリプト プロパティ」に以下を設定します。
+ * 
+ *      キー           | 値
+ *      -------------|------------------------------------
+ *      CLIENT_ID    | ネクストエンジンアプリのクライアントID
+ *      CLIENT_SECRET| ネクストエンジンアプリのクライアントシークレット
+ *      REDIRECT_URI | 上記1で取得したWebアプリのデプロイURL
+ * 
+ * 3. `doGet(e)` 関数の実装
+ *    - 認証後のリダイレクトを受け取り、アクセストークンを取得・保存する `doGet(e)` 関数をプロジェクトに実装する必要があります。
+ * 
+ * ---
+ * 
+ * 【利用手順】
+ * 1. `generateAuthUrl()` を実行して認証URLを生成します。
+ *    ```javascript
+ *    function getAuthUrl() {
+ *      const props = PropertiesService.getScriptProperties();
+ *      const authUrl = NEAuth.generateAuthUrl(props);
+ *      console.log(authUrl);
+ *    }
+ *    ```
+ * 
+ * 2. 生成されたURLにアクセスし、ネクストエンジンで認証を行います。
+ * 
+ * 3. 認証後、`REDIRECT_URI` にリダイレクトされ、プロジェクトに実装した `doGet(e)` が実行されてトークンが保存されます。
+ * 
+ * 4. `testApiConnection()` を実行して、保存されたトークンでAPIに接続できるかテストします。
+ *    ```javascript
+ *    function checkConnection() {
+ *      const props = PropertiesService.getScriptProperties();
+ *      NEAuth.testApiConnection(props);
+ *    }
+ *    ```
+ * 
+ * ---
+ * 
+ * 【注意事項】
+ * - アクセストークンやクライアントシークレットは機密情報です。第三者に漏洩しないよう厳重に管理してください。
+ * - このライブラリは認証の補助を目的としており、APIの各エンドポイントの呼び出し機能は含みません。
 =============================================================================
 */
 
@@ -88,7 +93,7 @@ function getScriptProperties(externalProperties) {
 }
 
 /**
- * ステップ1: 認証URLを生成してログ出力
+ * 認証URLを生成してログ出力
  * 手動でブラウザでアクセスして認証を行う
  * 
  * @param {PropertiesService.Properties} externalProperties - 外部から渡されたプロパティ(オプション)
@@ -116,207 +121,9 @@ function generateAuthUrl(externalProperties) {
   }
 }
 
-/**
- * WebアプリとしてのGETリクエスト処理
- * ネクストエンジンからのリダイレクト時にuidとstateを受け取る
- * 
- * 注意: この関数は呼び出し元のプロジェクトで自動的に実行されるため、
- * PropertiesService.getScriptProperties()は呼び出し元のプロパティを参照します。
- * 
- * @param {Object} e - イベントオブジェクト
- * @return {HtmlService.HtmlOutput} HTML出力
- */
-function doGet(e) {
-  const uid = e.parameter.uid;
-  const state = e.parameter.state;
-  
-  if (uid && state) {
-    try {
-      // doGet()は呼び出し元で実行されるため、
-      // PropertiesService.getScriptProperties()は自動的に呼び出し元のプロパティを取得する
-      const properties = PropertiesService.getScriptProperties();
-      
-      // プロパティを明示的に渡す
-      const result = getAccessToken(uid, state, properties);
-      
-      return HtmlService.createHtmlOutput(`
-        <html>
-          <head>
-            <title>ネクストエンジン認証完了</title>
-            <style>
-              body { 
-                font-family: 'Helvetica Neue', Arial, sans-serif; 
-                max-width: 600px; 
-                margin: 50px auto; 
-                padding: 20px;
-                background-color: #f5f5f5;
-              }
-              .container {
-                background: white;
-                padding: 30px;
-                border-radius: 10px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-              }
-              .success { color: #28a745; }
-              .info { color: #17a2b8; }
-              .code { 
-                background: #f8f9fa; 
-                padding: 10px; 
-                border-radius: 5px; 
-                font-family: monospace;
-                margin: 10px 0;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <h2 class="success">✅ 認証成功！</h2>
-              <p>ネクストエンジンAPIの認証が完了しました。</p>
-              
-              <h3>取得した情報:</h3>
-              <div class="code">
-                <strong>UID:</strong> ${uid}<br>
-                <strong>State:</strong> ${state}<br>
-                <strong>Access Token:</strong> ${result.access_token.substring(0, 20)}...<br>
-                <strong>Refresh Token:</strong> ${result.refresh_token.substring(0, 20)}...
-              </div>
-              
-              <h3 class="info">次のステップ:</h3>
-              <p>GASエディタに戻り、<code>testApiConnection()</code> を実行してAPI接続をテストしてください。</p>
-              
-              <p><small>このページを閉じて構いません。</small></p>
-            </div>
-          </body>
-        </html>
-      `);
-      
-    } catch (error) {
-      return HtmlService.createHtmlOutput(`
-        <html>
-          <head>
-            <title>認証エラー</title>
-            <style>
-              body { 
-                font-family: Arial, sans-serif; 
-                max-width: 600px; 
-                margin: 50px auto; 
-                padding: 20px;
-              }
-              .error { color: #dc3545; }
-            </style>
-          </head>
-          <body>
-            <h2 class="error">❌ 認証エラー</h2>
-            <p>認証処理中にエラーが発生しました:</p>
-            <p><strong>${error.message}</strong></p>
-            <p>GASエディタでログを確認してください。</p>
-          </body>
-        </html>
-      `);
-    }
-  } else {
-    return HtmlService.createHtmlOutput(`
-      <html>
-        <head>
-          <title>パラメータエラー</title>
-          <style>
-            body { 
-              font-family: Arial, sans-serif; 
-              max-width: 600px; 
-              margin: 50px auto; 
-              padding: 20px;
-            }
-            .error { color: #dc3545; }
-          </style>
-        </head>
-        <body>
-          <h2 class="error">❌ パラメータエラー</h2>
-          <p>必要なパラメータ（uid、state）が見つかりません。</p>
-          <p>認証URLから正しくリダイレクトされていない可能性があります。</p>
-          <p>GASエディタで <code>generateAuthUrl()</code> を実行して、正しい認証URLを取得してください。</p>
-        </body>
-      </html>
-    `);
-  }
-}
 
 /**
- * ステップ2: uidとstateを使用してアクセストークンを取得
- * 
- * @param {string} uid - 認証後に取得されるuid
- * @param {string} state - 認証後に取得されるstate
- * @param {PropertiesService.Properties} externalProperties - 外部から渡されたプロパティ(オプション)
- * @return {Object} トークン情報 {access_token, refresh_token}
- */
-function getAccessToken(uid, state, externalProperties) {
-  try {
-    if (!uid || !state) {
-      throw new Error('uid と state が必要です');
-    }
-    
-    const config = getScriptProperties(externalProperties);
-    
-    // アクセストークン取得のリクエスト
-    const url = `${NE_API_URL}/api_neauth`;
-    
-    const payload = {
-      'uid': uid,
-      'state': state,
-      'client_id': config.clientId,
-      'client_secret': config.clientSecret
-    };
-    
-    const options = {
-      'method': 'POST',
-      'headers': {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      'payload': Object.keys(payload).map(key => 
-        encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
-      ).join('&')
-    };
-    
-    console.log('アクセストークン取得リクエスト送信中...');
-    console.log('使用URL:', url);
-    console.log('ペイロード:', payload);
-    const response = UrlFetchApp.fetch(url, options);
-    const responseText = response.getContentText();
-    
-    console.log('レスポンス:', responseText);
-    
-    if (response.getResponseCode() !== 200) {
-      throw new Error(`APIリクエストが失敗しました。ステータス: ${response.getResponseCode()}`);
-    }
-    
-    const responseData = JSON.parse(responseText);
-    
-    if (responseData.result === 'success') {
-      // トークンをスクリプトプロパティに保存
-      const properties = externalProperties || PropertiesService.getScriptProperties();
-      properties.setProperties({
-        'ACCESS_TOKEN': responseData.access_token,
-        'REFRESH_TOKEN': responseData.refresh_token,
-        'TOKEN_OBTAINED_AT': new Date().getTime().toString()
-      });
-      
-      console.log('=== 認証成功 ===');
-      console.log('アクセストークン:', responseData.access_token);
-      console.log('リフレッシュトークン:', responseData.refresh_token);
-      console.log('トークンをスクリプトプロパティに保存しました');
-      
-      return responseData;
-    } else {
-      throw new Error(`認証失敗: ${JSON.stringify(responseData)}`);
-    }
-    
-  } catch (error) {
-    console.error('アクセストークン取得エラー:', error.message);
-    throw error;
-  }
-}
-
-/**
- * ステップ3: 保存されたトークンでAPI接続をテスト
+ * 保存されたトークンでAPI接続をテスト
  * ユーザー情報を取得して認証が正常に動作しているか確認
  * 
  * @param {PropertiesService.Properties} externalProperties - 外部から渡されたプロパティ(オプション)
@@ -388,89 +195,6 @@ function testApiConnection(externalProperties) {
 }
 
 /**
- * 在庫APIのテスト（最終目標に向けて）
- * 商品マスタ情報の取得をテスト
- * 
- * @param {PropertiesService.Properties} externalProperties - 外部から渡されたプロパティ(オプション)
- * @return {Array} 商品情報の配列
- */
-function testInventoryApi(externalProperties) {
-  try {
-    const properties = externalProperties || PropertiesService.getScriptProperties();
-    const accessToken = properties.getProperty('ACCESS_TOKEN');
-    const refreshToken = properties.getProperty('REFRESH_TOKEN');
-    
-    if (!accessToken || !refreshToken) {
-      throw new Error('アクセストークンが見つかりません。');
-    }
-    
-    // 商品マスタ検索API
-    const url = `${NE_API_URL}/api_v1_master_goods/search`;
-    
-    const payload = {
-      'access_token': accessToken,
-      'refresh_token': refreshToken,
-      'fields': 'goods_id,goods_name,stock_quantity', // 必要な項目のみ
-      'limit': '5' // テスト用に5件に制限
-    };
-    
-    const options = {
-      'method': 'POST',
-      'headers': {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      'payload': Object.keys(payload).map(key => 
-        encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
-      ).join('&')
-    };
-    
-    console.log('在庫API テスト実行中...');
-    console.log('使用URL:', url);
-    
-    const response = UrlFetchApp.fetch(url, options);
-    const responseText = response.getContentText();
-    
-    console.log('レスポンスコード:', response.getResponseCode());
-    console.log('在庫API レスポンス:', responseText);
-    
-    const responseData = JSON.parse(responseText);
-    
-    if (responseData.result === 'success') {
-      console.log('=== 在庫API テスト成功 ===');
-      console.log('取得商品数:', responseData.count);
-      console.log('商品情報:', responseData.data);
-      
-      // トークンが更新された場合は保存
-      if (responseData.access_token && responseData.refresh_token) {
-        properties.setProperties({
-          'ACCESS_TOKEN': responseData.access_token,
-          'REFRESH_TOKEN': responseData.refresh_token,
-          'TOKEN_UPDATED_AT': new Date().getTime().toString()
-        });
-        console.log('トークンが更新されました');
-      }
-      
-      return responseData.data;
-    } else {
-      console.log('在庫API エラー:', responseData);
-      
-      if (responseData.code === '004001') {
-        console.log('');
-        console.log('【解決方法】');
-        console.log('ネクストエンジンの「アプリを作る」→アプリ編集→「API」タブで');
-        console.log('「商品マスタ検索」の権限を有効にしてください');
-      }
-      
-      return responseData;
-    }
-    
-  } catch (error) {
-    console.error('在庫API テストエラー:', error.message);
-    throw error;
-  }
-}
-
-/**
  * 保存されているトークン情報を表示
  * 
  * @param {PropertiesService.Properties} externalProperties - 外部から渡されたプロパティ(オプション)
@@ -532,35 +256,4 @@ function checkCurrentDeployment(externalProperties) {
     console.log('生成される認証URL:');
     console.log(authUrl);
   }
-}
-
-/**
- * 認証フロー全体のガイド表示
- */
-function showAuthGuide() {
-  console.log('=== ネクストエンジンAPI認証ガイド v2.0 ===');
-  console.log('');
-  console.log('【ライブラリとして使用する場合】');
-  console.log('1. 呼び出し元のプロジェクトでスクリプトプロパティを設定:');
-  console.log('   - CLIENT_ID');
-  console.log('   - CLIENT_SECRET');
-  console.log('   - REDIRECT_URI');
-  console.log('');
-  console.log('2. 呼び出し元のプロジェクトをWebアプリとしてデプロイ');
-  console.log('');
-  console.log('3. 呼び出し元で以下のように使用:');
-  console.log('   const props = PropertiesService.getScriptProperties();');
-  console.log('   const authUrl = NEAuth.generateAuthUrl(props);');
-  console.log('');
-  console.log('【スタンドアロンで使用する場合】');
-  console.log('1. このプロジェクトでスクリプトプロパティを設定');
-  console.log('2. このプロジェクトをWebアプリとしてデプロイ');
-  console.log('3. generateAuthUrl() を実行（引数なし）');
-  console.log('');
-  console.log('【認証手順】');
-  console.log('1. generateAuthUrl() で認証URLを取得');
-  console.log('2. ブラウザで認証URLにアクセス');
-  console.log('3. ネクストエンジンにログイン');
-  console.log('4. 自動的にアクセストークンが取得されます');
-  console.log('5. testApiConnection() で動作確認');
 }
