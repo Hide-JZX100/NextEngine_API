@@ -939,3 +939,28 @@ function getInventoryToSheet() {
   
   // ... API呼び出しとスプレッドシート書き込みの処理
 }
+
+/**
+ * スクリプトプロパティの設定確認
+ */
+function checkMyProperties() {
+  console.log('=== スクリプトプロパティ確認 ===');
+  
+  const props = PropertiesService.getScriptProperties();
+  const clientId = props.getProperty('CLIENT_ID');
+  const clientSecret = props.getProperty('CLIENT_SECRET');
+  const redirectUri = props.getProperty('REDIRECT_URI');
+  
+  console.log('CLIENT_ID:', clientId ? `設定済み (${clientId.substring(0, 10)}...)` : '❌ 未設定');
+  console.log('CLIENT_SECRET:', clientSecret ? '✅ 設定済み' : '❌ 未設定');
+  console.log('REDIRECT_URI:', redirectUri ? `✅ 設定済み (${redirectUri})` : '❌ 未設定');
+  
+  if (clientId && clientSecret && redirectUri) {
+    console.log('');
+    console.log('✅ すべての設定が完了しています！');
+    console.log('testGenerateAuthUrl()を実行できます。');
+  } else {
+    console.log('');
+    console.log('❌ 設定が不足しています。スクリプトプロパティを確認してください。');
+  }
+}
