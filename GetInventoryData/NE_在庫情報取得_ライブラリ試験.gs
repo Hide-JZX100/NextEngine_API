@@ -985,3 +985,37 @@ function checkLibraryVersion() {
     console.log('❌ NEAuthライブラリが見つかりません');
   }
 }
+
+/**
+ * 詳細デバッグテスト
+ */
+function debugTest() {
+  console.log('=== 詳細デバッグ ===');
+  
+  // ステップ1: ローカルのプロパティ取得
+  console.log('【ステップ1】ローカルプロパティ取得');
+  const myProps = PropertiesService.getScriptProperties();
+  console.log('✅ プロパティオブジェクト取得成功');
+  
+  // ステップ2: 各値の確認
+  console.log('【ステップ2】プロパティ値確認');
+  const clientId = myProps.getProperty('CLIENT_ID');
+  const clientSecret = myProps.getProperty('CLIENT_SECRET');
+  const redirectUri = myProps.getProperty('REDIRECT_URI');
+  
+  console.log('CLIENT_ID:', clientId ? '✅' : '❌');
+  console.log('CLIENT_SECRET:', clientSecret ? '✅' : '❌');
+  console.log('REDIRECT_URI:', redirectUri ? '✅' : '❌');
+  
+  // ステップ3: ライブラリの関数呼び出し
+  console.log('【ステップ3】ライブラリ関数呼び出し');
+  try {
+    console.log('NEAuthライブラリに渡すプロパティ:', myProps);
+    const authUrl = NEAuth.generateAuthUrl(myProps);
+    console.log('✅ 成功!');
+    console.log('認証URL:', authUrl);
+  } catch (error) {
+    console.error('❌ 失敗:', error.message);
+    console.error('スタックトレース:', error.stack);
+  }
+}
