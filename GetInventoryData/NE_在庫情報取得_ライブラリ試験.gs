@@ -803,10 +803,124 @@ function testGenerateAuthUrl() {
 /**
  * doGet関数 - ネクストエンジンからのリダイレクトを受け取る
  * Webアプリとしてデプロイされている場合に自動的に実行される
+ * 
+ * この関数は在庫情報取得プロジェクト内にある必要があります。
+ * ライブラリの関数を直接使うのではなく、ここで明示的にプロパティを渡します。
  */
 function doGet(e) {
-  // ライブラリのdoGet関数にそのまま委譲
-  return NEAuth.doGet(e);
+  const uid = e.parameter.uid;
+  const state = e.parameter.state;
+  
+  if (uid && state) {
+    try {
+      // このプロジェクトのスクリプトプロパティを取得
+      const myProperties = PropertiesService.getScriptProperties();
+      
+      // ライブラリの関数に明示的に渡す
+      const result = NEAuth.getAccessToken(uid, state, myProperties);
+      
+      // 成功画面を表示
+      return HtmlService.createHtmlOutput(`
+        <html>
+          <head>
+            <title>ネクストエンジン認証完了</title>
+            <style>
+              body { 
+                font-family: 'Helvetica Neue', Arial, sans-serif; 
+                max-width: 600px; 
+                margin: 50px auto; 
+                padding: 20px;
+                background-color: #f5f5f5;
+              }
+              .container {
+                background: white;
+                padding: 30px;
+                border-radius: 10px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+              }
+              .success { color: #28a745; }
+              .info { color: #17a2b8; }
+              .code { 
+                background: #f8f9fa; 
+                padding: 10px; 
+                border-radius: 5px; 
+                font-family: monospace;
+                margin: 10px 0;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h2 class="success">✅ 認証成功!</h2>
+              <p>ネクストエンジンAPIの認証が完了しました。</p>
+              
+              <h3>取得した情報:</h3>
+              <div class="code">
+                <strong>UID:</strong> ${uid}<br>
+                <strong>State:</strong> ${state}<br>
+                <strong>Access Token:</strong> ${result.access_token.substring(0, 20)}...<br>
+                <strong>Refresh Token:</strong> ${result.refresh_token.substring(0, 20)}...
+              </div>
+              
+              <h3 class="info">次のステップ:</h3>
+              <p>GASエディタに戻り、<code>testApiConnection()</code> を実行してAPI接続をテストしてください。</p>
+              
+              <p><small>このページを閉じて構いません。</small></p>
+            </div>
+          </body>
+        </html>
+      `);
+      
+    } catch (error) {
+      // エラー画面を表示
+      return HtmlService.createHtmlOutput(`
+        <html>
+          <head>
+            <title>認証エラー</title>
+            <style>
+              body { 
+                font-family: Arial, sans-serif; 
+                max-width: 600px; 
+                margin: 50px auto; 
+                padding: 20px;
+              }
+              .error { color: #dc3545; }
+            </style>
+          </head>
+          <body>
+            <h2 class="error">❌ 認証エラー</h2>
+            <p>認証処理中にエラーが発生しました:</p>
+            <p><strong>${error.message}</strong></p>
+            <p>GASエディタでログを確認してください。</p>
+          </body>
+        </html>
+      `);
+    }
+  } else {
+    // パラメータエラー画面
+    return HtmlService.createHtmlOutput(`
+      <html>
+        <head>
+          <title>パラメータエラー</title>
+          <style>
+            body { 
+              font-family: Arial, sans-serif; 
+              max-width: 600px; 
+              margin: 50px auto; 
+              padding: 20px;
+            }
+            .error { color: #dc3545; }
+          </style>
+        </head>
+        <body>
+          <h2 class="error">❌ パラメータエラー</h2>
+          <p>必要なパラメータ（uid、state）が見つかりません。</p>
+          <p>認証URLから正しくリダイレクトされていない可能性があります。</p>
+          <p>GASエディタで <code>testGenerateAuthUrl()</code> を実行して、正しい認証URLを取得してください。</p>
+        </body>
+      </html>
+    `);
+  }
 }
 
 /**
