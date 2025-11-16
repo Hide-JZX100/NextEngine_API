@@ -1019,3 +1019,28 @@ function debugTest() {
     console.error('スタックトレース:', error.stack);
   }
 }
+
+/**
+ * ライブラリ接続の最小テスト
+ */
+function minimalLibraryTest() {
+  console.log('=== 最小ライブラリテスト ===');
+  
+  // ライブラリが存在するか確認
+  if (typeof NEAuth === 'undefined') {
+    console.error('❌ NEAuthライブラリが見つかりません');
+    console.error('ライブラリが正しく追加されているか確認してください');
+    return;
+  }
+  
+  console.log('✅ NEAuthライブラリが見つかりました');
+  
+  // ライブラリの関数が呼び出せるか確認
+  try {
+    console.log('showAuthGuide()を呼び出します...');
+    NEAuth.showAuthGuide();
+    console.log('✅ ライブラリ関数の呼び出しに成功');
+  } catch (error) {
+    console.error('❌ ライブラリ関数の呼び出しに失敗:', error.message);
+  }
+}
