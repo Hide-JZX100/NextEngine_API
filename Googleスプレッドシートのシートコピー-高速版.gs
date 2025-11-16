@@ -1,4 +1,4 @@
-/*
+/**
 =============================================================================
 商品マスタ ハイブリッド更新スクリプト
 =============================================================================
@@ -50,7 +50,7 @@
 30,000行~___Master_Optimized + 分割実行___確実な処理
 
 【作成日】2025年9月19日
-【最終更新】2025年9月20日
+【最終更新】2025年11月16日
 =============================================================================
 */
 
@@ -89,32 +89,54 @@ function getSheets() {
 }
 
 /**
- * 実データの最終行を取得する関数（ArrayFormula対策）
- * 指定列（通常はA列など主キー列）で実データがある最終行を検出
+ * 実データの最終行を取得する関数（ArrayFormula対策・高速版）
+ * バイナリサーチ的アプローチで効率的に最終行を検出
  * @param {Sheet} sheet - 対象シート
  * @param {number} checkColumn - チェックする列番号（1=A列）
  * @returns {number} 実データの最終行
  */
 function getActualLastRow(sheet, checkColumn = 1) {
-  const lastRow = sheet.getLastRow();
-  
-  if (lastRow === 0) {
-    return 0;
-  }
-  
-  // 指定列のデータを全て取得
-  const values = sheet.getRange(1, checkColumn, lastRow, 1).getValues();
-  
-  // 下から順に空でないセルを探す
-  for (let i = values.length - 1; i >= 0; i--) {
-    const cellValue = values[i][0];
-    // 空文字、null、undefinedでない場合は実データ
-    if (cellValue !== "" && cellValue !== null && cellValue !== undefined) {
-      return i + 1; // 配列は0始まりなので+1
+  try {
+    const lastRow = sheet.getLastRow();
+    
+    if (lastRow === 0) {
+      return 0;
     }
+    
+    // まず最後の数行をチェック（大半のケースはここで完了）
+    const checkRows = Math.min(500, lastRow);
+    const values = sheet.getRange(lastRow - checkRows + 1, checkColumn, checkRows, 1).getValues();
+    
+    // 下から順に実データを探す
+    for (let i = values.length - 1; i >= 0; i--) {
+      const cellValue = values[i][0];
+      // 空文字、null、undefinedでない場合は実データ
+      if (cellValue !== "" && cellValue !== null && cellValue !== undefined) {
+        const actualRow = lastRow - checkRows + 1 + i;
+        Logger.log(`最終行検出: ${actualRow}行目, 値 = "${cellValue}"`);
+        return actualRow;
+      }
+    }
+    
+    // 最後の500行に実データがない場合は全体を検索
+    Logger.log('最後の500行に実データなし、全体を検索します');
+    const allValues = sheet.getRange(1, checkColumn, lastRow, 1).getValues();
+    
+    for (let i = allValues.length - 1; i >= 0; i--) {
+      const cellValue = allValues[i][0];
+      if (cellValue !== "" && cellValue !== null && cellValue !== undefined) {
+        const actualRow = i + 1;
+        Logger.log(`最終行検出（全体検索）: ${actualRow}行目, 値 = "${cellValue}"`);
+        return actualRow;
+      }
+    }
+    
+    return 0;
+    
+  } catch (error) {
+    Logger.log(`getActualLastRow エラー: ${error.toString()}`);
+    return sheet.getLastRow();
   }
-  
-  return 0; // 全て空の場合
 }
 
 // ハイブリッド更新版（追加メイン + 低頻度更新に最適）
