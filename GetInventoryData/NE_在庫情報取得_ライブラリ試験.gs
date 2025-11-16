@@ -964,3 +964,24 @@ function checkMyProperties() {
     console.log('❌ 設定が不足しています。スクリプトプロパティを確認してください。');
   }
 }
+
+/**
+ * ライブラリのバージョン確認
+ */
+function checkLibraryVersion() {
+  console.log('=== ライブラリバージョン確認 ===');
+  
+  // ライブラリの関数が存在するか確認
+  if (typeof NEAuth !== 'undefined') {
+    console.log('✅ NEAuthライブラリが読み込まれています');
+    
+    // ライブラリのガイドを表示(バージョン情報が含まれている)
+    try {
+      NEAuth.showAuthGuide();
+    } catch (error) {
+      console.error('❌ showAuthGuide()の実行に失敗:', error.message);
+    }
+  } else {
+    console.log('❌ NEAuthライブラリが見つかりません');
+  }
+}
