@@ -121,7 +121,7 @@ function generateAuthUrl(externalProperties) {
  * ネクストエンジンからのリダイレクト時にuidとstateを受け取る
  * 
  * 注意: この関数は呼び出し元のプロジェクトで自動的に実行されるため、
- * 外部プロパティの指定は不要です。
+ * PropertiesService.getScriptProperties()は呼び出し元のプロパティを参照します。
  * 
  * @param {Object} e - イベントオブジェクト
  * @return {HtmlService.HtmlOutput} HTML出力
@@ -132,9 +132,12 @@ function doGet(e) {
   
   if (uid && state) {
     try {
-      // 自動的にアクセストークンを取得
-      // doGet()は呼び出し元で実行されるため、自動的に呼び出し元のプロパティが使用される
-      const result = getAccessToken(uid, state);
+      // doGet()は呼び出し元で実行されるため、
+      // PropertiesService.getScriptProperties()は自動的に呼び出し元のプロパティを取得する
+      const properties = PropertiesService.getScriptProperties();
+      
+      // プロパティを明示的に渡す
+      const result = getAccessToken(uid, state, properties);
       
       return HtmlService.createHtmlOutput(`
         <html>
