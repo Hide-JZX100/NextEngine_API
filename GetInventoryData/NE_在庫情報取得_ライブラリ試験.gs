@@ -1044,3 +1044,64 @@ function minimalLibraryTest() {
     console.error('❌ ライブラリ関数の呼び出しに失敗:', error.message);
   }
 }
+
+/**
+ * ライブラリ診断
+ */
+function diagnoseLibrary() {
+  console.log('=== ライブラリ診断 ===');
+  
+  // 1. ライブラリの存在確認
+  console.log('【1】ライブラリの存在確認');
+  console.log('typeof NEAuth:', typeof NEAuth);
+  
+  if (typeof NEAuth === 'undefined') {
+    console.error('❌ ライブラリが読み込まれていません');
+    console.error('');
+    console.error('【解決方法】');
+    console.error('1. 左メニュー「ライブラリ」を開く');
+    console.error('2. ライブラリが追加されているか確認');
+    console.error('3. 識別子が「NEAuth」になっているか確認');
+    console.error('4. バージョンが「2」になっているか確認');
+    return;
+  }
+  
+  console.log('✅ NEAuthライブラリが存在します');
+  
+  // 2. 利用可能な関数の確認
+  console.log('');
+  console.log('【2】利用可能な関数');
+  const functions = [
+    'generateAuthUrl',
+    'getAccessToken',
+    'testApiConnection',
+    'testInventoryApi',
+    'showStoredTokens',
+    'clearProperties',
+    'showAuthGuide'
+  ];
+  
+  functions.forEach(funcName => {
+    const exists = typeof NEAuth[funcName] === 'function';
+    console.log(`- ${funcName}: ${exists ? '✅' : '❌'}`);
+  });
+  
+  // 3. 実際に関数を呼び出してみる
+  console.log('');
+  console.log('【3】実際の呼び出しテスト');
+  
+  try {
+    const myProps = PropertiesService.getScriptProperties();
+    console.log('プロパティ取得: ✅');
+    
+    console.log('generateAuthUrl()を呼び出します...');
+    const authUrl = NEAuth.generateAuthUrl(myProps);
+    
+    console.log('✅ 成功!');
+    console.log('認証URL:', authUrl);
+    
+  } catch (error) {
+    console.error('❌ 失敗:', error.message);
+    console.error('スタック:', error.stack);
+  }
+}
