@@ -1,0 +1,38 @@
+セット商品マスタ
+
+項目名,フィールド名,データ型,備考
+セット商品コード,set_goods_id,文字列型,
+セット商品名,set_goods_name,文字列型,
+セット商品単価（セット販売価格）,set_goods_selling_price,数値型,
+商品コード（内訳）,set_goods_detail_goods_id,文字列型,
+数量（内訳）,set_goods_detail_quantity,数値型,
+代表商品コード,set_goods_representation_id,文字列型,
+消費税率,set_goods_tax_rate,数値型,
+JANコード,set_goods_jan_code,文字列型,
+英語表記名,set_goods_foreign_name,文字列型,
+定価,set_goods_display_price,数値型,
+消費税,set_goods_tax_id,数値型,0:税別 1:税込 2:非課税
+型番,set_goods_model_number,文字列型,
+ロケーションコード,set_goods_location,文字列型,
+ギフト可否,set_goods_gift_ok_flg,数値型,0:不可 1:可
+サイズ,set_goods_size,文字列型,
+メーカー型番,set_goods_maker_model_number,文字列型,
+商品状態,set_goods_condition_id,文字列型,01:新品 02:中古 03:その他 04:未使用に近い 05:目立った傷や汚れなし 06:やや傷や汚れあり 07:傷や汚れあり 08:全体的に状態が悪い
+商品状態説明,set_goods_condition_description,文字列型,
+パッケージ込みの幅,set_goods_width,数値型,
+パッケージ込みの奥行き,set_goods_length,数値型,
+パッケージ込みの高さ,set_goods_height,数値型,
+パッケージ込みの重さ,set_goods_weight,数値型,
+当日・翌日発送,set_goods_same_day_delivery_id,数値型,1:当日 2:翌日
+のし対応,set_goods_option_noshi_id,数値型,0:対応しない 1:対応する
+色,set_goods_color,文字列型,
+ブランド名,set_goods_brand_name,文字列型,
+メーカー名,set_goods_maker_name,文字列型,
+販売開始日,set_goods_first_time_sold_date,日時型,
+販売終了日,set_goods_last_time_sold_date,日時型,
+作成日,set_goods_creation_date,日時型,
+作成担当者ID,set_goods_creator_id,数値型,
+作成担当者名,set_goods_creator_name,文字列型,
+最終更新日,set_goods_last_modified_date,日時型,
+最終更新担当者ID,set_goods_last_modified_by_id,数値型,
+最終更新担当者名,set_goods_last_modified_by_name,文字列型,
