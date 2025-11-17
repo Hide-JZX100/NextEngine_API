@@ -1,0 +1,22 @@
+{
+"result": "success",
+"count": "2",
+"data":[
+{
+"set_goods_id": "set-test-syohin00001",
+"set_goods_name": "セットテスト商品00001",
+"set_goods_detail_goods_id": "test-syohin00001",
+"set_goods_detail_quantity": "4"
+},
+{
+"set_goods_id": "set-test-syohin10001",
+"set_goods_name": "セットテスト商品10001",
+"set_goods_detail_goods_id": "test-syohin00001",
+"set_goods_detail_quantity": "4"
+}
+],
+"access_token": "xxx",
+"access_token_end_date": "2022-09-27 18:45:17",
+"refresh_token": "xxx",
+"refresh_token_end_date": "2022-09-29 18:45:17"
+}
