@@ -133,8 +133,9 @@ function fetchAllSetGoodsMaster() {
       }
       
       // ページネーション情報をログ出力
-      const estimatedTotal = currentCount === limit ? '不明(継続中)' : allData.length;
-      logPaginationInfo(apiCallCount, '?', currentCount, allData.length);
+      // 最終ページかどうかで総ページ数を判定
+      const totalPages = currentCount < limit ? apiCallCount : '?';
+      logPaginationInfo(apiCallCount, totalPages, currentCount, allData.length);
       
       // 取得件数がlimitより少ない場合は最終ページ
       if (currentCount < limit) {
