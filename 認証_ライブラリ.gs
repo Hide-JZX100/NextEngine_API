@@ -257,3 +257,53 @@ function checkCurrentDeployment(externalProperties) {
     console.log(authUrl);
   }
 }
+
+/**
+ * トークンを強制的に更新
+ * 
+ * この関数は、API呼び出しを行うことでトークンの有効性を確認し、
+ * 必要に応じて新しいトークンを取得して保存します。
+ * 
+ * 【使用シーン】
+ * - 定期実行トリガーで毎日実行し、トークンの有効期限を延長
+ * - 長期間実行されないプロジェクトでも、トークン切れを防ぐ
+ * 
+ * @param {PropertiesService.Properties} externalProperties - 外部プロパティ
+ * @return {Object} 更新結果 {success: boolean, message: string, userInfo: Object}
+ */
+function refreshTokens(externalProperties) {
+  try {
+    console.log('=== トークン更新開始 ===');
+    
+    const properties = externalProperties || PropertiesService.getScriptProperties();
+    const accessToken = properties.getProperty('ACCESS_TOKEN');
+    const refreshToken = properties.getProperty('REFRESH_TOKEN');
+    
+    // トークンの存在確認
+    if (!accessToken || !refreshToken) {
+      throw new Error('トークンが見つかりません。再認証が必要です。');
+    }
+    
+    // API呼び出しでトークンを更新
+    // testApiConnection()を使用すると、自動的にトークンが更新される
+    const userInfo = testApiConnection(externalProperties);
+    
+    console.log('✅ トークン更新成功');
+    console.log('ユーザー情報:', userInfo);
+    
+    return {
+      success: true,
+      message: 'トークンを更新しました',
+      userInfo: userInfo
+    };
+    
+  } catch (error) {
+    console.error('❌ トークン更新失敗:', error.message);
+    
+    return {
+      success: false,
+      message: error.message,
+      userInfo: null
+    };
+  }
+}
