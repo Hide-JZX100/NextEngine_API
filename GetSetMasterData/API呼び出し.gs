@@ -35,10 +35,20 @@ function fetchSetGoodsMaster(offset = 0, limit = 1000) {
     // APIエンドポイント
     const url = `${NE_API_URL}/api_v1_master_setgoods/search`;
     
+    // 取得するフィールドを指定
+    const fields = [
+      'set_goods_id',
+      'set_goods_name',
+      'set_goods_selling_price',
+      'set_goods_detail_goods_id',
+      'set_goods_detail_quantity'
+    ].join(',');
+    
     // リクエストパラメータ
     const payload = {
       'access_token': accessToken,
       'refresh_token': refreshToken,
+      'fields': fields,
       'offset': offset.toString(),
       'limit': limit.toString()
     };
