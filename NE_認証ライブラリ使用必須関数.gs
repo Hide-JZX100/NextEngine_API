@@ -298,8 +298,15 @@ function testApiConnection() {
     console.log('✅ テスト成功!');
     console.log('ユーザー情報:', result);
     console.log('');
-    console.log('会社名:', result.company_name);
-    console.log('ログインユーザー名:', result.login_user_name);
+    
+    // resultは配列なので、最初の要素を取得
+    if (result && result.length > 0) {
+      const userInfo = result[0];
+      console.log('担当者ID:', userInfo.pic_id);
+      console.log('担当者名:', userInfo.pic_name);
+      console.log('担当者かな:', userInfo.pic_kana);
+      console.log('メールアドレス:', userInfo.pic_mail_address);
+    }
     
     return result;
     
@@ -430,7 +437,11 @@ function dailyTokenRefresh() {
     
     if (result.success) {
       console.log('✅ トークン更新成功:', result.message);
-      console.log('ユーザー:', result.userInfo.company_name);
+      
+      // ユーザー情報を表示(配列の最初の要素)
+      if (result.userInfo && result.userInfo.length > 0) {
+        console.log('担当者名:', result.userInfo[0].pic_name);
+      }
       
       // 成功時は何もしない(メール不要)
       
