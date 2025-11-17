@@ -108,7 +108,8 @@ function doGet(e) {
       }
       
       // アクセストークン取得のAPIリクエスト
-      const url = 'https://api.next-engine.org/api_neauth';
+      const NE_API_URL = 'https://api.next-engine.org';
+      const url = `${NE_API_URL}/api_neauth`;
       
       const payload = {
         'uid': uid,
