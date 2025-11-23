@@ -106,8 +106,82 @@ function fetchSetGoodsMaster(offset = 0, limit = 1000) {
 }
 
 /**
+ * セット商品マスタを全件取得(ページネーション対応 + リトライ機能)
+ * 
+ * @return {Array} 全データの配列
+ */
+function fetchAllSetGoodsMasterWithRetry() {
+  console.log('=== セット商品マスタ 全件取得開始 (リトライ機能付き) ===');
+  
+  const startTime = new Date().getTime();
+  const limit = 1000; // 1回のAPI呼び出しで取得する件数
+  let offset = 0;
+  let allData = [];
+  let apiCallCount = 0;
+  
+  try {
+    while (true) {
+      apiCallCount++;
+      
+      // API呼び出し(リトライ機能付き)
+      const response = fetchSetGoodsMasterWithRetry(offset, limit);
+      const currentCount = parseInt(response.count);
+      
+      // データを追加
+      if (response.data && response.data.length > 0) {
+        allData = allData.concat(response.data);
+      }
+      
+      // ページネーション情報をログ出力
+      // 最終ページかどうかで総ページ数を判定
+      const totalPages = currentCount < limit ? apiCallCount : '?';
+      logPaginationInfo(apiCallCount, totalPages, currentCount, allData.length);
+      
+      // 取得件数がlimitより少ない場合は最終ページ
+      if (currentCount < limit) {
+        console.log('最終ページに到達しました');
+        break;
+      }
+      
+      // 次のページへ
+      offset += limit;
+      
+      // API制限を考慮して少し待機(1秒)
+      Utilities.sleep(1000);
+    }
+    
+    const endTime = new Date().getTime();
+    const duration = endTime - startTime;
+    
+    // サマリー出力
+    const summary = {
+      apiCallCount: apiCallCount,
+      totalCount: allData.length,
+      writeCount: allData.length,
+      duration: duration
+    };
+    
+    logProcessSummary(summary);
+    
+    console.log('');
+    console.log('✅ 全件取得完了');
+    
+    return allData;
+    
+  } catch (error) {
+    console.error('❌ 全件取得エラー:', error.message);
+    
+    // エラー時も取得済みデータを返す
+    console.log('取得済みデータ:', allData.length, '件');
+    
+    throw error;
+  }
+}
+
+/**
  * セット商品マスタを全件取得(ページネーション対応)
  * 
+ * @deprecated リトライ機能付きの fetchAllSetGoodsMasterWithRetry() を推奨
  * @return {Array} 全データの配列
  */
 function fetchAllSetGoodsMaster() {
