@@ -24,6 +24,10 @@
  * この関数を実行すると、ネクストエンジンから最新のセット商品マスタを取得し、
  * スプレッドシートに書き込みます。
  * 
+ * 【エラーハンドリング】
+ * - API呼び出し失敗時: 自動リトライ(最大3回)
+ * - 処理失敗時: メール通知送信
+ * 
  * @return {Object} 処理結果 {success: boolean, message: string, summary: Object}
  */
 function updateSetGoodsMaster() {
@@ -35,6 +39,7 @@ function updateSetGoodsMaster() {
   console.log('');
   
   const startTime = new Date().getTime();
+  let apiCallCount = 0;
   
   try {
     // Step 1: 設定確認
@@ -59,9 +64,10 @@ function updateSetGoodsMaster() {
     console.log('✅ 認証トークン確認完了');
     console.log('');
     
-    // Step 3: セット商品マスタ全件取得
+    // Step 3: セット商品マスタ全件取得(リトライ機能付き)
     console.log('【Step 3】セット商品マスタ取得');
-    const allData = fetchAllSetGoodsMaster();
+    const allData = fetchAllSetGoodsMasterWithRetry();
+    apiCallCount = Math.ceil(allData.length / 1000); // API呼び出し回数を推定
     console.log('');
     
     // Step 4: スプレッドシートに書き込み
@@ -89,15 +95,21 @@ function updateSetGoodsMaster() {
     console.log('完了日時:', new Date().toLocaleString('ja-JP'));
     console.log('');
     
+    // 処理結果のサマリー
+    const summary = {
+      dataCount: allData.length,
+      writeCount: writeResult.rowCount,
+      duration: duration,
+      completedAt: new Date().toLocaleString('ja-JP')
+    };
+    
+    // 成功通知(有効化されている場合のみ)
+    sendSuccessNotification(summary, 'セット商品マスタ更新処理');
+    
     return {
       success: true,
       message: '処理が正常に完了しました',
-      summary: {
-        dataCount: allData.length,
-        writeCount: writeResult.rowCount,
-        duration: duration,
-        completedAt: new Date().toLocaleString('ja-JP')
-      }
+      summary: summary
     };
     
   } catch (error) {
@@ -119,6 +131,15 @@ function updateSetGoodsMaster() {
     console.error('2. スプレッドシート設定の確認: testSpreadsheetConfig()');
     console.error('3. ネクストエンジンのAPI権限確認');
     console.error('');
+    
+    // エラー通知メールを送信
+    const additionalInfo = {
+      'API呼び出し回数': apiCallCount + '回',
+      '処理時間': (duration / 1000).toFixed(2) + '秒',
+      'スプレッドシートID': getSpreadsheetConfig().spreadsheetId
+    };
+    
+    sendErrorNotification(error, 'セット商品マスタ更新処理', additionalInfo);
     
     return {
       success: false,
