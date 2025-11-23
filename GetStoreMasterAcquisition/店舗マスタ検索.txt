@@ -1,0 +1,4 @@
+店舗マスタ検索
+リクエストURL
+ホスト  https://api.next-engine.org
+エンドポイント  /api_v1_master_shop/search

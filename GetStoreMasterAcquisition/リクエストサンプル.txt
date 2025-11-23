@@ -1,0 +1,46 @@
+サンプル
+リクエスト
+
+curl -X POST  -H 'content-type: application/x-www-form-urlencoded' \
+  -d 'access_token=xxx&refresh_token=xxx&wait_flag=1&fields=xxx&shop_id-eq=xxx' \
+  https://api.next-engine.org/api_v1_master_shop/search 
+レスポンス
+
+{
+  "result": "success",
+  "count": "1",
+  "data": [
+    {
+      "shop_id": "1",
+      "shop_name": "Test01",
+      "shop_kana": "",
+      "shop_abbreviated_name": "tst1",
+      "shop_handling_goods_name": null,
+      "shop_close_date": null,
+      "shop_note": "",
+      "shop_mall_id": "1",
+      "shop_authorization_type_id": "0",
+      "shop_authorization_type_name": null,
+      "shop_tax_id": "0",
+      "shop_tax_name": "税込",
+      "shop_currency_unit_id": "1",
+      "shop_currency_unit_name": "円",
+      "shop_tax_calculation_sequence_id": "1",
+      "shop_type_id": null,
+      "shop_deleted_flag": "0",
+      "shop_creation_date": "2016-12-19 18:04:03",
+      "shop_last_modified_date": "2016-12-19 18:04:03",
+      "shop_last_modified_null_safe_date": "2016-12-19 18:04:03",
+      "shop_creator_id": "2",
+      "shop_creator_name": "xxx",
+      "shop_last_modified_by_id": "2",
+      "shop_last_modified_by_null_safe_id": "2",
+      "shop_last_modified_by_name": "xxx",
+      "shop_last_modified_by_null_safe_name": "xxx"
+    }
+  ],
+  "access_token": "xxx",
+  "access_token_end_date": "2017-04-19 11:21:13",
+  "refresh_token": "xxx",
+  "refresh_token_end_date": "2017-04-21 11:21:13"
+}
