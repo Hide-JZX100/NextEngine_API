@@ -220,8 +220,33 @@ function updateShippingData(startDate, endDate) {
     // 実行完了日時を記録
     recordExecutionTimestamp();
 
+    // スプレッドシートの変更を確実にコミット
+    SpreadsheetApp.flush();
+
     // ========================================
-    // 6. 正常終了（ログは記録しない）
+    // 6. データ転記(外部ライブラリ実行)
+    // ========================================
+    currentStep = 'データ転記';  // ← この行を追加
+    console.log('--- ステップ4: データ転記 ---');
+
+    // スプレッドシートの数式計算完了を待つ
+    const waitSeconds = 15; // 待機時間（秒）
+    console.log(`スプレッドシートの数式計算完了を待機中... (${waitSeconds}秒)`);
+    Utilities.sleep(waitSeconds * 1000);
+    console.log('✓ 待機完了');
+    console.log('');
+
+    console.log('出荷予定数を別スプレッドシートに転記中...');
+    
+    Yamato.Shipping();
+    Sagawa.Shipping();
+    JP.Shipping();
+    
+    console.log('✓ 転記完了');
+    console.log('');
+
+    // ========================================
+    // 7. 正常終了(ログは記録しない)
     // ========================================
     // エラー時のみログを記録するため、成功時のログ記録は行わない
     
