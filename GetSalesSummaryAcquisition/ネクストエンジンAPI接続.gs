@@ -279,13 +279,15 @@ function filterCancelledRows(data) {
 // =============================================================================
 
 /**
- * API接続テスト
+ * ネクストエンジンAPI接続テスト
  * 
  * ネクストエンジンAPIに接続できるかテストします。
  * 認証ライブラリのtestApiConnection()を利用します。
+ * 
+ * ※関数名を testNEApiConnection() に変更(認証ライブラリとの重複回避)
  */
-function testApiConnection() {
-  console.log('=== API接続テスト ===');
+function testNEApiConnection() {
+  console.log('=== ネクストエンジンAPI接続テスト ===');
   
   try {
     const props = PropertiesService.getScriptProperties();
@@ -462,8 +464,8 @@ function testPhase3() {
   
   try {
     // 1. API接続テスト
-    console.log('【1】API接続テスト');
-    testApiConnection();
+    console.log('【1】ネクストエンジンAPI接続テスト');
+    testNEApiConnection();
     console.log('');
     
     // 2. 受注明細検索テスト(1ページ)
