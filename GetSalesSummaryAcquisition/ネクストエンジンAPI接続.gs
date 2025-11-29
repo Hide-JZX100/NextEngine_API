@@ -152,7 +152,12 @@ const RECEIVEORDER_ROW_FIELDS = [
 function searchReceiveOrderRowPage(startDate, endDate, offset = 0, limit = NE_API_LIMIT) {
   logMessage(`受注明細検索: offset=${offset}, limit=${limit}`, LOG_LEVEL.SAMPLE);
   
+  // デバッグ: 日付パラメータを確認
+  logMessage(`検索期間: ${startDate} ～ ${endDate}`, LOG_LEVEL.SAMPLE);
+  
   // 検索パラメータ
+  // ※受注明細検索APIで受注伝票のフィールドを検索条件に使う場合、
+  //   パラメータ名は「receiveorder_」プレフィックスなしで指定します
   const params = {
     fields: RECEIVEORDER_ROW_FIELDS,
     'receive_order_date-gte': startDate,  // 受注日 >= 開始日時
@@ -505,4 +510,20 @@ function testPhase3() {
     
     throw error;
   }
+}
+
+function debugDateRange() {
+  console.log('=== 日付範囲デバッグ ===');
+  
+  const dateRange = getSearchDateRange();
+  
+  console.log('startDate:', dateRange.startDate);
+  console.log('endDate:', dateRange.endDate);
+  console.log('startDateStr:', dateRange.startDateStr);
+  console.log('endDateStr:', dateRange.endDateStr);
+  console.log('');
+  
+  // 型チェック
+  console.log('startDateStr type:', typeof dateRange.startDateStr);
+  console.log('endDateStr type:', typeof dateRange.endDateStr);
 }
