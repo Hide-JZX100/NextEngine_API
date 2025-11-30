@@ -78,26 +78,18 @@ function main() {
     // Phase 3: ネクストエンジンAPI呼び出し
     // ========================================
     console.log('【Phase 3】ネクストエンジンAPI呼び出し');
-    const rawData = searchReceiveOrderRowAll(
+    const orderData = searchReceiveOrderRowAll(
       dateRange.startDateStr,
       dateRange.endDateStr
     );
-    console.log(`取得件数: ${rawData.length}件`);
-    console.log('');
-    
-    // ========================================
-    // Phase 3: キャンセル除外
-    // ========================================
-    console.log('【Phase 3】キャンセル除外フィルタリング');
-    const filteredData = filterCancelledRows(rawData);
-    console.log(`有効データ: ${filteredData.length}件`);
+    console.log(`取得件数: ${orderData.length}件 (API側でキャンセル除外済み)`);
     console.log('');
     
     // ========================================
     // Phase 4: データ整形
     // ========================================
     console.log('【Phase 4】データ整形');
-    const spreadsheetData = convertAllToSpreadsheetData(filteredData, shopMap);
+    const spreadsheetData = convertAllToSpreadsheetData(orderData, shopMap);
     console.log(`整形完了: ${spreadsheetData.length}件`);
     console.log('');
     
@@ -123,10 +115,8 @@ function main() {
         end: dateRange.endDateStr
       },
       dataCount: {
-        raw: rawData.length,
-        cancelled: rawData.length - filteredData.length,
-        valid: filteredData.length,
-        written: spreadsheetData.length
+        fetched: orderData.length,        // API取得件数(キャンセル除外済み)
+        written: spreadsheetData.length   // スプレッドシート書き込み件数
       },
       shopMasterCount: shopMap.size
     };
@@ -138,9 +128,7 @@ function main() {
     console.log('【実行結果サマリー】');
     console.log(`- 実行時間: ${totalElapsedTime.toFixed(2)}秒`);
     console.log(`- 検索期間: ${dateRange.startDateStr} ～ ${dateRange.endDateStr}`);
-    console.log(`- 取得件数: ${rawData.length}件`);
-    console.log(`- キャンセル除外: ${rawData.length - filteredData.length}件`);
-    console.log(`- 有効データ: ${filteredData.length}件`);
+    console.log(`- 取得件数: ${orderData.length}件 (API側でキャンセル除外済み)`);
     console.log(`- 書き込み完了: ${spreadsheetData.length}件`);
     console.log('');
     
@@ -270,9 +258,7 @@ function sendSuccessNotification(statistics) {
 - 検索期間: ${statistics.searchPeriod.start} ～ ${statistics.searchPeriod.end}
 
 【取得データ】
-- API取得件数: ${statistics.dataCount.raw}件
-- キャンセル除外: ${statistics.dataCount.cancelled}件
-- 有効データ: ${statistics.dataCount.valid}件
+- API取得件数: ${statistics.dataCount.fetched}件 (キャンセル除外済み)
 - スプレッドシート書き込み: ${statistics.dataCount.written}件
 
 【店舗マスタ】
@@ -386,9 +372,7 @@ function displayStatistics(result) {
   console.log('');
   
   console.log('【データ処理】');
-  console.log(`  API取得: ${stats.dataCount.raw}件`);
-  console.log(`  キャンセル除外: ${stats.dataCount.cancelled}件`);
-  console.log(`  有効データ: ${stats.dataCount.valid}件`);
+  console.log(`  API取得: ${stats.dataCount.fetched}件 (キャンセル除外済み)`);
   console.log(`  書き込み完了: ${stats.dataCount.written}件`);
   console.log('');
   
