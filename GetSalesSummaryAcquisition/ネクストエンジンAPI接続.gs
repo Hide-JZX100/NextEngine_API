@@ -142,6 +142,7 @@ const RECEIVEORDER_ROW_FIELDS = [
  * 受注明細を検索(1ページ分)
  * 
  * 指定された条件で受注明細を検索し、1ページ分(最大1000件)を取得します。
+ * キャンセルされた明細行は除外されます。
  * 
  * @param {string} startDate - 検索開始日時(YYYY-MM-DD HH:MM:SS)
  * @param {string} endDate - 検索終了日時(YYYY-MM-DD HH:MM:SS)
@@ -158,10 +159,12 @@ function searchReceiveOrderRowPage(startDate, endDate, offset = 0, limit = NE_AP
   // 検索パラメータ
   // ※受注明細検索APIで受注伝票のフィールドを検索条件に使う場合、
   //   パラメータ名は「receiveorder_」プレフィックスなしで指定します
+  // ※キャンセルフラグ = 0 (有効な明細のみ取得)
   const params = {
     fields: RECEIVEORDER_ROW_FIELDS,
-    'receive_order_date-gte': startDate,  // 受注日 >= 開始日時
-    'receive_order_date-lte': endDate,    // 受注日 <= 終了日時
+    'receive_order_date-gte': startDate,              // 受注日 >= 開始日時
+    'receive_order_date-lte': endDate,                // 受注日 <= 終了日時
+    'receive_order_row_cancel_flag-eq': '0',          // キャンセルフラグ = 0 (有効データのみ)
     offset: offset,
     limit: limit
   };
@@ -175,7 +178,7 @@ function searchReceiveOrderRowPage(startDate, endDate, offset = 0, limit = NE_AP
   const hasMore = (offset + data.length) < count;
   
   logMessage(
-    `取得結果: ${data.length}件 (全体: ${count}件, 残り: ${hasMore ? 'あり' : 'なし'})`,
+    `取得結果: ${data.length}件 (このページのcount: ${count}件)`,
     LOG_LEVEL.SAMPLE
   );
   
@@ -218,23 +221,30 @@ function searchReceiveOrderRowAll(startDate, endDate) {
     // 初回でtotalCountを保存
     if (totalCount === 0) {
       totalCount = result.count;
-      logMessage(`全体件数: ${totalCount}件`);
+      logMessage(`API返却の全体件数: ${totalCount}件`);
+    }
+    
+    // データがない場合は終了
+    if (result.data.length === 0) {
+      logMessage('データ取得完了: これ以上データがありません', LOG_LEVEL.SAMPLE);
+      break;
     }
     
     // データを追加
     allData.push(...result.data);
     
-    logMessage(`累計: ${allData.length}件 / ${totalCount}件`, LOG_LEVEL.SAMPLE);
+    logMessage(`累計: ${allData.length}件`, LOG_LEVEL.SAMPLE);
     
-    // 次のページがない場合は終了
-    if (!result.hasMore) {
+    // 取得件数がlimitより少ない場合は最後のページ
+    if (result.data.length < NE_API_LIMIT) {
+      logMessage('最終ページに到達しました', LOG_LEVEL.SAMPLE);
       break;
     }
     
     // オフセットを更新
     offset += NE_API_LIMIT;
     
-    // API負荷軽減のため少し待機(オプション)
+    // API負荷軽減のため少し待機
     Utilities.sleep(500); // 0.5秒待機
   }
   
@@ -243,9 +253,10 @@ function searchReceiveOrderRowAll(startDate, endDate) {
   
   logMessage('');
   logMessage('=== 受注明細全件取得完了 ===');
-  logMessage(`取得件数: ${allData.length}件`);
+  logMessage(`実際の取得件数: ${allData.length}件`);
   logMessage(`ページ数: ${pageCount}ページ`);
   logMessage(`処理時間: ${elapsedTime.toFixed(2)}秒`);
+  logMessage(`平均速度: ${(allData.length / elapsedTime).toFixed(0)}件/秒`);
   
   return allData;
 }
@@ -402,6 +413,29 @@ function testSearchReceiveOrderRowAll() {
 }
 
 /**
+ * デバッグ用: 日付範囲確認
+ * 
+ * 日付計算が正しく行われているか確認します。
+ */
+function debugDateRange() {
+  console.log('=== 日付範囲デバッグ ===');
+  
+  const dateRange = getSearchDateRange();
+  
+  console.log('startDate:', dateRange.startDate);
+  console.log('endDate:', dateRange.endDate);
+  console.log('startDateStr:', dateRange.startDateStr);
+  console.log('endDateStr:', dateRange.endDateStr);
+  console.log('');
+  
+  // 型チェック
+  console.log('startDateStr type:', typeof dateRange.startDateStr);
+  console.log('endDateStr type:', typeof dateRange.endDateStr);
+  console.log('');
+  console.log('✅ 日付範囲デバッグ完了');
+}
+
+/**
  * キャンセル除外テスト
  * 
  * キャンセルフラグによるフィルタリングをテストします。
@@ -510,20 +544,4 @@ function testPhase3() {
     
     throw error;
   }
-}
-
-function debugDateRange() {
-  console.log('=== 日付範囲デバッグ ===');
-  
-  const dateRange = getSearchDateRange();
-  
-  console.log('startDate:', dateRange.startDate);
-  console.log('endDate:', dateRange.endDate);
-  console.log('startDateStr:', dateRange.startDateStr);
-  console.log('endDateStr:', dateRange.endDateStr);
-  console.log('');
-  
-  // 型チェック
-  console.log('startDateStr type:', typeof dateRange.startDateStr);
-  console.log('endDateStr type:', typeof dateRange.endDateStr);
 }
