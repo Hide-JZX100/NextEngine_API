@@ -307,8 +307,15 @@ function getLastRowWithData(sheet) {
 /**
  * コピー先の貼付開始行を計算
  * 
- * コピー先の最終行の日付とコピー元の日付を比較し、
- * 貼付開始行を決定します。
+ * コピー元の週の開始日とコピー先の最終行を比較し、
+ * 重複がある場合は上書き位置を、なければ追記位置を返します。
+ * 
+ * 【判定ロジック】
+ * 1. コピー先の最終7行の範囲を確認
+ * 2. コピー元の週の開始日(2行目)を確認
+ * 3. コピー元の開始日がコピー先の範囲内にあるか判定
+ *    - 範囲内 → その日付から上書き
+ *    - 範囲外 → 追記
  * 
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sourceSheet - コピー元シート
  * @param {GoogleAppsScript.Spreadsheet.Sheet} targetSheet - コピー先シート
@@ -323,23 +330,26 @@ function calculateStartRow(sourceSheet, targetSheet) {
     return 2; // 2行目から開始
   }
   
-  // コピー先の最終行の日付を取得
-  const targetLastDate = targetSheet.getRange(targetLastRow, 1).getValue();
+  // コピー元の週の開始日を取得(2行目のA列)
+  const sourceStartDate = sourceSheet.getRange(COPY_ROW_CONFIG.startRow, 1).getValue();
+  const sourceStartDateStr = formatDateToString(sourceStartDate);
   
-  // コピー元の日付を取得(2行目のA列)
-  const sourceDate = sourceSheet.getRange(COPY_ROW_CONFIG.startRow, 1).getValue();
+  // コピー先の最終7行の日付範囲を確認
+  const targetStartRow = Math.max(2, targetLastRow - COPY_ROW_CONFIG.rowCount + 1);
+  const targetDateRange = targetSheet.getRange(targetStartRow, 1, targetLastRow - targetStartRow + 1, 1).getValues();
   
-  // 日付を比較
-  const targetDateStr = formatDateToString(targetLastDate);
-  const sourceDateStr = formatDateToString(sourceDate);
-  
-  if (targetDateStr === sourceDateStr) {
-    // 同じ日付 → 上書き(最終行から開始)
-    return targetLastRow - COPY_ROW_CONFIG.rowCount + 1;
-  } else {
-    // 異なる日付 → 追記(次の行から開始)
-    return targetLastRow + 1;
+  // コピー元の開始日がコピー先の最終7行の中にあるか検索
+  for (let i = 0; i < targetDateRange.length; i++) {
+    const targetDateStr = formatDateToString(targetDateRange[i][0]);
+    
+    if (targetDateStr === sourceStartDateStr) {
+      // 一致 → この行から上書き
+      return targetStartRow + i;
+    }
   }
+  
+  // 一致なし → 追記
+  return targetLastRow + 1;
 }
 
 /**
