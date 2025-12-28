@@ -1,0 +1,106 @@
+受注キャンセル区分情報取得
+リクエストURL
+ホスト
+
+https://api.next-engine.org
+
+エンドポイント
+
+/api_v1_system_canceltype/info
+
+
+フィールド一覧
+
+受注キャンセル区分
+項目名	フィールド名	データ型	備考
+受注キャンセル区分	cancel_type_id	文字列型	
+受注キャンセル名	cancel_type_name	文字列型	
+非表示フラグ	cancel_type_deleted_flag	数値型	1:非表示になっている区分 0:表示されている区分
+
+サンプル
+リクエスト
+curl -X POST -H "Content-Type: application/x-www-form-urlencoded" \ -d 'access_token=xxxxxxxxxxxxxx&refresh_token=xxxxxxxxxxxxxx&wait_flag=1' \ "https://api.next-engine.org/api_v1_system_canceltype/info"
+
+レスポンス
+{
+   "result":"success",
+   "count":"18",
+   "data":[
+      {
+         "cancel_type_id":"0",
+         "cancel_type_name":"有効な受注です。"
+      },
+      {
+         "cancel_type_id":"1",
+         "cancel_type_name":"顧客依頼によりキャンセル"
+      },
+      {
+         "cancel_type_id":"2",
+         "cancel_type_name":"顧客依頼により明細内容をキャンセル"
+      },
+      {
+         "cancel_type_id":"3",
+         "cancel_type_name":"他の伝票への統合の為キャンセル"
+      },
+      {
+         "cancel_type_id":"4",
+         "cancel_type_name":"カード否決によりキャンセル"
+      },
+      {
+         "cancel_type_id":"5",
+         "cancel_type_name":"都合によりキャンセル"
+      },
+      {
+         "cancel_type_id":"11",
+         "cancel_type_name":"保留期間満了の為キャンセル"
+      },
+      {
+         "cancel_type_id":"12",
+         "cancel_type_name":"伝票を確認後、有効にして下さい。"
+      },
+      {
+         "cancel_type_id":"20",
+         "cancel_type_name":"未入金によりキャンセル"
+      },
+      {
+         "cancel_type_id":"7",
+         "cancel_type_name":"既に何らか処理が完了しているはず"
+      },
+      {
+         "cancel_type_id":"6",
+         "cancel_type_name":"不良返品によるキャンセル"
+      },
+      {
+         "cancel_type_id":"8",
+         "cancel_type_name":"顧客都合返品によるキャンセル"
+      },
+      {
+         "cancel_type_id":"15",
+         "cancel_type_name":"受取拒否によるキャンセル"
+      },
+      {
+         "cancel_type_id":"14",
+         "cancel_type_name":"長期不在戻りによるキャンセル"
+      },
+      {
+         "cancel_type_id":"16",
+         "cancel_type_name":"クレームによる戻りでキャンセル"
+      },
+      {
+         "cancel_type_id":"17",
+         "cancel_type_name":"誤配の戻りによるキャンセル"
+      },
+      {
+         "cancel_type_id":"18",
+         "cancel_type_name":"出荷遅延によるキャンセル"
+      },
+      {
+         "cancel_type_id":"19",
+         "cancel_type_name":"住所不明によるキャンセル"
+      }
+   ],
+   "access_token":"xxxxxxxxxxx",
+   "access_token_end_date":"2017-04-13 18:24:53",
+   "refresh_token":"xxxxxxxxxxx",
+   "refresh_token_end_date":"2017-04-15 18:24:53"
+}

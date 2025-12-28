@@ -1,0 +1,17 @@
+支払区分情報取得
+リクエストURL
+ホスト
+
+https://api.next-engine.org
+
+エンドポイント
+
+/api_v1_system_paymentmethod/info
+
+フィールド一覧
+
+支払区分
+項目名	フィールド名	データ型	備考
+支払区分	payment_method_id	文字列型	
+支払名	payment_method_name	文字列型	
+非表示フラグ	payment_method_deleted_flag	数値型	1:非表示になっている区分、0:表示されている区分
