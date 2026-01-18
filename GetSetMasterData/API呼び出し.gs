@@ -122,7 +122,11 @@ function fetchAllSetGoodsMasterWithRetry() {
   try {
     while (true) {
       apiCallCount++;
-      
+
+      // ページ番号を先に表示
+      console.log('');
+      console.log(`--- ページ ${apiCallCount} 取得開始 ---`);
+
       // API呼び出し(リトライ機能付き)
       const response = fetchSetGoodsMasterWithRetry(offset, limit);
       const currentCount = parseInt(response.count);
@@ -131,11 +135,14 @@ function fetchAllSetGoodsMasterWithRetry() {
       if (response.data && response.data.length > 0) {
         allData = allData.concat(response.data);
       }
-      
+
+      // 取得結果を表示
+      console.log(`取得成功: ${currentCount}件 (累積: ${allData.length}件)`);
+
       // ページネーション情報をログ出力
       // 最終ページかどうかで総ページ数を判定
-      const totalPages = currentCount < limit ? apiCallCount : '?';
-      logPaginationInfo(apiCallCount, totalPages, currentCount, allData.length);
+      // const totalPages = currentCount < limit ? apiCallCount : '?';
+      // logPaginationInfo(apiCallCount, totalPages, currentCount, allData.length);
       
       // 取得件数がlimitより少ない場合は最終ページ
       if (currentCount < limit) {
