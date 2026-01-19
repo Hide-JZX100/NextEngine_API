@@ -36,6 +36,9 @@ function generateAuthUrl() {
   const clientId = getProperty('NEXT_ENGINE_CLIENT_ID');
   const redirectUri = getProperty('NEXT_ENGINE_REDIRECT_URI'); // デプロイしたGASのURL
 
+  console.log("クライアントID",clientId);
+  console.log("リダイレクトURI",redirectUri);
+
   if (!clientId || !redirectUri) {
     Logger.log('エラー: スクリプトプロパティに CLIENT_ID または REDIRECT_URI が設定されていません。');
     return;
@@ -170,6 +173,8 @@ function testApiConnection() {
   if (response && response.result === 'success') {
     Logger.log('APIテスト成功！');
 
+    console.log(response);
+
     // 【修正】ネクストエンジンの仕様に合わせてフィールド名を修正
     // user_name ではなく pic_name (担当者名) が一般的です
     if (response.data && response.data[0]) {
@@ -222,6 +227,31 @@ function callNextEngineApi(path, params) {
   try {
     const response = UrlFetchApp.fetch(url, options);
     const json = JSON.parse(response.getContentText());
+
+    // トークンが返ってきた場合、または期限情報がある場合にログを出力
+    if (json.access_token_end_date && json.refresh_token_end_date) {
+      
+      const now = new Date();
+      
+      // アクセストークン期限までの計算
+      const accEndDate = new Date(json.access_token_end_date.replace(/-/g, '/')); // GASのDate解釈用に変換
+      const accDiffMs = accEndDate.getTime() - now.getTime();
+      const accDiffMin = Math.floor(accDiffMs / (1000 * 60)); // ミリ秒を分に変換
+
+      // リフレッシュトークン期限までの計算
+      const refEndDate = new Date(json.refresh_token_end_date.replace(/-/g, '/'));
+      const refDiffMs = refEndDate.getTime() - now.getTime();
+      const refDiffMin = Math.floor(refDiffMs / (1000 * 60));
+
+      Logger.log('--- トークン有効期限情報 ---');
+      Logger.log('アクセストークン残り: 約 ' + accDiffMin + ' 分 (' + (accDiffMin / 60).toFixed(1) + ' 時間)');
+      Logger.log('リフレッシュトークン残り: 約 ' + refDiffMin + ' 分 (' + (refDiffMin / 60).toFixed(1) + ' 時間)');
+      
+      if (accDiffMin < 0) {
+        Logger.log('警告: アクセストークンが期限切れです。次回のAPI呼出で更新されます。');
+      }
+      Logger.log('---------------------------');
+    }
 
     // ★ここが重要: API利用時にトークンが更新されていたら保存し直す
     // ネクストエンジンは有効期限切れが近いや切れた場合に、新しいトークンをレスポンスに含めて返します
