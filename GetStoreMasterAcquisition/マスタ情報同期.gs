@@ -27,10 +27,10 @@ function getProperty(key) {
 function saveTokens(accessToken, refreshToken) {
   const props = PropertiesService.getScriptProperties();
   const data = {};
-  
+
   if (accessToken) data['NEXT_ENGINE_ACCESS_TOKEN'] = accessToken;
   if (refreshToken) data['NEXT_ENGINE_REFRESH_TOKEN'] = refreshToken;
-  
+
   props.setProperties(data);
   Logger.log('スクリプトプロパティに新しいアクセストークンとリフレッシュトークンを保存しました。');
 }
@@ -45,28 +45,29 @@ function saveTokens(accessToken, refreshToken) {
  */
 function getAppConfig() {
   const props = PropertiesService.getScriptProperties();
-  
+
   // 必須項目: スクリプトプロパティに設定してください
   const config = {
     // 認証情報
-    accessToken: props.getProperty('NEXT_ENGINE_ACCESS_TOKEN'), 
-    refreshToken: props.getProperty('NEXT_ENGINE_REFRESH_TOKEN'), 
+    accessToken: props.getProperty('NEXT_ENGINE_ACCESS_TOKEN'),
+    refreshToken: props.getProperty('NEXT_ENGINE_REFRESH_TOKEN'),
     // スプレッドシート情報
     SPREADSHEET_ID: props.getProperty('SPREADSHEET_ID'),
     SHEET_NAME_SHOP: props.getProperty('SHEET_NAME_SHOP'), // 例: 店舗マスタ
     SHEET_NAME_MALL: props.getProperty('SHEET_NAME_MALL'), // 例: モールマスタ
+    SHEET_NAME_CANCEL: props.getProperty('SHEET_NAME_CANCEL'), // 例: 受注キャンセル区分
   };
-  
+
   // 必須設定のチェック
   if (!config.accessToken || !config.refreshToken) {
     Logger.log('エラー: アクセストークン(NEXT_ENGINE_ACCESS_TOKEN)とリフレッシュトークン(NEXT_ENGINE_REFRESH_TOKEN)の両方が必要です。認証スクリプトで取得し、プロパティに設定してください。');
     throw new Error('設定エラー: 認証トークン情報が必要です。');
   }
-  
+
   // スプレッドシート関連の必須設定のチェック
-  if (!config.SPREADSHEET_ID || !config.SHEET_NAME_SHOP || !config.SHEET_NAME_MALL) {
-     Logger.log('エラー: スプレッドシート情報が不足しています。');
-     throw new Error('設定エラー: SPREADSHEET_ID, SHEET_NAME_SHOP, SHEET_NAME_MALL が必要です。');
+  if (!config.SPREADSHEET_ID || !config.SHEET_NAME_SHOP || !config.SHEET_NAME_MALL || !config.SHEET_NAME_CANCEL) {
+    Logger.log('エラー: スプレッドシート情報が不足しています。');
+    throw new Error('設定エラー: SPREADSHEET_ID, SHEET_NAME_SHOP, SHEET_NAME_MALL, SHEET_NAME_CANCEL が必要です。');
   }
 
   return config;
@@ -88,13 +89,18 @@ function getAppConfig() {
  */
 function nextEngineApiSearch(endpoint, fields, accessToken, refreshToken) {
   const url = `https://api.next-engine.org/${endpoint}`;
-  
+
   const payload = {
     'access_token': accessToken,
     'refresh_token': refreshToken, // トークン自動更新のため毎回付与
-    'fields': fields,
     'wait_flag': '1' // 処理を待機
   };
+
+  // ★改修ポイント: fieldsが指定されている場合のみpayloadに追加
+  // /infoエンドポイント（fieldsが不要）にも対応できるようにする
+  if (fields) {
+    payload['fields'] = fields;
+  }
 
   const options = {
     'method': 'post',
@@ -102,7 +108,7 @@ function nextEngineApiSearch(endpoint, fields, accessToken, refreshToken) {
     'muteHttpExceptions': true
   };
 
-  Logger.log(`APIコール開始: ${endpoint} (フィールド数: ${fields.split(',').length})`);
+  Logger.log(`APIコール開始: ${endpoint} (フィールド数: ${fields ? fields.split(',').length : 'N/A - info endpoint'})`);
 
   try {
     const response = UrlFetchApp.fetch(url, options);
@@ -114,7 +120,7 @@ function nextEngineApiSearch(endpoint, fields, accessToken, refreshToken) {
       // 返ってきたトークンを優先し、返ってこなければ現在のトークンを維持して保存
       const newAccessToken = json.access_token || accessToken;
       const newRefreshToken = json.refresh_token || refreshToken;
-      saveTokens(newAccessToken, newRefreshToken); 
+      saveTokens(newAccessToken, newRefreshToken);
     }
 
     if (json.result === 'success') {
@@ -125,7 +131,7 @@ function nextEngineApiSearch(endpoint, fields, accessToken, refreshToken) {
       Logger.log(`Result: ${json.result}`);
       Logger.log(`Code: ${json.code}`);
       Logger.log(`Message: ${json.message}`);
-      
+
       // トークンエラーを含む認証エラーの場合は、認証フローの再実行を促す。
       if (json.code === 'C005' || json.code === '002003' || json.code === '002004') {
         Logger.log('致命的な認証エラーが発生しました。リフレッシュトークンも無効化された可能性があります。認証スクリプトを再実行してください。');
@@ -151,21 +157,21 @@ function jsonToSheetArray(data, headerMap) {
   if (!data || data.length === 0 || !headerMap || Object.keys(headerMap).length === 0) {
     return null;
   }
-  
+
   // APIフィールド名 (JSONキー) の配列
   const apiFields = Object.keys(headerMap);
-  
+
   // 日本語項目名 (スプレッドシートのヘッダー) の配列
   const japaneseHeaders = apiFields.map(field => headerMap[field]);
-  
+
   const result = [japaneseHeaders]; // 1行目は日本語ヘッダー
-  
+
   data.forEach(item => {
     // APIフィールド名に対応する値をJSONデータから取得して行を構築
     const row = apiFields.map(field => item[field.trim()]);
     result.push(row);
   });
-  
+
   return result;
 }
 
@@ -186,7 +192,7 @@ function writeToSheet(sheetArray, sheetName, spreadsheetId) {
     Logger.log(`警告: ${sheetName} に書き込むデータがありません。処理をスキップします。`);
     return;
   }
-  
+
   try {
     const ss = SpreadsheetApp.openById(spreadsheetId);
     let sheet = ss.getSheetByName(sheetName);
@@ -199,21 +205,21 @@ function writeToSheet(sheetArray, sheetName, spreadsheetId) {
       // 既存のデータをクリア (ヘッダー行はデータに含まれているため全クリアでOK)
       sheet.clearContents();
     }
-    
+
     // 書き込み範囲を設定
     const numRows = sheetArray.length;
     const numCols = sheetArray[0].length;
     const range = sheet.getRange(1, 1, numRows, numCols);
-    
+
     // データ書き込み
     range.setValues(sheetArray);
-    
+
     // ヘッダー行を固定・装飾 (オプション)
     sheet.setFrozenRows(1);
     sheet.getRange('A1:' + sheet.getRange(1, numCols).getA1Notation()).setBackground('#f0f0f0').setFontWeight('bold');
-    
+
     Logger.log(`「${sheetName}」に ${numRows - 1} 件のデータを書き込みました。`);
-    
+
   } catch (e) {
     Logger.log(`スプレッドシート書き込み中にエラーが発生しました (${sheetName}): ` + e.toString());
   }
@@ -229,7 +235,7 @@ function writeToSheet(sheetArray, sheetName, spreadsheetId) {
  */
 function mainMasterSync() {
   Logger.log('--- マスタ情報同期処理 開始 ---');
-  
+
   // 1. 設定値の取得
   const config = getAppConfig();
   const token = config.accessToken;
@@ -264,7 +270,7 @@ function mainMasterSync() {
     'shop_last_modified_by_name': '最終更新者名',
     'shop_last_modified_by_null_safe_name': '最終更新者名(Null Safe)'
   };
-  
+
   const shopFields = Object.keys(shopHeaderMap).join(',');
 
   const shopData = nextEngineApiSearch('api_v1_master_shop/search', shopFields, token, refreshToken);
@@ -283,7 +289,7 @@ function mainMasterSync() {
     'mall_country_id': '国ID',
     'mall_deleted_flag': '削除フラグ'
   };
-  
+
   const mallFields = Object.keys(mallHeaderMap).join(',');
 
   const mallData = nextEngineApiSearch('api_v1_master_shop/search', mallFields, token, refreshToken);
@@ -292,6 +298,9 @@ function mainMasterSync() {
     const mallArray = jsonToSheetArray(mallData, mallHeaderMap);
     writeToSheet(mallArray, config.SHEET_NAME_MALL, config.SPREADSHEET_ID);
   }
-  
+
+  // --- 受注キャンセル区分マスタの処理 ---
+  syncCancelTypeMaster(config, token, refreshToken);
+
   Logger.log('--- マスタ情報同期処理 完了 ---');
 }
