@@ -36,5 +36,8 @@ function mainMasterSync() {
   // 受注キャンセル区分マスタ同期（受注キャンセル区分マスタ同期.gs）
   syncCancelTypeMaster(config, token, refreshToken);
 
+  // 支払区分マスタ同期（支払区分情報同期.gs）
+  syncPaymentMethodMaster(config, token, refreshToken);
+
   Logger.log('--- マスタ情報同期処理 完了 ---');
 }

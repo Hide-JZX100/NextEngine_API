@@ -63,6 +63,7 @@ function getAppConfig() {
         SHEET_NAME_SHOP: props.getProperty('SHEET_NAME_SHOP'), // 例: 店舗マスタ
         SHEET_NAME_MALL: props.getProperty('SHEET_NAME_MALL'), // 例: モールマスタ
         SHEET_NAME_CANCEL: props.getProperty('SHEET_NAME_CANCEL'), // 例: 受注キャンセル区分
+        SHEET_NAME_PAYMENT: props.getProperty('SHEET_NAME_PAYMENT'), // 例: 支払区分情報
     };
 
     // 必須設定のチェック
@@ -72,9 +73,9 @@ function getAppConfig() {
     }
 
     // スプレッドシート関連の必須設定のチェック
-    if (!config.SPREADSHEET_ID || !config.SHEET_NAME_SHOP || !config.SHEET_NAME_MALL || !config.SHEET_NAME_CANCEL) {
+    if (!config.SPREADSHEET_ID || !config.SHEET_NAME_SHOP || !config.SHEET_NAME_MALL || !config.SHEET_NAME_CANCEL || !config.SHEET_NAME_PAYMENT) {
         Logger.log('エラー: スプレッドシート情報が不足しています。');
-        throw new Error('設定エラー: SPREADSHEET_ID, SHEET_NAME_SHOP, SHEET_NAME_MALL, SHEET_NAME_CANCEL が必要です。');
+        throw new Error('設定エラー: SPREADSHEET_ID, SHEET_NAME_SHOP, SHEET_NAME_MALL, SHEET_NAME_CANCEL, SHEET_NAME_PAYMENT が必要です。');
     }
 
     return config;
