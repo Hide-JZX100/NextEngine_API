@@ -1,12 +1,7 @@
 支払区分情報取得
 リクエストURL
-ホスト
-
-https://api.next-engine.org
-
-エンドポイント
-
-/api_v1_system_paymentmethod/info
+ホスト　　https://api.next-engine.org
+エンドポイント　　/api_v1_system_paymentmethod/info
 
 フィールド一覧
 
