@@ -1,12 +1,7 @@
-受注明細検索
+受注明細検索　→　受注伝票検索のほうが適している？
 リクエストURL
-ホスト
-
-https://api.next-engine.org
-
-エンドポイント
-
-/api_v1_receiveorder_row/search
+ホスト　　https://api.next-engine.org
+エンドポイント　　/api_v1_receiveorder_row/search
 
 フィールド一覧
 
