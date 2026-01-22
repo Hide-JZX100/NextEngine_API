@@ -12,45 +12,17 @@ function filterAndMapSlips(rawData) {
     console.log(`=== データ処理開始: 元データ ${rawData.length} 件 ===`);
 
     // 1. フィルタリング
-    // 条件: 受注状態区分が '50' (出荷確定済み) または 受注キャンセル区分が '3' (分割・統合によりキャンセル)
     const filteredData = rawData.filter(item => {
         const statusId = item.receive_order_order_status_id;
         const cancelTypeId = item.receive_order_cancel_type_id;
-        return statusId === '50' || cancelTypeId === '3';
+        return statusId === CONFIG.FILTER.ORDER_STATUS_ID || cancelTypeId === CONFIG.FILTER.CANCEL_TYPE_ID;
     });
 
     console.log(`フィルタリング後: ${filteredData.length} 件`);
 
-    // 2. マッピング (CSVサンプルのヘッダー順に合わせる)
-    // ヘッダー: 伝票番号,受注番号,出荷予定日,受注日,購入者名,支払方法,総合計,商品計,税金,発送代,手数料,他費用,ポイント数,発送伝票番号,支払区分,同梱先伝票番号,複数配送親伝票番号,分割元伝票番号,複写元伝票番号,複数配送親フラグ,受注キャンセル区分,受注キャンセル名,受注キャンセル日,受注状態区分,受注状態名
+    // 2. マッピング (CONFIG.FIELDSの定義順に従ってデータを抽出)
     const mappedData = filteredData.map(item => {
-        return [
-            item.receive_order_id,
-            item.receive_order_shop_cut_form_id,
-            item.receive_order_send_plan_date,
-            item.receive_order_date,
-            item.receive_order_purchaser_name,
-            item.receive_order_payment_method_name, // 支払方法 (APIフィールドは支払名)
-            item.receive_order_total_amount,
-            item.receive_order_goods_amount,
-            item.receive_order_tax_amount,
-            item.receive_order_delivery_fee_amount,
-            item.receive_order_charge_amount,
-            item.receive_order_other_amount,
-            item.receive_order_point_amount,
-            item.receive_order_delivery_cut_form_id,
-            item.receive_order_payment_method_id,   // 支払区分
-            item.receive_order_include_to_order_id,
-            item.receive_order_multi_delivery_parent_order_id,
-            item.receive_order_divide_from_order_id,
-            item.receive_order_copy_from_order_id,
-            item.receive_order_multi_delivery_parent_flag,
-            item.receive_order_cancel_type_id,
-            item.receive_order_cancel_type_name,
-            item.receive_order_cancel_date,
-            item.receive_order_order_status_id,
-            item.receive_order_order_status_name
-        ];
+        return CONFIG.FIELDS.map(field => item[field.api]);
     });
 
     console.log(`=== データ処理終了 ===`);
