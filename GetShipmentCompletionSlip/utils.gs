@@ -14,7 +14,7 @@ function getTargetDate() {
     if (CONFIG.DEV_MODE.ENABLED) {
         // 開発モード:固定日付
         targetDate = new Date(CONFIG.DEV_MODE.TARGET_DATE);
-        console.log('【開発モード】対象日(固定): ' CONFIG.DEV_MODE.TARGET_DATE);
+        console.log('【開発モード】対象日(固定): ' + CONFIG.DEV_MODE.TARGET_DATE);
     } else {
         // 本番モード：昨日
         const today = new Date();
