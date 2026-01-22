@@ -57,7 +57,18 @@ function writeToSpreadsheet(data) {
 
 function appendHeader(sheet) {
     const headers = CONFIG.FIELDS.map(field => field.header);
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    const headerRange = sheet.getRange(1, 1, 1, headers.length);
+
+    // ヘッダー値を設定
+    headerRange.setValues([headers]);
+
+    // ヘッダーのスタイル設定
+    headerRange
+        .setBackground('#e67e22')           // オレンジ系(温かみのある色)
+        .setFontColor('#ffffff')            // 白文字
+        .setFontWeight('bold')              // 太字
+        .setHorizontalAlignment('center');  // 中央揃え
+
     console.log('ヘッダー行を追加しました。');
 }
 
