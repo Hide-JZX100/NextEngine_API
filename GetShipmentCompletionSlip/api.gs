@@ -20,7 +20,7 @@ function searchCompletedSlips(targetDate) {
     let allData = [];
     let offset = 0;
     let hasMore = true;
-    const LIMIT = 1000; // APIの1回あたりの最大取得件数
+    const LIMIT = CONFIG.API.LIMIT; // APIの1回あたりの最大取得件数
 
     while (hasMore) {
         console.log(`取得中... Offset: ${offset}`);
@@ -31,7 +31,7 @@ function searchCompletedSlips(targetDate) {
         const params = {
             'access_token': accessToken,
             'wait_flag': '1',
-            'fields': CONFIG.FIELDS.join(','),
+            'fields': CONFIG.FIELDS.map(f => f.api).join(','),
             'receive_order_send_plan_date-eq': targetDate,
             'limit': LIMIT.toString(),
             'offset': offset.toString()
@@ -73,7 +73,7 @@ function searchCompletedSlips(targetDate) {
             } else {
                 offset += LIMIT;
                 // API制限回避のために少し待機
-                Utilities.sleep(500);
+                Utilities.sleep(CONFIG.API.WAIT_MS);
             }
         }
     }
