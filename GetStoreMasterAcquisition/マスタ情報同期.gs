@@ -20,24 +20,43 @@
 function mainMasterSync() {
   Logger.log('--- マスタ情報同期処理 開始 ---');
 
-  // 1. 設定値の取得（共通ライブラリ.gsの関数を使用）
-  const config = getAppConfig();
-  const token = config.accessToken;
-  const refreshToken = config.refreshToken;
+  // 1. 設定値の取得（初期）
+  let config = getAppConfig();
+  let token = config.accessToken;
+  let refreshToken = config.refreshToken;
 
-  // 2. 各マスタの同期処理を実行
 
-  // 店舗マスタ同期（店舗マスタ同期.gs）
+  // 2.【店舗マスタ同期】
+  // 直前の処理でトークンが更新されている可能性があるため再読込は不要（初回なので）
   syncShopMaster(config, token, refreshToken);
 
-  // モールマスタ同期（モールマスタ同期.gs）
+
+  // 3.【モールマスタ同期】
+  // 店舗マスタ同期でトークンが更新された可能性があるため、最新の値を再取得
+  config = getAppConfig();
+  token = config.accessToken;
+  refreshToken = config.refreshToken;
+
   syncMallMaster(config, token, refreshToken);
 
-  // 受注キャンセル区分マスタ同期（受注キャンセル区分マスタ同期.gs）
+
+  // 4.【受注キャンセル区分マスタ同期】
+  // モールマスタ同期でトークンが更新された可能性があるため、再取得
+  config = getAppConfig();
+  token = config.accessToken;
+  refreshToken = config.refreshToken;
+
   syncCancelTypeMaster(config, token, refreshToken);
 
-  // 支払区分マスタ同期（支払区分情報同期.gs）
+
+  // 5.【支払区分マスタ同期】
+  // キャンセル区分マスタ同期でトークンが更新された可能性があるため、再取得
+  config = getAppConfig();
+  token = config.accessToken;
+  refreshToken = config.refreshToken;
+
   syncPaymentMethodMaster(config, token, refreshToken);
+
 
   Logger.log('--- マスタ情報同期処理 完了 ---');
 }
