@@ -55,19 +55,8 @@ function writeToSpreadsheet(data) {
     }
 }
 
-/**
- * ヘッダー行を書き込む
- * 
- * @param {SpreadsheetApp.Sheet} sheet - 対象シート
- */
 function appendHeader(sheet) {
-    const headers = [
-        '伝票番号', '受注番号', '出荷予定日', '受注日', '購入者名',
-        '支払方法', '総合計', '商品計', '税金', '発送代',
-        '手数料', '他費用', 'ポイント数', '発送伝票番号', '支払区分',
-        '同梱先伝票番号', '複数配送親伝票番号', '分割元伝票番号', '複写元伝票番号', '複数配送親フラグ',
-        '受注キャンセル区分', '受注キャンセル名', '受注キャンセル日', '受注状態区分', '受注状態名'
-    ];
+    const headers = CONFIG.FIELDS.map(field => field.header);
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     console.log('ヘッダー行を追加しました。');
 }
