@@ -75,6 +75,7 @@ function getAppConfig() {
         SHEET_NAME_MALL: props.getProperty('SHEET_NAME_MALL'), // 例: モールマスタ
         SHEET_NAME_CANCEL: props.getProperty('SHEET_NAME_CANCEL'), // 例: 受注キャンセル区分
         SHEET_NAME_PAYMENT: props.getProperty('SHEET_NAME_PAYMENT'), // 例: 支払区分情報
+        SHEET_NAME_SUPPLIER: props.getProperty('SHEET_NAME_SUPPLIER'), // 例: 仕入先マスタ
     };
 
     // 必須設定のチェック
@@ -84,9 +85,9 @@ function getAppConfig() {
     }
 
     // スプレッドシート関連の必須設定のチェック
-    if (!config.SPREADSHEET_ID || !config.SHEET_NAME_SHOP || !config.SHEET_NAME_MALL || !config.SHEET_NAME_CANCEL || !config.SHEET_NAME_PAYMENT) {
+    if (!config.SPREADSHEET_ID || !config.SHEET_NAME_SHOP || !config.SHEET_NAME_MALL || !config.SHEET_NAME_CANCEL || !config.SHEET_NAME_PAYMENT || !config.SHEET_NAME_SUPPLIER) {
         Logger.log('エラー: スプレッドシート情報が不足しています。');
-        throw new Error('設定エラー: SPREADSHEET_ID, SHEET_NAME_SHOP, SHEET_NAME_MALL, SHEET_NAME_CANCEL, SHEET_NAME_PAYMENT が必要です。');
+        throw new Error('設定エラー: SPREADSHEET_ID, SHEET_NAME_SHOP, SHEET_NAME_MALL, SHEET_NAME_CANCEL, SHEET_NAME_PAYMENT, SHEET_NAME_SUPPLIER が必要です。');
     }
 
     return config;
@@ -214,12 +215,14 @@ function jsonToSheetArray(data, headerMap) {
  * - シートが存在しない場合: 新規作成します。
  * - シートが存在する場合: 既存の内容をクリアして上書きします。
  * - ヘッダー行の凍結・背景色設定などの装飾も行います。
+ * - 特定の列をテキスト形式（ゼロ落ち防止）に設定可能です。
  * 
  * @param {Array<Array<any>>} sheetArray - 書き込む2次元配列データ
  * @param {string} sheetName - 書き込み対象のシート名
  * @param {string} spreadsheetId - 操作対象のスプレッドシートID
+ * @param {Array<number>} textColumnIndices - (オプション) テキスト形式('@')に設定したい列のインデックス配列(0始まり)。例: [0, 2]
  */
-function writeToSheet(sheetArray, sheetName, spreadsheetId) {
+function writeToSheet(sheetArray, sheetName, spreadsheetId, textColumnIndices = null) {
     if (!sheetArray || sheetArray.length === 0) {
         Logger.log(`警告: ${sheetName} に書き込むデータがありません。処理をスキップします。`);
         return;
@@ -242,6 +245,19 @@ function writeToSheet(sheetArray, sheetName, spreadsheetId) {
         const numRows = sheetArray.length;
         const numCols = sheetArray[0].length;
         const range = sheet.getRange(1, 1, numRows, numCols);
+
+        // 指定された列をテキスト形式('@')に設定して、ゼロ落ちを防止
+        // デフォルトの書式設定（自動）に戻すため、一旦クリアしてから適用するのが安全ですが、
+        // ここでは明示的に指定された列のみ '@' をセットします。
+        if (textColumnIndices && Array.isArray(textColumnIndices)) {
+            textColumnIndices.forEach(colIndex => {
+                // colIndexは0始まり。getRangeの列番号は1始まりなので +1
+                if (colIndex >= 0 && colIndex < numCols) {
+                    // 全行に対して書式設定
+                    sheet.getRange(1, colIndex + 1, numRows, 1).setNumberFormat('@');
+                }
+            });
+        }
 
         // データ書き込み
         range.setValues(sheetArray);
