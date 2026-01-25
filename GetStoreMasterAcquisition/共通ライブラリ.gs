@@ -1,15 +1,19 @@
 /**
- * ネクストエンジンAPI連携 共通ライブラリ
+ * 共通ライブラリ.gs
  * 
- * 目的: GetStoreMasterAcquisitionプロジェクト内で使用する共通関数を集約
+ * 【ファイルの役割】
+ * GetStoreMasterAcquisitionプロジェクト全体で使用される基盤機能を集約したライブラリです。
+ * 本番環境用スクリプト（店舗マスタ同期.gs等）およびメイン処理（マスタ情報同期.gs）から
+ * 共通して呼び出されます。
+ * 
+ * 【主な機能】
+ * - 認証管理: トークンの取得・保存・自動更新
+ * - 設定管理: スクリプトプロパティからの設定読み込みとバリデーション
+ * - API連携: ネクストエンジンAPIへのリクエスト送信とエラーハンドリング
+ * - データ処理: JSONデータのスプレッドシート形式への変換
+ * - I/O処理: Googleスプレッドシートへのデータ書き込み
+ * 
  * 作成日: 2026-01-21
- * 
- * 含まれる関数:
- * - トークン管理
- * - 設定管理
- * - API呼び出し
- * - データ変換
- * - スプレッドシート操作
  */
 
 // ====================================================================
@@ -18,8 +22,9 @@
 
 /**
  * スクリプトプロパティから設定値を取得するヘルパー関数
- * @param {string} key - 取得するキー名
- * @return {string|null} プロパティの値
+ * 
+ * @param {string} key - 取得するキー名（例: 'NEXT_ENGINE_ACCESS_TOKEN'）
+ * @return {string|null} プロパティの値（存在しない場合はnull）
  */
 function getProperty(key) {
     return PropertiesService.getScriptProperties().getProperty(key);
@@ -27,8 +32,10 @@ function getProperty(key) {
 
 /**
  * トークンをスクリプトプロパティに保存する共通関数
- * @param {string} accessToken - アクセストークン
- * @param {string} refreshToken - リフレッシュトークン
+ * APIレスポンスで新しいトークンが発行された際に呼び出され、永続化します。
+ * 
+ * @param {string} accessToken - 新しいアクセストークン
+ * @param {string} refreshToken - 新しいリフレッシュトークン
  */
 function saveTokens(accessToken, refreshToken) {
     const props = PropertiesService.getScriptProperties();
@@ -46,9 +53,13 @@ function saveTokens(accessToken, refreshToken) {
 // ====================================================================
 
 /**
- * スクリプトプロパティから必要な設定値を取得する
+ * アプリケーション実行に必要な設定値を一括取得する
+ * スクリプトプロパティから値を読み込み、必須項目の不足があればエラーをスローして停止させます。
+ * 
  * @return {Object} 設定値オブジェクト
- * @throws {Error} 設定値が不足している場合
+ *    - accessToken, refreshToken: 認証情報
+ *    - SPREADSHEET_ID, SHEET_NAME_*: スプレッドシート設定
+ * @throws {Error} 必須設定値（トークンやシート名など）が不足している場合
  */
 function getAppConfig() {
     const props = PropertiesService.getScriptProperties();
@@ -86,14 +97,18 @@ function getAppConfig() {
 // ====================================================================
 
 /**
- * ネクストエンジンAPIを実行し、データを取得する共通関数
- * APIコール時にトークンを渡し、レスポンスに新しいトークンが含まれていれば自動更新します
+ * ネクストエンジンAPIを実行し、データを取得する中核関数
+ * 
+ * 【特徴】
+ * - 自動トークン更新: レスポンスに新しいトークンが含まれていた場合、自動的に保存処理を行います。
+ * - エラーハンドリング: APIエラー（Code != success）を検知しログ出力します。
+ * - 柔軟なエンドポイント対応: 検索系(/search)と情報系(/info)の両方に対応します。
  * 
  * @param {string} endpoint - APIのエンドポイント (例: 'api_v1_master_shop/search')
- * @param {string|null} fields - 取得するフィールドのカンマ区切り文字列（nullの場合は/infoエンドポイント）
- * @param {string} accessToken - アクセストークン
- * @param {string} refreshToken - リフレッシュトークン
- * @return {Array<Object>|null} 取得したデータ配列、またはエラーの場合はnull
+ * @param {string|null} fields - 取得するフィールドのカンマ区切り文字列（nullの場合は/infoエンドポイントとして扱う）
+ * @param {string} accessToken - 現在のアクセストークン
+ * @param {string} refreshToken - 現在のリフレッシュトークン
+ * @return {Array<Object>|null} 取得したデータ配列。エラー時やデータなし時はnullまたは空配列を返す。
  */
 function nextEngineApiSearch(endpoint, fields, accessToken, refreshToken) {
     const url = `https://api.next-engine.org/${endpoint}`;
@@ -120,6 +135,7 @@ function nextEngineApiSearch(endpoint, fields, accessToken, refreshToken) {
 
     try {
         const response = UrlFetchApp.fetch(url, options);
+        // レスポンスが空の場合などを考慮してtry-catch内でパース
         const json = JSON.parse(response.getContentText());
 
         // ★重要: APIレスポンスに新しいトークンが含まれていれば保存し直す
@@ -160,11 +176,10 @@ function nextEngineApiSearch(endpoint, fields, accessToken, refreshToken) {
 
 /**
  * JSONデータ配列をスプレッドシート書き込み用の2次元配列に変換する
- * ヘッダーはフィールド名ではなく、日本語の項目名を使用する
  * 
- * @param {Array<Object>} data - 取得したJSONデータ配列
- * @param {Object} headerMap - {フィールド名: 項目名} のマップ
- * @return {Array<Array<any>>|null} 2次元配列 ([項目名(ヘッダー)行, データ行, ...])
+ * @param {Array<Object>} data - APIから取得したJSONデータ配列
+ * @param {Object} headerMap - {APIフィールド名: 日本語ヘッダー名} のマッピングオブジェクト
+ * @return {Array<Array<any>>|null} スプレッドシート用2次元配列 ([ヘッダー行, データ行1, データ行2...])
  */
 function jsonToSheetArray(data, headerMap) {
     if (!data || data.length === 0 || !headerMap || Object.keys(headerMap).length === 0) {
@@ -194,11 +209,15 @@ function jsonToSheetArray(data, headerMap) {
 
 /**
  * 指定されたシートにデータを書き込む共通関数
- * 既存のデータをクリアしてから書き込む
+ * 
+ * 【動作仕様】
+ * - シートが存在しない場合: 新規作成します。
+ * - シートが存在する場合: 既存の内容をクリアして上書きします。
+ * - ヘッダー行の凍結・背景色設定などの装飾も行います。
  * 
  * @param {Array<Array<any>>} sheetArray - 書き込む2次元配列データ
  * @param {string} sheetName - 書き込み対象のシート名
- * @param {string} spreadsheetId - スプレッドシートID
+ * @param {string} spreadsheetId - 操作対象のスプレッドシートID
  */
 function writeToSheet(sheetArray, sheetName, spreadsheetId) {
     if (!sheetArray || sheetArray.length === 0) {
