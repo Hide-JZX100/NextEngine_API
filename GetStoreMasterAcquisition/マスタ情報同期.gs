@@ -12,6 +12,7 @@
  * 2. モール/カートマスタ
  * 3. 受注キャンセル区分マスタ
  * 4. 支払区分マスタ
+ * 5. 仕入先マスタ
  * 
  * 【重要な仕様: トークン管理】
  * ネクストエンジンAPIは呼び出し毎にトークンが更新される仕様です。
@@ -78,6 +79,15 @@ function mainMasterSync() {
   refreshToken = config.refreshToken;
 
   syncPaymentMethodMaster(config, token, refreshToken);
+
+
+  // 6.【仕入先マスタ同期】
+  // 支払区分マスタ同期でトークンが更新された可能性があるため、再取得
+  config = getAppConfig();
+  token = config.accessToken;
+  refreshToken = config.refreshToken;
+
+  syncSupplierMaster(config, token, refreshToken);
 
 
   Logger.log('--- マスタ情報同期処理 完了 ---');
