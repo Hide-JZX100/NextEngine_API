@@ -77,7 +77,7 @@ const LOG_LEVEL = {
  */
 function getScriptConfig() {
   const props = PropertiesService.getScriptProperties();
-  
+
   // 必須プロパティ
   const requiredProps = {
     accessToken: props.getProperty('ACCESS_TOKEN'),
@@ -87,7 +87,7 @@ function getScriptConfig() {
     shopMasterSpreadsheetId: props.getProperty('SHOP_MASTER_SPREADSHEET_ID'),
     shopMasterSheetName: props.getProperty('SHOP_MASTER_SHEET_NAME')
   };
-  
+
   // 必須プロパティの検証
   const missingProps = [];
   for (const [key, value] of Object.entries(requiredProps)) {
@@ -95,20 +95,20 @@ function getScriptConfig() {
       missingProps.push(key);
     }
   }
-  
+
   if (missingProps.length > 0) {
     throw new Error(
       `必須スクリプトプロパティが未設定です: ${missingProps.join(', ')}\n` +
       `スクリプトプロパティを設定してください。`
     );
   }
-  
+
   // オプションプロパティ(デフォルト値あり)
   const logLevel = props.getProperty('LOG_LEVEL') || '3';
   const retryCount = props.getProperty('RETRY_COUNT') || '3';
   const notificationEmail = props.getProperty('NOTIFICATION_EMAIL') || Session.getActiveUser().getEmail();
   const notifyOnSuccess = props.getProperty('NOTIFY_ON_SUCCESS') === 'true';
-  
+
   return {
     ...requiredProps,
     logLevel: parseInt(logLevel, 10),
@@ -126,10 +126,10 @@ function getScriptConfig() {
  */
 function testScriptConfig() {
   console.log('=== スクリプトプロパティ設定テスト ===');
-  
+
   try {
     const config = getScriptConfig();
-    
+
     console.log('✅ 必須プロパティ: すべて設定済み');
     console.log('');
     console.log('【設定内容】');
@@ -147,9 +147,9 @@ function testScriptConfig() {
     console.log('- NOTIFY_ON_SUCCESS:', config.notifyOnSuccess);
     console.log('');
     console.log('✅ 設定確認完了!');
-    
+
     return config;
-    
+
   } catch (error) {
     console.error('❌ 設定エラー:', error.message);
     throw error;
@@ -192,7 +192,7 @@ function getSevenDaysAgo() {
   const sevenDaysAgo = new Date(today);
   sevenDaysAgo.setDate(today.getDate() - 7);
   sevenDaysAgo.setHours(0, 0, 0, 0);
-  
+
   return sevenDaysAgo;
 }
 
@@ -204,7 +204,7 @@ function getSevenDaysAgo() {
 function getTodayEnd() {
   const today = new Date();
   today.setHours(23, 59, 59, 999);
-  
+
   return today;
 }
 
@@ -223,7 +223,7 @@ function formatDateTimeForNE(date) {
   const hours = String(date.getHours()).padStart(2, '0');
   const minutes = String(date.getMinutes()).padStart(2, '0');
   const seconds = String(date.getSeconds()).padStart(2, '0');
-  
+
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
@@ -237,7 +237,7 @@ function formatDateTimeForNE(date) {
 function getSearchDateRange() {
   const startDate = getSevenDaysAgo();
   const endDate = getTodayEnd();
-  
+
   return {
     startDate,
     endDate,
@@ -251,28 +251,28 @@ function getSearchDateRange() {
  * 
  * Phase 1のテスト用関数です。
  */
-function testDateCalculation() {
+function testDateCalculation1() {
   console.log('=== 日付計算テスト ===');
-  
+
   const today = new Date();
   console.log('今日:', today.toLocaleString('ja-JP'));
   console.log('曜日:', ['日', '月', '火', '水', '木', '金', '土'][today.getDay()]);
   console.log('');
-  
+
   const sevenDaysAgo = getSevenDaysAgo();
   console.log('7日前(1週間前):', sevenDaysAgo.toLocaleString('ja-JP'));
   console.log('');
-  
+
   const todayEnd = getTodayEnd();
   console.log('本日終了時刻:', todayEnd.toLocaleString('ja-JP'));
   console.log('');
-  
+
   const dateRange = getSearchDateRange();
   console.log('【検索期間】');
   console.log('開始:', dateRange.startDateStr);
   console.log('終了:', dateRange.endDateStr);
   console.log('');
-  
+
   // 日数計算
   const diffTime = dateRange.endDate - dateRange.startDate;
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -295,7 +295,7 @@ function testDateCalculation() {
  */
 function logMessage(message, level = LOG_LEVEL.ALL) {
   const config = getScriptConfig();
-  
+
   // 設定されたログレベル以下の場合のみ出力
   if (config.logLevel <= level) {
     console.log(message);
@@ -315,13 +315,13 @@ function logMessage(message, level = LOG_LEVEL.ALL) {
  */
 function logData(dataArray, title = 'データ') {
   const config = getScriptConfig();
-  
+
   if (config.logLevel === LOG_LEVEL.NONE) {
     return; // 出力なし
   }
-  
+
   console.log(`=== ${title} (全${dataArray.length}件) ===`);
-  
+
   if (config.logLevel === LOG_LEVEL.ALL) {
     // 全件出力
     dataArray.forEach((item, index) => {
@@ -333,12 +333,12 @@ function logData(dataArray, title = 'データ') {
     sampleData.forEach((item, index) => {
       console.log(`[${index + 1}]`, JSON.stringify(item, null, 2));
     });
-    
+
     if (dataArray.length > 3) {
       console.log(`... 残り ${dataArray.length - 3} 件は省略`);
     }
   }
-  
+
   console.log('');
 }
 
@@ -349,11 +349,11 @@ function logData(dataArray, title = 'データ') {
  */
 function testLogOutput() {
   console.log('=== ログ出力テスト ===');
-  
+
   const config = getScriptConfig();
   console.log('現在のログレベル:', config.logLevel, getLogLevelName(config.logLevel));
   console.log('');
-  
+
   // テストデータ
   const testData = [
     { id: 1, name: 'テスト商品1', price: 1000 },
@@ -362,15 +362,15 @@ function testLogOutput() {
     { id: 4, name: 'テスト商品4', price: 4000 },
     { id: 5, name: 'テスト商品5', price: 5000 }
   ];
-  
+
   // ログレベル別出力テスト
   console.log('【通常メッセージ】');
   logMessage('これは通常メッセージです', LOG_LEVEL.ALL);
   console.log('');
-  
+
   console.log('【データログ】');
   logData(testData, 'テストデータ');
-  
+
   console.log('✅ ログ出力テスト完了!');
   console.log('');
   console.log('【確認事項】');
@@ -393,30 +393,30 @@ function testPhase1() {
   console.log('║  Phase 1: 基盤構築 - 統合テスト                           ║');
   console.log('╚════════════════════════════════════════════════════════════╝');
   console.log('');
-  
+
   try {
     // 1. スクリプトプロパティテスト
     console.log('【1】スクリプトプロパティ設定テスト');
     testScriptConfig();
     console.log('');
-    
+
     // 2. 日付計算テスト
     console.log('【2】日付計算テスト');
-    testDateCalculation();
+    testDateCalculation1();
     console.log('');
-    
+
     // 3. ログ出力テスト
     console.log('【3】ログ出力テスト');
     testLogOutput();
     console.log('');
-    
+
     console.log('╔════════════════════════════════════════════════════════════╗');
     console.log('║  ✅ Phase 1 統合テスト: すべて成功!                       ║');
     console.log('╚════════════════════════════════════════════════════════════╝');
     console.log('');
     console.log('【次のステップ】');
     console.log('Phase 2: 店舗マスタ連携の開発に進みます。');
-    
+
   } catch (error) {
     console.error('');
     console.error('╔════════════════════════════════════════════════════════════╗');
@@ -428,7 +428,7 @@ function testPhase1() {
     console.error('【確認事項】');
     console.error('- スクリプトプロパティが正しく設定されているか');
     console.error('- 必須項目がすべて入力されているか');
-    
+
     throw error;
   }
 }
