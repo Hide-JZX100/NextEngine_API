@@ -46,9 +46,9 @@ function main() {
   console.log('║  ネクストエンジン受注明細取得 - メイン処理開始           ║');
   console.log('╚════════════════════════════════════════════════════════════╝');
   console.log('');
-  
+
   const overallStartTime = new Date();
-  
+
   try {
     // ========================================
     // Phase 1: 設定読み込み
@@ -57,7 +57,7 @@ function main() {
     const config = getScriptConfig();
     logMessage(`ログレベル: ${config.logLevel} ${getLogLevelName(config.logLevel)}`);
     console.log('');
-    
+
     // ========================================
     // Phase 1: 検索期間計算
     // ========================================
@@ -65,7 +65,7 @@ function main() {
     const dateRange = getSearchDateRange();
     console.log(`検索期間: ${dateRange.startDateStr} ～ ${dateRange.endDateStr}`);
     console.log('');
-    
+
     // ========================================
     // Phase 2: 店舗マスタ読み込み
     // ========================================
@@ -73,7 +73,7 @@ function main() {
     const shopMap = getShopMapWithCache();
     console.log(`店舗マスタ: ${shopMap.size}件`);
     console.log('');
-    
+
     // ========================================
     // Phase 3: ネクストエンジンAPI呼び出し
     // ========================================
@@ -84,7 +84,7 @@ function main() {
     );
     console.log(`取得件数: ${orderData.length}件 (API側でキャンセル除外済み)`);
     console.log('');
-    
+
     // ========================================
     // Phase 4: データ整形
     // ========================================
@@ -92,20 +92,20 @@ function main() {
     const spreadsheetData = convertAllToSpreadsheetData(orderData, shopMap);
     console.log(`整形完了: ${spreadsheetData.length}件`);
     console.log('');
-    
+
     // ========================================
     // Phase 4: スプレッドシート書き込み
     // ========================================
     console.log('【Phase 4】スプレッドシート書き込み');
     writeToSpreadsheet(spreadsheetData);
     console.log('');
-    
+
     // ========================================
     // 実行結果サマリー
     // ========================================
     const overallEndTime = new Date();
     const totalElapsedTime = (overallEndTime - overallStartTime) / 1000;
-    
+
     const statistics = {
       startTime: overallStartTime,
       endTime: overallEndTime,
@@ -120,7 +120,7 @@ function main() {
       },
       shopMasterCount: shopMap.size
     };
-    
+
     console.log('╔════════════════════════════════════════════════════════════╗');
     console.log('║  ✅ メイン処理完了                                       ║');
     console.log('╚════════════════════════════════════════════════════════════╝');
@@ -131,22 +131,22 @@ function main() {
     console.log(`- 取得件数: ${orderData.length}件 (API側でキャンセル除外済み)`);
     console.log(`- 書き込み完了: ${spreadsheetData.length}件`);
     console.log('');
-    
+
     // 成功時のメール通知
     if (config.notifyOnSuccess) {
       sendSuccessNotification(statistics);
     }
-    
+
     return {
       success: true,
       statistics,
       error: null
     };
-    
+
   } catch (error) {
     const overallEndTime = new Date();
     const totalElapsedTime = (overallEndTime - overallStartTime) / 1000;
-    
+
     console.error('');
     console.error('╔════════════════════════════════════════════════════════════╗');
     console.error('║  ❌ メイン処理エラー                                     ║');
@@ -155,10 +155,10 @@ function main() {
     console.error('エラー内容:', error.message);
     console.error('実行時間:', totalElapsedTime.toFixed(2), '秒');
     console.error('');
-    
+
     // エラー時のメール通知
     sendErrorNotification(error, totalElapsedTime);
-    
+
     return {
       success: false,
       statistics: null,
@@ -183,44 +183,44 @@ function mainWithRetry() {
   console.log('║  ネクストエンジン受注明細取得 - リトライ付き実行         ║');
   console.log('╚════════════════════════════════════════════════════════════╝');
   console.log('');
-  
+
   const config = getScriptConfig();
   const maxRetries = config.retryCount;
-  
+
   console.log(`最大リトライ回数: ${maxRetries}回`);
   console.log('');
-  
+
   let lastError = null;
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     console.log(`--- 実行試行 ${attempt}/${maxRetries} ---`);
     console.log('');
-    
+
     const result = main();
-    
+
     if (result.success) {
       console.log('');
       console.log(`✅ ${attempt}回目の試行で成功しました`);
       return result;
     }
-    
+
     lastError = result.error;
-    
+
     if (attempt < maxRetries) {
       const waitTime = attempt * 5; // リトライ間隔を徐々に増やす
       console.log('');
       console.log(`⚠️ ${attempt}回目の試行が失敗しました`);
       console.log(`${waitTime}秒後に再試行します...`);
       console.log('');
-      
+
       Utilities.sleep(waitTime * 1000);
     }
   }
-  
+
   console.error('');
   console.error(`❌ ${maxRetries}回のリトライすべてが失敗しました`);
   console.error('最終エラー:', lastError);
-  
+
   return {
     success: false,
     statistics: null,
@@ -243,9 +243,9 @@ function sendSuccessNotification(statistics) {
   try {
     const config = getScriptConfig();
     const recipient = config.notificationEmail;
-    
+
     const subject = '✅ [成功] ネクストエンジン受注明細取得完了';
-    
+
     const body = `
 ネクストエンジン受注明細取得が正常に完了しました。
 
@@ -268,11 +268,11 @@ function sendSuccessNotification(statistics) {
 このメールは自動送信されています。
 スクリプトID: ${ScriptApp.getScriptId()}
     `;
-    
+
     MailApp.sendEmail(recipient, subject, body);
-    
+
     logMessage(`成功通知メールを送信しました: ${recipient}`);
-    
+
   } catch (error) {
     console.error('⚠️ 成功通知メール送信エラー:', error.message);
     // メール送信失敗は致命的エラーではないのでログのみ
@@ -291,9 +291,9 @@ function sendErrorNotification(error, elapsedTime) {
   try {
     const config = getScriptConfig();
     const recipient = config.notificationEmail;
-    
+
     const subject = '❌ [エラー] ネクストエンジン受注明細取得失敗';
-    
+
     const body = `
 ネクストエンジン受注明細取得でエラーが発生しました。
 
@@ -324,11 +324,11 @@ ${error.message}
 このメールは自動送信されています。
 スクリプトID: ${ScriptApp.getScriptId()}
     `;
-    
+
     MailApp.sendEmail(recipient, subject, body);
-    
+
     console.log(`エラー通知メールを送信しました: ${recipient}`);
-    
+
   } catch (mailError) {
     console.error('⚠️ エラー通知メール送信エラー:', mailError.message);
     // メール送信失敗は致命的エラーではないのでログのみ
@@ -352,34 +352,34 @@ function displayStatistics(result) {
   console.log('║  実行統計情報                                             ║');
   console.log('╚════════════════════════════════════════════════════════════╝');
   console.log('');
-  
+
   if (!result.success) {
     console.error('❌ 実行失敗');
     console.error('エラー:', result.error);
     return;
   }
-  
+
   const stats = result.statistics;
-  
+
   console.log('【実行時間】');
   console.log(`  開始: ${stats.startTime.toLocaleString('ja-JP')}`);
   console.log(`  終了: ${stats.endTime.toLocaleString('ja-JP')}`);
   console.log(`  所要時間: ${stats.elapsedTime.toFixed(2)}秒`);
   console.log('');
-  
+
   console.log('【検索条件】');
   console.log(`  期間: ${stats.searchPeriod.start} ～ ${stats.searchPeriod.end}`);
   console.log('');
-  
+
   console.log('【データ処理】');
   console.log(`  API取得: ${stats.dataCount.fetched}件 (キャンセル除外済み)`);
   console.log(`  書き込み完了: ${stats.dataCount.written}件`);
   console.log('');
-  
+
   console.log('【店舗マスタ】');
   console.log(`  店舗数: ${stats.shopMasterCount}件`);
   console.log('');
-  
+
   // パフォーマンス指標
   const recordsPerSecond = (stats.dataCount.written / stats.elapsedTime).toFixed(2);
   console.log('【パフォーマンス】');
@@ -388,8 +388,162 @@ function displayStatistics(result) {
 }
 
 // =============================================================================
-// テスト関数
+// 統合実行関数(ネクストエンジン取得 + 売れ数転記)
 // =============================================================================
+
+/**
+ * 統合メイン処理: ネクストエンジン受注明細取得 → 売れ数転記
+ * 
+ * 1. ネクストエンジンAPIから受注明細を取得しスプレッドシートに書き込み
+ * 2. 待機時間(5分)
+ * 3. 売れ数転記処理(メーカー別転記 + BtoB集計)
+ * 
+ * トリガーで実行する場合はこの関数を設定してください。
+ * 
+ * @return {Object} 実行結果
+ */
+function integratedDailyUpdate() {
+  console.log('╔════════════════════════════════════════════════════════════╗');
+  console.log('║  統合処理開始: NE取得 → 売れ数転記                       ║');
+  console.log('╚════════════════════════════════════════════════════════════╝');
+  console.log('');
+
+  const overallStartTime = new Date();
+  const results = {
+    neExecution: null,
+    dailyUpdate: null,
+    startTime: overallStartTime,
+    endTime: null,
+    totalElapsedTime: 0
+  };
+
+  try {
+    // ========================================
+    // Phase 1: ネクストエンジン受注明細取得
+    // ========================================
+    console.log('【Phase 1】ネクストエンジン受注明細取得');
+    console.log('');
+
+    results.neExecution = mainWithRetry();
+
+    console.log('');
+    console.log('✅ ネクストエンジン受注明細取得完了');
+    console.log('');
+
+    // ========================================
+    // 待機時間(5分)
+    // ========================================
+    const waitMinutes = 5;
+    console.log(`【待機】${waitMinutes}分間待機します...`);
+    console.log(`待機開始: ${new Date().toLocaleString('ja-JP')}`);
+
+    Utilities.sleep(waitMinutes * 60 * 1000);
+
+    console.log(`待機終了: ${new Date().toLocaleString('ja-JP')}`);
+    console.log('');
+
+    // ========================================
+    // Phase 2: 売れ数転記処理
+    // ========================================
+    console.log('【Phase 2】売れ数転記処理');
+    console.log('');
+
+    // dailyUpdate()を呼び出す
+    // ※dailyUpdate_main.gsに定義されている関数を使用
+    if (typeof dailyUpdate === 'function') {
+      results.dailyUpdate = dailyUpdate();
+    } else {
+      throw new Error('dailyUpdate()関数が見つかりません。dailyUpdate_main.gsが読み込まれているか確認してください。');
+    }
+
+    console.log('');
+    console.log('✅ 売れ数転記処理完了');
+    console.log('');
+
+    // ========================================
+    // 統合結果サマリー
+    // ========================================
+    results.endTime = new Date();
+    results.totalElapsedTime = (results.endTime - overallStartTime) / 1000;
+
+    displayIntegratedSummary(results);
+
+    return results;
+
+  } catch (error) {
+    console.error('');
+    console.error('╔════════════════════════════════════════════════════════════╗');
+    console.error('║  ❌ 統合処理エラー                                       ║');
+    console.error('╚════════════════════════════════════════════════════════════╝');
+    console.error('');
+    console.error('エラー内容:', error.message);
+
+    // エラー通知
+    const subject = '❌ [エラー] 統合処理(NE取得+売れ数転記)失敗';
+    const body = `
+統合処理でエラーが発生しました。
+
+【エラー内容】
+${error.message}
+
+【実行状況】
+- ネクストエンジン取得: ${results.neExecution ? '完了' : '未完了またはエラー'}
+- 売れ数転記: ${results.dailyUpdate ? '完了' : '未完了またはエラー'}
+
+【発生時刻】
+${new Date().toLocaleString('ja-JP')}
+
+【対処方法】
+GASエディタで実行ログを確認してください。
+URL: https://script.google.com/home/projects/${ScriptApp.getScriptId()}/edit
+    `;
+
+    MailApp.sendEmail(Session.getActiveUser().getEmail(), subject, body);
+
+    throw error;
+  }
+}
+
+/**
+ * 統合処理結果サマリーを表示
+ * 
+ * @param {Object} results - 実行結果
+ */
+function displayIntegratedSummary(results) {
+  console.log('╔════════════════════════════════════════════════════════════╗');
+  console.log('║  統合処理結果サマリー                                     ║');
+  console.log('╚════════════════════════════════════════════════════════════╝');
+  console.log('');
+
+  console.log('【実行時間】');
+  console.log(`開始: ${results.startTime.toLocaleString('ja-JP')}`);
+  console.log(`終了: ${results.endTime.toLocaleString('ja-JP')}`);
+  console.log(`総所要時間: ${results.totalElapsedTime.toFixed(2)}秒`);
+  console.log('');
+
+  console.log('【ネクストエンジン受注明細取得】');
+  if (results.neExecution && results.neExecution.success) {
+    const stats = results.neExecution.statistics;
+    console.log(`ステータス: 成功`);
+    console.log(`取得件数: ${stats.dataCount.fetched}件`);
+    console.log(`書き込み完了: ${stats.dataCount.written}件`);
+    console.log(`実行時間: ${stats.elapsedTime.toFixed(2)}秒`);
+  } else {
+    console.log('ステータス: 失敗またはエラー');
+  }
+  console.log('');
+
+  console.log('【売れ数転記処理】');
+  if (results.dailyUpdate) {
+    // dailyUpdate()の結果は内部で表示されているため、ここでは簡易表示
+    console.log('ステータス: 完了(詳細は上記参照)');
+  } else {
+    console.log('ステータス: 未実行またはエラー');
+  }
+  console.log('');
+
+  console.log('✅ 統合処理がすべて完了しました');
+}
 
 /**
  * メイン処理テスト(ドライラン)
@@ -401,12 +555,12 @@ function testMain() {
   console.log('=== メイン処理テスト ===');
   console.log('⚠️ 実際にAPIを呼び出し、スプレッドシートを更新します!');
   console.log('');
-  
+
   const result = main();
-  
+
   console.log('');
   displayStatistics(result);
-  
+
   return result;
 }
 
@@ -420,12 +574,12 @@ function testMainWithRetry() {
   console.log('=== リトライ付きメイン処理テスト ===');
   console.log('⚠️ 実際にAPIを呼び出し、スプレッドシートを更新します!');
   console.log('');
-  
+
   const result = mainWithRetry();
-  
+
   console.log('');
   displayStatistics(result);
-  
+
   return result;
 }
 
@@ -437,11 +591,11 @@ function testMainWithRetry() {
 function testEmailNotification() {
   console.log('=== メール通知テスト ===');
   console.log('');
-  
+
   const config = getScriptConfig();
   console.log(`通知先: ${config.notificationEmail}`);
   console.log('');
-  
+
   // テスト用統計情報
   const testStatistics = {
     startTime: new Date(Date.now() - 30000),
@@ -459,25 +613,25 @@ function testEmailNotification() {
     },
     shopMasterCount: 25
   };
-  
+
   try {
     console.log('【1】成功通知メール送信テスト');
     sendSuccessNotification(testStatistics);
     console.log('✅ 成功通知メール送信完了');
     console.log('');
-    
+
     console.log('【2】エラー通知メール送信テスト');
     const testError = new Error('これはテスト用のエラーメッセージです');
     sendErrorNotification(testError, 15.3);
     console.log('✅ エラー通知メール送信完了');
     console.log('');
-    
+
     console.log('✅ メール通知テスト完了!');
     console.log('');
     console.log('【確認事項】');
     console.log('- メールが届いているか確認してください');
     console.log('- 件名と本文が正しいか確認してください');
-    
+
   } catch (error) {
     console.error('❌ メール通知テストエラー:', error.message);
     throw error;
@@ -499,19 +653,19 @@ function testPhase5() {
   console.log('║  Phase 5: メイン処理とエラーハンドリング - 統合テスト    ║');
   console.log('╚════════════════════════════════════════════════════════════╝');
   console.log('');
-  
+
   try {
     // 1. メール通知テスト
     console.log('【1】メール通知テスト');
     testEmailNotification();
     console.log('');
-    
+
     // 2. メイン処理テスト(実行確認)
     console.log('【2】メイン処理テスト');
     console.log('⚠️ 実際にAPIを呼び出し、スプレッドシートを更新します!');
     console.log('実行しますか? (手動でtestMain()を実行してください)');
     console.log('');
-    
+
     console.log('╔════════════════════════════════════════════════════════════╗');
     console.log('║  ✅ Phase 5 統合テスト: 完了                             ║');
     console.log('╚════════════════════════════════════════════════════════════╝');
@@ -522,7 +676,7 @@ function testPhase5() {
     console.log('   - トリガー設定(毎日自動実行)');
     console.log('   - ログレベル調整(LOG_LEVEL=3推奨)');
     console.log('   - 通知設定確認');
-    
+
   } catch (error) {
     console.error('');
     console.error('╔════════════════════════════════════════════════════════════╗');
@@ -530,7 +684,7 @@ function testPhase5() {
     console.error('╚════════════════════════════════════════════════════════════╝');
     console.error('');
     console.error('エラー内容:', error.message);
-    
+
     throw error;
   }
 }
@@ -553,9 +707,9 @@ function testAllPhases() {
   console.log('⚠️ すべてのPhaseのテストを順次実行します');
   console.log('⚠️ 実際のAPIを呼び出し、スプレッドシートを更新します');
   console.log('');
-  
+
   const overallStartTime = new Date();
-  
+
   try {
     // Phase 1
     console.log('【Phase 1】基盤構築');
@@ -565,7 +719,7 @@ function testAllPhases() {
     console.log('');
     console.log('─────────────────────────────────────────────────────────');
     console.log('');
-    
+
     // Phase 2
     console.log('【Phase 2】店舗マスタ連携');
     testPhase2();
@@ -574,7 +728,7 @@ function testAllPhases() {
     console.log('');
     console.log('─────────────────────────────────────────────────────────');
     console.log('');
-    
+
     // Phase 3
     console.log('【Phase 3】ネクストエンジンAPI接続');
     testPhase3();
@@ -583,7 +737,7 @@ function testAllPhases() {
     console.log('');
     console.log('─────────────────────────────────────────────────────────');
     console.log('');
-    
+
     // Phase 4
     console.log('【Phase 4】データ整形・書き込み');
     testPhase4();
@@ -592,17 +746,17 @@ function testAllPhases() {
     console.log('');
     console.log('─────────────────────────────────────────────────────────');
     console.log('');
-    
+
     // Phase 5
     console.log('【Phase 5】メイン処理とエラーハンドリング');
     testPhase5();
     console.log('');
     console.log('✅ Phase 5 完了');
     console.log('');
-    
+
     const overallEndTime = new Date();
     const totalTime = (overallEndTime - overallStartTime) / 1000;
-    
+
     console.log('╔════════════════════════════════════════════════════════════╗');
     console.log('║  ✅ 全Phase統合テスト: すべて成功!                       ║');
     console.log('╚════════════════════════════════════════════════════════════╝');
@@ -612,7 +766,7 @@ function testAllPhases() {
     console.log('【開発完了!】');
     console.log('すべてのフェーズのテストが完了しました。');
     console.log('本番運用の準備に進んでください。');
-    
+
   } catch (error) {
     console.error('');
     console.error('╔════════════════════════════════════════════════════════════╗');
@@ -620,7 +774,7 @@ function testAllPhases() {
     console.error('╚════════════════════════════════════════════════════════════╝');
     console.error('');
     console.error('エラー内容:', error.message);
-    
+
     throw error;
   }
 }
