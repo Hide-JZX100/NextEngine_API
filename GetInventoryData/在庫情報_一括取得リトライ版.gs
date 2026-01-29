@@ -37,9 +37,6 @@
 
 @see getBatchInventoryDataWithRetry - バッチ単位で在庫データを取得・整形する内部関数です。
 @see getBatchStockDataWithRetry     - APIへ接続し、リトライ処理を実行する中心的な内部関数です。
-@see resetRetryStats                - 実行ごとにリトライ統計をリセットします。
-@see recordRetryAttempt             - リトライの試行回数を記録します。
-@see showRetryStats                 - 実行結果のリトライ統計をコンソールに表示します。
 @see logRetryStatsToSheet           - リトライ統計をスプレッドシートの「リトライログ」シートに書き出します。
 
 
