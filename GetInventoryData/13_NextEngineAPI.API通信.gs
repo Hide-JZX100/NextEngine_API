@@ -106,16 +106,26 @@ function getBatchStockData(goodsCodeList, tokens, batchNumber) {
 }
 
 /**
- * トークン更新処理
+ * トークン更新処理（最適化版）
+ * - 変更がある場合のみ更新
+ * - 更新日時も記録
  */
 function updateStoredTokens(accessToken, refreshToken) {
     const properties = PropertiesService.getScriptProperties();
-    properties.setProperties({
-        'ACCESS_TOKEN': accessToken,
-        'REFRESH_TOKEN': refreshToken,
-        'TOKEN_UPDATED_AT': new Date().getTime().toString()
-    });
-    console.log('トークンを更新しました');
+    const currentAccess = properties.getProperty('ACCESS_TOKEN');
+    const currentRefresh = properties.getProperty('REFRESH_TOKEN');
+
+    // 現在の値と異なる場合のみ更新（APIクォータ節約 & ログ抑制）
+    if (accessToken !== currentAccess || refreshToken !== currentRefresh) {
+        properties.setProperties({
+            'ACCESS_TOKEN': accessToken,
+            'REFRESH_TOKEN': refreshToken,
+            'TOKEN_UPDATED_AT': new Date().getTime().toString() // 追跡用に更新日時も保存
+        });
+
+        // Logger.gsの関数を使用
+        logWithLevel(LOG_LEVEL.DETAILED, '  認証トークンを更新しました');
+    }
 }
 
 // ============================================================================
