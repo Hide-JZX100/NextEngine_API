@@ -37,11 +37,6 @@ getBatchGoodsData(goodsCodeList, tokens)
 複数の商品について基本情報（商品ID、商品名など）をまとめて取得します。
 goods_id-inというパラメータを使って、複数の商品を一度に検索する点が特徴です。
 
-getBatchStockData(goodsCodeList, tokens)
-在庫マスタAPI（／api_v1_master_stock／search）を呼び出し、
-複数の商品について在庫情報（在庫数、引当数など）をまとめて取得します。
-これもstock_goods_id-inパラメータを利用して、効率的な一括検索を行います。
-
 テストおよびユーティリティ関数
 compareAPIVersions(sampleSize)
 fetchInventoryWithDoubleAPIとfetchInventoryWithSingleAPIを実際に実行し、
@@ -60,10 +55,6 @@ testBatchProcessing(maxItems)
 comparePerformance(sampleSize)
 このスクリプトの「一括版」と、架空の「従来版（1件ずつAPIを叩く）」の推定処理時間を比較する関数です。
 高速化の倍率を計算し、大幅な時間短縮効果を数値で示します。
-
-updateStoredTokens(accessToken, refreshToken)
-ネクストエンジンAPIから新しいトークンが返された際に、
-スクリプトプロパティを更新し、トークン情報を保存します。
 
 updateRowWithInventoryData(sheet, rowIndex, inventoryData)
 取得した在庫情報（inventoryData）を基に、
@@ -530,81 +521,6 @@ function getBatchInventoryData(goodsCodeList, tokens, batchNumber) {
   }
 }
 
-function getBatchStockData(goodsCodeList, tokens, batchNumber) {
-  const url = `${NE_API_URL}/api_v1_master_stock/search`;
-
-  const goodsIdCondition = goodsCodeList.join(',');
-
-  const payload = {
-    'access_token': tokens.accessToken,
-    'refresh_token': tokens.refreshToken,
-    'stock_goods_id-in': goodsIdCondition,
-    'fields': 'stock_goods_id,stock_quantity,stock_allocation_quantity,stock_defective_quantity,stock_remaining_order_quantity,stock_out_quantity,stock_free_quantity,stock_advance_order_quantity,stock_advance_order_allocation_quantity,stock_advance_order_free_quantity',
-    'limit': MAX_ITEMS_PER_CALL.toString()
-  };
-
-  const options = {
-    'method': 'POST',
-    'headers': {
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    'payload': Object.keys(payload).map(key =>
-      encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
-    ).join('&')
-  };
-
-  const stockDataMap = new Map();
-
-  try {
-    const response = UrlFetchApp.fetch(url, options);
-    const responseText = response.getContentText();
-    const responseData = JSON.parse(responseText);
-
-    if (responseData.access_token && responseData.refresh_token) {
-      updateStoredTokens(responseData.access_token, responseData.refresh_token);
-      tokens.accessToken = responseData.access_token;
-      tokens.refreshToken = responseData.refresh_token;
-    }
-
-    if (responseData.result === 'success' && responseData.data) {
-      responseData.data.forEach(stockData => {
-        stockDataMap.set(stockData.stock_goods_id, stockData);
-      });
-      logWithLevel(LOG_LEVEL.DETAILED, `  API応答: ${responseData.data.length}件取得`);
-    } else {
-      logAPIErrorDetail(
-        '在庫マスタAPI',
-        {
-          goodsCodeCount: goodsCodeList.length,
-          firstCode: goodsCodeList[0],
-          lastCode: goodsCodeList[goodsCodeList.length - 1]
-        },
-        responseData,
-        new Error(responseData.message || 'API呼び出しに失敗しました')
-      );
-
-      logError(`  在庫マスタAPI エラー: ${responseData.message || 'Unknown error'}`);
-    }
-
-    return stockDataMap;
-
-  } catch (error) {
-    logAPIErrorDetail(
-      '在庫マスタAPI（通信エラー）',
-      {
-        goodsCodeCount: goodsCodeList.length,
-        firstCode: goodsCodeList[0],
-        lastCode: goodsCodeList[goodsCodeList.length - 1]
-      },
-      null,
-      error
-    );
-
-    logError(`在庫マスタ一括取得エラー: ${error.message}`);
-    return stockDataMap;
-  }
-}
-
 // ユーティリティ関数(旧表示)
 
 function updateRowWithInventoryData(sheet, rowIndex, inventoryData) {
@@ -622,16 +538,6 @@ function updateRowWithInventoryData(sheet, rowIndex, inventoryData) {
 
   const range = sheet.getRange(rowIndex, COLUMNS.STOCK_QTY + 1, 1, updateValues.length);
   range.setValues([updateValues]);
-}
-
-function updateStoredTokens(accessToken, refreshToken) {
-  const properties = PropertiesService.getScriptProperties();
-  properties.setProperties({
-    'ACCESS_TOKEN': accessToken,
-    'REFRESH_TOKEN': refreshToken,
-    'TOKEN_UPDATED_AT': new Date().getTime().toString()
-  });
-  console.log('トークンを更新しました');
 }
 
 function logErrorsToSheet(errorDetails) {
