@@ -1,0 +1,20 @@
+1） 受注明細検索API
+https://api.next-engine.org/api_v1_receiveorder_row/search
+昇順：receive_order_row_receive_order_id （優先度１）
+昇順：receive_order_row_no (優先度２)
+
+2） 受注オプション検索API
+https://api.next-engine.org/api_v1_receiveorder_option/search
+昇順：receive_order_id
+
+3）在庫検索API
+https://api.next-engine.org/api_v1_master_stock/search
+昇順：stock_goods_id
+
+4）商品マスターAPI
+https://api.next-engine.org/api_v1_master_goods/search
+昇順：goods_id
+
+5）アップロードキュー検索
+https://api.next-engine.org/api_v1_system_que/search
+昇順：que_id
