@@ -33,11 +33,6 @@
 @see compareVersions     - 従来版とリトライ版の処理速度や安定性を比較テストします。
 @see showMigrationGuide  - 従来版のスクリプトから本スクリプトへ安全に移行するための手順を表示します。
 
---- 内部処理・統計関連関数 ---
-
-@see logRetryStatsToSheet           - リトライ統計をスプレッドシートの「リトライログ」シートに書き出します。
-
-
 /**
 =============================================================================
 在庫情報取得スクリプト - リトライ機能追加版（SRE改善）
@@ -61,62 +56,6 @@
 * - リトライ頻度の可視化（障害検知）
 =============================================================================
 */
-
-/**
- * リトライ統計をエラーログシートに記録
- */
-function logRetryStatsToSheet() {
-  if (retryStats.totalRetries === 0) {
-    return;
-  }
-
-  try {
-    const { SPREADSHEET_ID } = getSpreadsheetConfig();
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-    let retryLogSheet = spreadsheet.getSheetByName('リトライログ');
-
-    if (!retryLogSheet) {
-      retryLogSheet = spreadsheet.insertSheet('リトライログ');
-      const headers = [
-        '実行日時', '総リトライ回数', 'リトライ発生バッチ数',
-        '最大リトライ回数', 'リトライ発生率(%)', '備考'
-      ];
-      retryLogSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-      retryLogSheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
-      retryLogSheet.getRange(1, 1, 1, headers.length).setBackground('#f3f3f3');
-    }
-
-    const totalBatches = retryStats.retriesByBatch.length;
-    const retryRate = totalBatches > 0
-      ? (retryStats.batchesWithRetry / totalBatches * 100).toFixed(1)
-      : 0;
-
-    let note = '';
-    if (retryRate > 10) {
-      note = 'リトライ率高（要確認）';
-    } else if (retryStats.totalRetries > 0) {
-      note = '正常（軽微なリトライ）';
-    }
-
-    const logRow = [
-      new Date(),
-      retryStats.totalRetries,
-      retryStats.batchesWithRetry,
-      retryStats.maxRetriesUsed,
-      retryRate,
-      note
-    ];
-
-    const lastRow = retryLogSheet.getLastRow();
-    retryLogSheet.getRange(lastRow + 1, 1, 1, 6).setValues([logRow]);
-    retryLogSheet.getRange(lastRow + 1, 1, 1, 1).setNumberFormat('yyyy/mm/dd hh:mm:ss');
-
-    logWithLevel(LOG_LEVEL.SUMMARY, 'リトライ統計をシートに記録しました');
-
-  } catch (error) {
-    logError('リトライログ記録エラー:', error.message);
-  }
-}
 
 // ============================================================================
 // メイン処理関数の修正版

@@ -56,139 +56,16 @@ comparePerformance(sampleSize)
 このスクリプトの「一括版」と、架空の「従来版（1件ずつAPIを叩く）」の推定処理時間を比較する関数です。
 高速化の倍率を計算し、大幅な時間短縮効果を数値で示します。
 
-updateRowWithInventoryData(sheet, rowIndex, inventoryData)
-取得した在庫情報（inventoryData）を基に、
-スプレッドシートの指定された行（rowIndex）の在庫関連の列を更新します。
-
-logErrorsToSheet(errorDetails)
-処理中に発生したエラーの詳細を、スプレッドシート上の「エラーログ」シートに記録します。
-これにより、どの商品でどのような問題が発生したかを後から確認できます。
-
 showCurrentProperties()
 現在のスクリプトプロパティの設定内容をログに出力します。
 
 debugSpecificProducts()
 大文字、小文字の表記ゆれがある場合に在庫情報が取得できない場合があるので、テスト関数を作成してその原因の特定を行う。
 
-recordExecutionTimestamp()
-実行完了日時を指定されたシートに記録する関数
-シート名はスクリプトプロパティに保存するので、任意のシート名を設定してください。
-また、実行完了日時はそのシートのA1セルに記録するようにしていますので、
-A1セルには他の情報を入力しないようにしてください。
-
 showUsageGuide()
 スクリプトの主要な機能、使用方法、そして期待される効果について説明します。
 =============================================================================
 */
-
-/**
- * バッチ単位で在庫データを一括更新する関数（最適化版）
- */
-function updateBatchInventoryData(sheet, batch, inventoryDataMap, rowIndexMap) {
-  const updateData = [];
-  const results = [];
-
-  // ステップ1: 行番号でソートして連続した範囲を特定
-  const sortedItems = [];
-
-  for (const goodsCode of batch) {
-    const inventoryData = inventoryDataMap.get(goodsCode);
-    const rowIndex = rowIndexMap.get(goodsCode);
-
-    if (inventoryData && rowIndex) {
-      sortedItems.push({
-        goodsCode: goodsCode,
-        rowIndex: rowIndex,
-        inventoryData: inventoryData
-      });
-    } else {
-      results.push({
-        goodsCode: goodsCode,
-        status: 'no_data'
-      });
-    }
-  }
-
-  // 行番号でソート
-  sortedItems.sort((a, b) => a.rowIndex - b.rowIndex);
-
-  // ステップ2: 連続した範囲をグループ化
-  const rangeGroups = [];
-  let currentGroup = null;
-
-  for (const item of sortedItems) {
-    if (!currentGroup || item.rowIndex !== currentGroup.endRow + 1) {
-      if (currentGroup) {
-        rangeGroups.push(currentGroup);
-      }
-      currentGroup = {
-        startRow: item.rowIndex,
-        endRow: item.rowIndex,
-        items: [item]
-      };
-    } else {
-      currentGroup.endRow = item.rowIndex;
-      currentGroup.items.push(item);
-    }
-  }
-
-  if (currentGroup) {
-    rangeGroups.push(currentGroup);
-  }
-
-  // ステップ3: 各グループごとに一括更新
-  let totalUpdated = 0;
-
-  for (const group of rangeGroups) {
-    try {
-      const updateValues = group.items.map(item => [
-        item.inventoryData.stock_quantity || 0,
-        item.inventoryData.stock_allocated_quantity || 0,
-        item.inventoryData.stock_free_quantity || 0,
-        item.inventoryData.stock_advance_order_quantity || 0,
-        item.inventoryData.stock_advance_order_allocation_quantity || 0,
-        item.inventoryData.stock_advance_order_free_quantity || 0,
-        item.inventoryData.stock_defective_quantity || 0,
-        item.inventoryData.stock_remaining_order_quantity || 0,
-        item.inventoryData.stock_out_quantity || 0
-      ]);
-
-      const range = sheet.getRange(
-        group.startRow,
-        COLUMNS.STOCK_QTY + 1,
-        updateValues.length,
-        9
-      );
-      range.setValues(updateValues);
-
-      totalUpdated += group.items.length;
-
-      for (const item of group.items) {
-        results.push({
-          goodsCode: item.goodsCode,
-          status: 'success',
-          stock: item.inventoryData.stock_quantity
-        });
-      }
-
-    } catch (error) {
-      for (const item of group.items) {
-        results.push({
-          goodsCode: item.goodsCode,
-          status: 'error',
-          error: error.message
-        });
-      }
-
-      logError(`グループ更新エラー (行 ${group.startRow}-${group.endRow}): ${error.message}`);
-    }
-  }
-
-  return {
-    updated: totalUpdated,
-    results: results
-  };
-}
 
 // ============================================================================
 // メイン処理関数
@@ -518,96 +395,6 @@ function getBatchInventoryData(goodsCodeList, tokens, batchNumber) {
     );
 
     return inventoryDataMap;
-  }
-}
-
-// ユーティリティ関数(旧表示)
-
-function updateRowWithInventoryData(sheet, rowIndex, inventoryData) {
-  const updateValues = [
-    inventoryData.stock_quantity || 0,
-    inventoryData.stock_allocated_quantity || 0,
-    inventoryData.stock_free_quantity || 0,
-    inventoryData.stock_advance_order_quantity || 0,
-    inventoryData.stock_advance_order_allocation_quantity || 0,
-    inventoryData.stock_advance_order_free_quantity || 0,
-    inventoryData.stock_defective_quantity || 0,
-    inventoryData.stock_remaining_order_quantity || 0,
-    inventoryData.stock_out_quantity || 0
-  ];
-
-  const range = sheet.getRange(rowIndex, COLUMNS.STOCK_QTY + 1, 1, updateValues.length);
-  range.setValues([updateValues]);
-}
-
-function logErrorsToSheet(errorDetails) {
-  try {
-    const { SPREADSHEET_ID } = getSpreadsheetConfig();
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-    let errorSheet = spreadsheet.getSheetByName('エラーログ');
-
-    if (!errorSheet) {
-      errorSheet = spreadsheet.insertSheet('エラーログ');
-      const headers = [
-        '発生日時', '商品コード', 'エラー種別',
-        'エラー内容', 'バッチ番号', '処理日時'
-      ];
-      errorSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-      errorSheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
-    }
-
-    const errorRows = errorDetails.map(error => [
-      error.timestamp,
-      error.goodsCode,
-      error.errorType,
-      error.errorMessage,
-      error.batchNumber,
-      new Date()
-    ]);
-
-    if (errorRows.length > 0) {
-      const lastRow = errorSheet.getLastRow();
-      const range = errorSheet.getRange(lastRow + 1, 1, errorRows.length, 6);
-      range.setValues(errorRows);
-
-      errorSheet.getRange(lastRow + 1, 1, errorRows.length, 1)
-        .setNumberFormat('yyyy/mm/dd hh:mm:ss');
-      errorSheet.getRange(lastRow + 1, 6, errorRows.length, 1)
-        .setNumberFormat('yyyy/mm/dd hh:mm:ss');
-    }
-
-    console.log(`エラーログに${errorRows.length}件を記録しました`);
-
-  } catch (error) {
-    console.error('エラーログ記録中にエラーが発生:', error.message);
-  }
-}
-
-function recordExecutionTimestamp() {
-  try {
-    const properties = PropertiesService.getScriptProperties();
-    const spreadsheetId = properties.getProperty('SPREADSHEET_ID');
-    const sheetName = properties.getProperty('LOG_SHEET_NAME');
-
-    if (!spreadsheetId || !sheetName) {
-      throw new Error('スクリプトプロパティ SPREADSHEET_ID または LOG_SHEET_NAME が設定されていません。');
-    }
-
-    const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
-    const sheet = spreadsheet.getSheetByName(sheetName);
-
-    if (!sheet) {
-      console.error(`シート "${sheetName}" が見つかりません。日時の記録をスキップします。`);
-      return;
-    }
-
-    sheet.getRange(1, 1).setValue(
-      Utilities.formatDate(new Date(), 'JST', 'MM月dd日HH時mm分ss秒')
-    );
-    console.log(`実行日時をシート "${sheetName}" のA1セルに記録しました。`);
-
-  } catch (error) {
-    console.error('実行日時の記録中にエラーが発生しました:', error.message);
   }
 }
 
