@@ -212,6 +212,7 @@ function logErrorsToSheet(errorDetails) {
  */
 function logRetryStatsToSheet() {
     if (retryStats.totalRetries === 0) {
+        logWithLevel(LOG_LEVEL.DETAILED, 'リトライ0回: ログ記録スキップ');
         return;
     }
 
@@ -235,6 +236,12 @@ function logRetryStatsToSheet() {
         const retryRate = totalBatches > 0
             ? (retryStats.batchesWithRetry / totalBatches * 100).toFixed(1)
             : 0;
+
+        // ★★★ 条件2: リトライ発生率が0% ★★★
+        if (parseFloat(retryRate) === 0) {
+            logWithLevel(LOG_LEVEL.DETAILED, 'リトライ発生率0%: ログ記録スキップ');
+            return;
+        }
 
         let note = '';
         if (retryRate > 10) {
