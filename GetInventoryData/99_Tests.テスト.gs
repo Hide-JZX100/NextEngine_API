@@ -219,3 +219,81 @@ function verifyConfiguration() {
 
     console.log('================');
 }
+
+/**
+ * 使用状況確認スクリプト
+ */
+function checkFileUsage() {
+    console.log('=== ファイル使用状況確認 ===');
+
+    // 1. トリガー設定確認
+    const properties = PropertiesService.getScriptProperties();
+    const triggerFunction = properties.getProperty('TRIGGER_FUNCTION_NAME');
+    console.log('1. トリガー関数:', triggerFunction || '未設定');
+
+    // 2. 関数の存在確認
+    console.log('\n2. 関数の存在確認:');
+
+    const functionsToCheck = [
+        'updateInventoryDataBatchWithRetry',
+        'updateInventoryDataBatch',
+        'showUsageGuideWithRetry',
+        'enableRetry',
+        'disableRetry',
+        'showSREDashboard',
+        'compareVersions'
+    ];
+
+    functionsToCheck.forEach(funcName => {
+        try {
+            const func = this[funcName];
+            console.log(`  ${funcName}: ${func ? '✓存在' : '✗不在'}`);
+        } catch (e) {
+            console.log(`  ${funcName}: ✗不在 (${e.message})`);
+        }
+    });
+
+    // 3. 実際のトリガー確認
+    console.log('\n3. 設定済みトリガー:');
+    const triggers = ScriptApp.getProjectTriggers();
+    triggers.forEach(trigger => {
+        console.log(`  - ${trigger.getHandlerFunction()}`);
+    });
+}
+
+/**
+ * 関数の所在地を特定
+ */
+function locateFunctions() {
+    console.log('=== 関数の所在確認 ===\n');
+
+    // 確認したい関数のリスト
+    const functionsToLocate = [
+        'updateInventoryDataBatchWithRetry',
+        'updateInventoryDataBatch',
+        'showUsageGuideWithRetry',
+        'showUsageGuide',
+        'enableRetry',
+        'disableRetry',
+        'showSREDashboard',
+        'compareVersions',
+        'getBatchInventoryDataWithRetry',
+        'getBatchInventoryData'
+    ];
+
+    functionsToLocate.forEach(funcName => {
+        try {
+            const func = eval(funcName);
+            if (func) {
+                // 関数のソースコードを取得して最初の数行を表示
+                const source = func.toString();
+                const firstLine = source.split('\n')[0];
+                console.log(`✓ ${funcName}`);
+                console.log(`  先頭: ${firstLine.substring(0, 80)}...`);
+                console.log('');
+            }
+        } catch (e) {
+            console.log(`✗ ${funcName}: ${e.message}\n`);
+        }
+    });
+}
