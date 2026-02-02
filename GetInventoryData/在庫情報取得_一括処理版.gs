@@ -402,7 +402,7 @@ function getBatchInventoryData(goodsCodeList, tokens, batchNumber) {
 // テスト・管理用関数
 // ============================================================================
 
-function showUsageGuide-old() {
+function showUsageGuide_old() {
   console.log('=== 在庫情報取得スクリプト v2.0 使用方法ガイド ===');
   console.log('');
   console.log('【主要関数】');
