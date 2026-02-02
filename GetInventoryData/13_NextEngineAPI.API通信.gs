@@ -156,17 +156,14 @@ function getBatchStockDataWithRetry(goodsCodeList, tokens, batchNumber, maxRetri
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            // リトライ回数を記録
-            recordRetryAttempt(batchNumber, attempt);
-
+            // ★★★ 修正: 2回目以降のみrecordする ★★★
             if (attempt > 1) {
+                recordRetryAttempt(batchNumber, attempt);
                 logWithLevel(LOG_LEVEL.SUMMARY, `  リトライ ${attempt}/${maxRetries}回目...`);
             }
 
-            // ★ 既存の関数を呼び出し
             const stockDataMap = getBatchStockData(goodsCodeList, tokens, batchNumber);
 
-            // 成功したらデータを返す
             if (attempt > 1) {
                 logWithLevel(LOG_LEVEL.SUMMARY, `  ✓ リトライ成功（${attempt}回目の試行で成功）`);
             }
