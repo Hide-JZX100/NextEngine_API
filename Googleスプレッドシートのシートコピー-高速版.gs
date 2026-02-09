@@ -60,7 +60,7 @@
  */
 function getSheets() {
   const scriptProperties = PropertiesService.getScriptProperties();
-  
+
   // スクリプトプロパティからIDとシート名を取得
   const sourceSsId = scriptProperties.getProperty('SOURCE_SPREADSHEET_ID');
   const sourceSheetName = scriptProperties.getProperty('SOURCE_SHEET_NAME');
@@ -95,59 +95,100 @@ function Master_HybridUpdate() {
     const sheets = getSheets();
     const sheet_copyFrom = sheets.sheet_copyFrom;
     const sheet_copyTo = sheets.sheet_copyTo;
-    
+
     const lastRow_From = sheet_copyFrom.getLastRow();
     const lastColumn_From = sheet_copyFrom.getLastColumn();
     const lastRow_To = sheet_copyTo.getLastRow();
-    
+
     Logger.log(`コピー元: ${lastRow_From}行, コピー先: ${lastRow_To}行`);
-    
+
     const scriptProperties = PropertiesService.getScriptProperties();
     const lastFullUpdate = scriptProperties.getProperty('LAST_FULL_UPDATE');
     const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    
+
     const dayOfWeek = new Date().getDay();
     const shouldFullUpdate = !lastFullUpdate || lastFullUpdate !== today && dayOfWeek === 1;
-    
+
     if (shouldFullUpdate) {
       Logger.log('完全更新を実行します');
-      
+
+      // データ取得
+      const getDataStart = new Date();
+
       const allData = sheet_copyFrom.getRange(1, 1, lastRow_From, lastColumn_From).getValues();
+
+      const getDataEnd = new Date();
+      Logger.log(`[データ取得] 完了: ${(getDataEnd - getDataStart) / 1000}秒`);
+
+      // シートクリア
+      const clearStart = new Date();
 
       sheet_copyTo.clear();
 
+      const clearEnd = new Date();
+      Logger.log(`[シートクリア] 完了: ${(clearEnd - clearStart) / 1000}秒`);
+
+      // データ書き込み
+      const setValuesStart = new Date();
+
       sheet_copyTo.getRange(1, 1, lastRow_From, lastColumn_From).setValues(allData);
-      
+
+      const setValuesEnd = new Date();
+      Logger.log(`[データ書き込み] 完了: ${(setValuesEnd - setValuesStart) / 1000}秒`);
+
       if (lastColumn_From >= 9) {
+        const formatStart = new Date();
+
         sheet_copyTo.getRange(1, 9, lastRow_From, Math.min(2, lastColumn_From - 8))
-                    .setNumberFormat("@");
+          .setNumberFormat("@");
+
+        const formatEnd = new Date();
+        Logger.log(`[書式設定] 完了: ${(formatEnd - formatStart) / 1000}秒`);
       }
-      
+
       scriptProperties.setProperty('LAST_FULL_UPDATE', today);
       Logger.log('完全更新完了');
-      
+
     } else if (lastRow_From > lastRow_To) {
       const newRows = lastRow_From - lastRow_To;
       Logger.log(`差分更新: ${newRows}行の新しいデータを追加`);
-      
+
+      // データ取得
+      const getDataStart = new Date();
+
       const newData = sheet_copyFrom.getRange(lastRow_To + 1, 1, newRows, lastColumn_From).getValues();
+
+      const getDataEnd = new Date();
+      Logger.log(`[差分データ取得] 完了: ${(getDataEnd - getDataStart) / 1000}秒`);
+
+      // データ書き込み
+      const setValuesStart = new Date();
+
       sheet_copyTo.getRange(lastRow_To + 1, 1, newRows, lastColumn_From).setValues(newData);
-      
+
+      const setValuesEnd = new Date();
+      Logger.log(`[差分データ書き込み] 完了: ${(setValuesEnd - setValuesStart) / 1000}秒`);
+
       if (lastColumn_From >= 9) {
+        const formatStart = new Date();
+
         sheet_copyTo.getRange(lastRow_To + 1, 9, newRows, Math.min(2, lastColumn_From - 8))
-                    .setNumberFormat("@");
+          .setNumberFormat("@");
+
+        const formatEnd = new Date();
+        Logger.log(`[差分書式設定] 完了: ${(formatEnd - formatStart) / 1000}秒`);
       }
-      
+
       Logger.log(`${newRows}行の新しいデータを追加しました`);
-      
+
     } else {
       Logger.log('更新するデータがありません');
     }
-    
+
     const endTime = new Date();
     const executionTime = (endTime - startTime) / 1000;
     Logger.log(`ハイブリッド更新完了: 実行時間 ${executionTime}秒`);
-    
+
   } catch (error) {
     Logger.log(`エラー発生: ${error.toString()}`);
     throw error;
@@ -161,30 +202,30 @@ function Master_ForceFullUpdate() {
     const sheets = getSheets();
     const sheet_copyFrom = sheets.sheet_copyFrom;
     const sheet_copyTo = sheets.sheet_copyTo;
-    
+
     const lastRow_From = sheet_copyFrom.getLastRow();
     const lastColumn_From = sheet_copyFrom.getLastColumn();
-    
+
     Logger.log(`強制完全更新: ${lastRow_From}行 × ${lastColumn_From}列`);
-    
+
     const allData = sheet_copyFrom.getRange(1, 1, lastRow_From, lastColumn_From).getValues();
 
     sheet_copyTo.clear();
-    
+
     sheet_copyTo.getRange(1, 1, lastRow_From, lastColumn_From).setValues(allData);
-    
+
     if (lastColumn_From >= 9) {
       sheet_copyTo.getRange(1, 9, lastRow_From, Math.min(2, lastColumn_From - 8))
-                  .setNumberFormat("@");
+        .setNumberFormat("@");
     }
-    
+
     const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
     PropertiesService.getScriptProperties().setProperty('LAST_FULL_UPDATE', today);
-    
+
     const endTime = new Date();
     const executionTime = (endTime - startTime) / 1000;
     Logger.log(`強制完全更新完了: 実行時間 ${executionTime}秒`);
-    
+
   } catch (error) {
     Logger.log(`エラー発生: ${error.toString()}`);
     throw error;
@@ -198,43 +239,43 @@ function Master_Optimized() {
     const sheets = getSheets();
     const sheet_copyFrom = sheets.sheet_copyFrom;
     const sheet_copyTo = sheets.sheet_copyTo;
-    
+
     const lastRow_From = sheet_copyFrom.getLastRow();
     const lastColumn_From = sheet_copyFrom.getLastColumn();
-    
+
     Logger.log(`コピー元データ範囲: ${lastRow_From}行 × ${lastColumn_From}列`);
-    
+
     if (lastRow_From === 0 || lastColumn_From === 0) {
       Logger.log('コピー元にデータが存在しません');
       return;
     }
-    
+
     sheet_copyTo.clear();
-    
+
     const batchSize = 5000;
-    
+
     for (let startRow = 1; startRow <= lastRow_From; startRow += batchSize) {
       const endRow = Math.min(startRow + batchSize - 1, lastRow_From);
       const numRows = endRow - startRow + 1;
-      
+
       Logger.log(`処理中: ${startRow}行目から${endRow}行目まで（${numRows}行）`);
-      
+
       const copyValue = sheet_copyFrom.getRange(startRow, 1, numRows, lastColumn_From).getValues();
-      
+
       if (lastColumn_From >= 9) {
         sheet_copyTo.getRange(startRow, 9, numRows, Math.min(2, lastColumn_From - 8))
-                    .setNumberFormat("@");
+          .setNumberFormat("@");
       }
-      
+
       sheet_copyTo.getRange(startRow, 1, numRows, lastColumn_From).setValues(copyValue);
-      
+
       Utilities.sleep(100);
     }
-    
+
     const endTime = new Date();
     const executionTime = (endTime - startTime) / 1000;
     Logger.log(`処理完了: 実行時間 ${executionTime}秒`);
-    
+
   } catch (error) {
     Logger.log(`エラー発生: ${error.toString()}`);
     throw error;
@@ -248,32 +289,32 @@ function Master_SuperFast() {
     const sheets = getSheets();
     const sheet_copyFrom = sheets.sheet_copyFrom;
     const sheet_copyTo = sheets.sheet_copyTo;
-    
+
     const lastRow_From = sheet_copyFrom.getLastRow();
     const lastColumn_From = sheet_copyFrom.getLastColumn();
-    
+
     Logger.log(`データ範囲: ${lastRow_From}行 × ${lastColumn_From}列`);
-    
+
     if (lastRow_From === 0 || lastColumn_From === 0) {
       Logger.log('データが存在しません');
       return;
     }
-    
+
     const allData = sheet_copyFrom.getRange(1, 1, lastRow_From, lastColumn_From).getValues();
-    
+
     sheet_copyTo.clear();
-    
+
     sheet_copyTo.getRange(1, 1, lastRow_From, lastColumn_From).setValues(allData);
-    
+
     if (lastColumn_From >= 9) {
       sheet_copyTo.getRange(1, 9, lastRow_From, Math.min(2, lastColumn_From - 8))
-                  .setNumberFormat("@");
+        .setNumberFormat("@");
     }
-    
+
     const endTime = new Date();
     const executionTime = (endTime - startTime) / 1000;
     Logger.log(`Super Fast完了: 実行時間 ${executionTime}秒`);
-    
+
   } catch (error) {
     Logger.log(`エラー発生: ${error.toString()}`);
     throw error;
