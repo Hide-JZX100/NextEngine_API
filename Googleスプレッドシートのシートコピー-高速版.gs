@@ -122,20 +122,26 @@ function Master_HybridUpdate() {
 
       // シートクリア
       const clearStart = new Date();
+
       sheet_copyTo.clear();
+
       const clearEnd = new Date();
       Logger.log(`[シートクリア] 完了: ${(clearEnd - clearStart) / 1000}秒`);
 
       // データ書き込み
       const setValuesStart = new Date();
+
       sheet_copyTo.getRange(1, 1, lastRow_From, lastColumn_From).setValues(allData);
+
       const setValuesEnd = new Date();
       Logger.log(`[データ書き込み] 完了: ${(setValuesEnd - setValuesStart) / 1000}秒`);
 
       if (lastColumn_From >= 9) {
         const formatStart = new Date();
+
         sheet_copyTo.getRange(1, 9, lastRow_From, Math.min(2, lastColumn_From - 8))
           .setNumberFormat("@");
+
         const formatEnd = new Date();
         Logger.log(`[書式設定] 完了: ${(formatEnd - formatStart) / 1000}秒`);
       }
@@ -147,20 +153,28 @@ function Master_HybridUpdate() {
       const newRows = lastRow_From - lastRow_To;
       Logger.log(`差分更新: ${newRows}行の新しいデータを追加`);
 
+      // データ取得
       const getDataStart = new Date();
+
       const newData = sheet_copyFrom.getRange(lastRow_To + 1, 1, newRows, lastColumn_From).getValues();
+
       const getDataEnd = new Date();
       Logger.log(`[差分データ取得] 完了: ${(getDataEnd - getDataStart) / 1000}秒`);
 
+      // データ書き込み
       const setValuesStart = new Date();
+
       sheet_copyTo.getRange(lastRow_To + 1, 1, newRows, lastColumn_From).setValues(newData);
+
       const setValuesEnd = new Date();
       Logger.log(`[差分データ書き込み] 完了: ${(setValuesEnd - setValuesStart) / 1000}秒`);
 
       if (lastColumn_From >= 9) {
         const formatStart = new Date();
+
         sheet_copyTo.getRange(lastRow_To + 1, 9, newRows, Math.min(2, lastColumn_From - 8))
           .setNumberFormat("@");
+
         const formatEnd = new Date();
         Logger.log(`[差分書式設定] 完了: ${(formatEnd - formatStart) / 1000}秒`);
       }
