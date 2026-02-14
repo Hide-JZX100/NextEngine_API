@@ -1,2 +1,0 @@
-Rename sample
-test
