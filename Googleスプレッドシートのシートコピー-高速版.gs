@@ -217,6 +217,11 @@ function Master_HybridUpdate_API() {
   try {
     const startTime = new Date();
     const info = getSheets();
+
+    // スクリプトプロパティから元のシート名を取得（API用）
+    const scriptProperties = PropertiesService.getScriptProperties();
+    const sourceSheetName = scriptProperties.getProperty('SOURCE_SHEET_NAME');
+
     const sheet_from = info.sheet_copyFrom;
     const sheet_to = info.sheet_copyTo;
 
@@ -226,7 +231,6 @@ function Master_HybridUpdate_API() {
 
     Logger.log(`[開始] コピー元: ${lastRow_From}行 / コピー先: ${lastRow_To}行`);
 
-    const scriptProperties = PropertiesService.getScriptProperties();
     const lastFullUpdate = scriptProperties.getProperty('LAST_FULL_UPDATE');
     const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
     const dayOfWeek = new Date().getDay();
@@ -236,15 +240,20 @@ function Master_HybridUpdate_API() {
     if (shouldFullUpdate) {
       Logger.log('【完全更新】APIモードで実行します');
 
-      // 1. データ取得（ここは標準命令でも十分高速です）
+      // 1. 【改良】APIによるデータ取得
       const getDataStart = new Date();
-      const allData = sheet_from.getRange(1, 1, lastRow_From, lastColumn_From).getValues();
-      Logger.log(`[1.データ取得] 完了: ${(new Date() - getDataStart) / 1000}秒`);
+      const rangeLetter = columnToLetter(lastColumn_From);
+      const readRange = `'${sourceSheetName}'!A1:${rangeLetter}${lastRow_From}`;
+
+      // APIで一括取得（valuesのみを取り出す）
+      const response = Sheets.Spreadsheets.Values.get(info.sourceSsId, readRange);
+      const allData = response.values;
+
+      Logger.log(`[1.APIデータ取得] 完了: ${(new Date() - getDataStart) / 1000}秒`);
 
       // 2. APIによるシートクリア（超高速）
       const clearStart = new Date();
       // A1形式の指定が必要なため補助関数を使用
-      const rangeLetter = columnToLetter(lastColumn_From);
       const clearRange = `'${info.destSheetName}'!A1:${rangeLetter}${lastRow_To + 1000}`;
 
       Sheets.Spreadsheets.Values.clear({}, info.destSsId, clearRange);
@@ -273,7 +282,7 @@ function Master_HybridUpdate_API() {
       Logger.log('完全更新完了');
 
     } else if (lastRow_From > lastRow_To) {
-      // --- 差分更新セクション（ヒデノリさんの計測ログを継承） ---
+      // --- 差分更新セクション（計測ログを継承） ---
       const newRows = lastRow_From - lastRow_To;
       Logger.log(`【差分更新】${newRows}行の追加`);
 
