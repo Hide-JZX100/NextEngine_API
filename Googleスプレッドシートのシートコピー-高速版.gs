@@ -91,6 +91,185 @@ function getSheets() {
   };
 }
 
+/**
+=============================================================================
+商品マスタ ハイブリッド更新スクリプト (API高速版・計測ログ付)
+=============================================================================
+
+【概要】
+・Google Sheets API (Advanced Services) を使用し、大規模データの更新を高速化。
+・追加した「工程別ログ計測」を搭載し、APIの恩恵を数値で確認可能。
+・月曜日の完全更新時はAPI、平日の差分更新は標準命令を使い分けるハイブリッド仕様。
+
+【更新履歴】
+2026/02/09：Sheets API v4 導入 ＋ 計測ログ実装
+
+* 【機能】
+* - Sheets APIを使用して高速にデータをコピー（18秒程度）
+* - API失敗時は自動的に従来方式にフォールバック
+*
+* 【エラーハンドリング】
+* - Sheets API利用不可時: 従来のGAS方式で実行
+* - APIクォータ超過時: 従来のGAS方式で実行
+* - その他エラー時: 従来のGAS方式で実行
+
+=============================================================================
+*/
+
+function Master_HybridUpdate_API() {
+  try {
+    const startTime = new Date();
+    const info = getSheets();
+
+    // スクリプトプロパティから元のシート名を取得（API用）
+    const scriptProperties = PropertiesService.getScriptProperties();
+    const sourceSheetName = scriptProperties.getProperty('SOURCE_SHEET_NAME');
+
+    const sheet_from = info.sheet_copyFrom;
+    const sheet_to = info.sheet_copyTo;
+
+    const lastRow_From = sheet_from.getLastRow();
+    const lastColumn_From = sheet_from.getLastColumn();
+    const lastRow_To = sheet_to.getLastRow();
+
+    Logger.log(`[開始] コピー元: ${lastRow_From}行 / コピー先: ${lastRow_To}行`);
+
+    const lastFullUpdate = scriptProperties.getProperty('LAST_FULL_UPDATE');
+    const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    const dayOfWeek = new Date().getDay();
+
+    const shouldFullUpdate = !lastFullUpdate || (lastFullUpdate !== today && dayOfWeek === 1);
+
+    if (shouldFullUpdate) {
+      Logger.log('【完全更新】APIモードで実行します');
+
+      try {
+        // 1. 【改良】APIによるデータ取得
+        const getDataStart = new Date();
+        const rangeLetter = columnToLetter(lastColumn_From);
+        const readRange = `'${sourceSheetName}'!A1:${rangeLetter}${lastRow_From}`;
+
+        // APIで一括取得（valuesのみを取り出す）
+        const response = Sheets.Spreadsheets.Values.get(info.sourceSsId, readRange);
+        const allData = response.values;
+
+        Logger.log(`[1.APIデータ取得] 完了: ${(new Date() - getDataStart) / 1000}秒`);
+
+        // 2. APIによるシートクリア（超高速）
+        const clearStart = new Date();
+        // A1形式の指定が必要なため補助関数を使用
+        const clearRange = `'${info.destSheetName}'!A1:${rangeLetter}${lastRow_To + 1000}`;
+
+        Sheets.Spreadsheets.Values.clear({}, info.destSsId, clearRange);
+        Logger.log(`[2.APIクリア] 完了: ${(new Date() - clearStart) / 1000}秒`);
+
+        // 3. APIによるデータ書き込み（ここが最大の短縮ポイント）
+        const setValuesStart = new Date();
+        const valueRange = Sheets.newRowData();
+        valueRange.values = allData;
+
+        // USER_ENTERED を使うことで、書式設定の一部（日付や数値認識）をAPIに任せます
+        Sheets.Spreadsheets.Values.update(valueRange, info.destSsId, `'${info.destSheetName}'!A1`, {
+          valueInputOption: 'USER_ENTERED'
+        });
+        Logger.log(`[3.API書き込み] 完了: ${(new Date() - setValuesStart) / 1000}秒`);
+
+        // 4. 書式設定（APIでも可能ですが、まずは従来の方式で時間を計測）
+        if (lastColumn_From >= 9) {
+          const formatStart = new Date();
+          sheet_to.getRange(1, 9, lastRow_From, Math.min(2, lastColumn_From - 8))
+            .setNumberFormat("@");
+          Logger.log(`[4.書式設定] 完了: ${(new Date() - formatStart) / 1000}秒`);
+        }
+
+        scriptProperties.setProperty('LAST_FULL_UPDATE', today);
+        Logger.log('完全更新完了');
+        // ===== API処理ブロック終了 =====
+
+      } catch (apiError) {
+        // API失敗時のフォールバック処理
+        Logger.log('========================================');
+        Logger.log('[警告] API処理に失敗しました');
+        Logger.log(`エラー内容: ${apiError.toString()}`);
+        Logger.log('[自動切替] 従来のGAS方式で再実行します');
+        Logger.log('========================================');
+
+        // 従来方式で完全更新を実行
+        const fallbackStart = new Date();
+
+        // データ取得
+        const getDataStart = new Date();
+        const allData = sheet_from.getRange(1, 1, lastRow_From, lastColumn_From).getValues();
+        Logger.log(`[従来方式:データ取得] 完了: ${(new Date() - getDataStart) / 1000}秒`);
+
+        // シートクリア
+        const clearStart = new Date();
+        sheet_to.clear();
+        Logger.log(`[従来方式:シートクリア] 完了: ${(new Date() - clearStart) / 1000}秒`);
+
+        // データ書き込み
+        const setValuesStart = new Date();
+        sheet_to.getRange(1, 1, lastRow_From, lastColumn_From).setValues(allData);
+        Logger.log(`[従来方式:データ書き込み] 完了: ${(new Date() - setValuesStart) / 1000}秒`);
+
+        // 書式設定
+        if (lastColumn_From >= 9) {
+          const formatStart = new Date();
+          sheet_to.getRange(1, 9, lastRow_From, Math.min(2, lastColumn_From - 8))
+            .setNumberFormat("@");
+          Logger.log(`[従来方式:書式設定] 完了: ${(new Date() - formatStart) / 1000}秒`);
+        }
+
+        scriptProperties.setProperty('LAST_FULL_UPDATE', today);
+        Logger.log(`[従来方式で完全更新完了] 実行時間: ${(new Date() - fallbackStart) / 1000}秒`);
+      }
+
+    } else if (lastRow_From > lastRow_To) {
+      // --- 差分更新セクション（計測ログを継承） ---
+      const newRows = lastRow_From - lastRow_To;
+      Logger.log(`【差分更新】${newRows}行の追加`);
+
+      const getDataStart = new Date();
+      const newData = sheet_from.getRange(lastRow_To + 1, 1, newRows, lastColumn_From).getValues();
+      Logger.log(`[差分取得] 完了: ${(new Date() - getDataStart) / 1000}秒`);
+
+      const setValuesStart = new Date();
+      sheet_to.getRange(lastRow_To + 1, 1, newRows, lastColumn_From).setValues(newData);
+      Logger.log(`[差分書込] 完了: ${(new Date() - setValuesStart) / 1000}秒`);
+
+      if (lastColumn_From >= 9) {
+        const formatStart = new Date();
+        sheet_to.getRange(lastRow_To + 1, 9, newRows, Math.min(2, lastColumn_From - 8))
+          .setNumberFormat("@");
+        Logger.log(`[差分書式] 完了: ${(new Date() - formatStart) / 1000}秒`);
+      }
+    } else {
+      Logger.log('更新不要：データに変化はありません');
+    }
+
+    const executionTime = (new Date() - startTime) / 1000;
+    Logger.log(`[全工程完了] 総合実行時間: ${executionTime}秒`);
+
+  } catch (error) {
+    Logger.log(`[エラー発生] ${error.toString()}`);
+    throw error;
+  }
+}
+
+/**
+ * 補助関数：列番号をアルファベットに変換
+ * (N88-BASICのサブルーチンのように呼び出して使います)
+ */
+function columnToLetter(column) {
+  let temp, letter = '';
+  while (column > 0) {
+    temp = (column - 1) % 26;
+    letter = String.fromCharCode(temp + 65) + letter;
+    column = (column - temp - 1) / 26;
+  }
+  return letter;
+}
+
 // ハイブリッド更新版（追加メイン + 低頻度更新に最適）
 function Master_HybridUpdate() {
   try {
@@ -196,135 +375,6 @@ function Master_HybridUpdate() {
     Logger.log(`エラー発生: ${error.toString()}`);
     throw error;
   }
-}
-
-/**
-=============================================================================
-商品マスタ ハイブリッド更新スクリプト (API高速版・計測ログ付)
-=============================================================================
-
-【概要】
-・Google Sheets API (Advanced Services) を使用し、大規模データの更新を高速化。
-・追加した「工程別ログ計測」を搭載し、APIの恩恵を数値で確認可能。
-・月曜日の完全更新時はAPI、平日の差分更新は標準命令を使い分けるハイブリッド仕様。
-
-【更新履歴】
-2026/02/09：Sheets API v4 導入 ＋ 計測ログ実装
-=============================================================================
-*/
-
-function Master_HybridUpdate_API() {
-  try {
-    const startTime = new Date();
-    const info = getSheets();
-
-    // スクリプトプロパティから元のシート名を取得（API用）
-    const scriptProperties = PropertiesService.getScriptProperties();
-    const sourceSheetName = scriptProperties.getProperty('SOURCE_SHEET_NAME');
-
-    const sheet_from = info.sheet_copyFrom;
-    const sheet_to = info.sheet_copyTo;
-
-    const lastRow_From = sheet_from.getLastRow();
-    const lastColumn_From = sheet_from.getLastColumn();
-    const lastRow_To = sheet_to.getLastRow();
-
-    Logger.log(`[開始] コピー元: ${lastRow_From}行 / コピー先: ${lastRow_To}行`);
-
-    const lastFullUpdate = scriptProperties.getProperty('LAST_FULL_UPDATE');
-    const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    const dayOfWeek = new Date().getDay();
-
-    const shouldFullUpdate = !lastFullUpdate || (lastFullUpdate !== today && dayOfWeek === 1);
-
-    if (shouldFullUpdate) {
-      Logger.log('【完全更新】APIモードで実行します');
-
-      // 1. 【改良】APIによるデータ取得
-      const getDataStart = new Date();
-      const rangeLetter = columnToLetter(lastColumn_From);
-      const readRange = `'${sourceSheetName}'!A1:${rangeLetter}${lastRow_From}`;
-
-      // APIで一括取得（valuesのみを取り出す）
-      const response = Sheets.Spreadsheets.Values.get(info.sourceSsId, readRange);
-      const allData = response.values;
-
-      Logger.log(`[1.APIデータ取得] 完了: ${(new Date() - getDataStart) / 1000}秒`);
-
-      // 2. APIによるシートクリア（超高速）
-      const clearStart = new Date();
-      // A1形式の指定が必要なため補助関数を使用
-      const clearRange = `'${info.destSheetName}'!A1:${rangeLetter}${lastRow_To + 1000}`;
-
-      Sheets.Spreadsheets.Values.clear({}, info.destSsId, clearRange);
-      Logger.log(`[2.APIクリア] 完了: ${(new Date() - clearStart) / 1000}秒`);
-
-      // 3. APIによるデータ書き込み（ここが最大の短縮ポイント）
-      const setValuesStart = new Date();
-      const valueRange = Sheets.newRowData();
-      valueRange.values = allData;
-
-      // USER_ENTERED を使うことで、書式設定の一部（日付や数値認識）をAPIに任せます
-      Sheets.Spreadsheets.Values.update(valueRange, info.destSsId, `'${info.destSheetName}'!A1`, {
-        valueInputOption: 'USER_ENTERED'
-      });
-      Logger.log(`[3.API書き込み] 完了: ${(new Date() - setValuesStart) / 1000}秒`);
-
-      // 4. 書式設定（APIでも可能ですが、まずは従来の方式で時間を計測）
-      if (lastColumn_From >= 9) {
-        const formatStart = new Date();
-        sheet_to.getRange(1, 9, lastRow_From, Math.min(2, lastColumn_From - 8))
-          .setNumberFormat("@");
-        Logger.log(`[4.書式設定] 完了: ${(new Date() - formatStart) / 1000}秒`);
-      }
-
-      scriptProperties.setProperty('LAST_FULL_UPDATE', today);
-      Logger.log('完全更新完了');
-
-    } else if (lastRow_From > lastRow_To) {
-      // --- 差分更新セクション（計測ログを継承） ---
-      const newRows = lastRow_From - lastRow_To;
-      Logger.log(`【差分更新】${newRows}行の追加`);
-
-      const getDataStart = new Date();
-      const newData = sheet_from.getRange(lastRow_To + 1, 1, newRows, lastColumn_From).getValues();
-      Logger.log(`[差分取得] 完了: ${(new Date() - getDataStart) / 1000}秒`);
-
-      const setValuesStart = new Date();
-      sheet_to.getRange(lastRow_To + 1, 1, newRows, lastColumn_From).setValues(newData);
-      Logger.log(`[差分書込] 完了: ${(new Date() - setValuesStart) / 1000}秒`);
-
-      if (lastColumn_From >= 9) {
-        const formatStart = new Date();
-        sheet_to.getRange(lastRow_To + 1, 9, newRows, Math.min(2, lastColumn_From - 8))
-          .setNumberFormat("@");
-        Logger.log(`[差分書式] 完了: ${(new Date() - formatStart) / 1000}秒`);
-      }
-    } else {
-      Logger.log('更新不要：データに変化はありません');
-    }
-
-    const executionTime = (new Date() - startTime) / 1000;
-    Logger.log(`[全工程完了] 総合実行時間: ${executionTime}秒`);
-
-  } catch (error) {
-    Logger.log(`[エラー発生] ${error.toString()}`);
-    throw error;
-  }
-}
-
-/**
- * 補助関数：列番号をアルファベットに変換
- * (N88-BASICのサブルーチンのように呼び出して使います)
- */
-function columnToLetter(column) {
-  let temp, letter = '';
-  while (column > 0) {
-    temp = (column - 1) % 26;
-    letter = String.fromCharCode(temp + 65) + letter;
-    column = (column - temp - 1) / 26;
-  }
-  return letter;
 }
 
 // 手動で完全更新を実行する関数
