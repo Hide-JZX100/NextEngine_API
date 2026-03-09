@@ -1,0 +1,14 @@
+店舗マスタ検索
+リクエストURL
+ホスト  https://api.next-engine.org
+エンドポイント  /api_v1_master_shop/search
+
+
+モール/カート
+項目名,フィールド名,データ型,備考
+モール/カートID,mall_id,数値型,
+モール/カート名,mall_name,文字列型,
+モール/カートカナ,mall_kana,文字列型,
+備考,mall_note,文字列型,
+国ID,mall_country_id,文字列型,
+削除フラグ,mall_deleted_flag,文字列型,
