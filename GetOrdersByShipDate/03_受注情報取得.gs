@@ -13,7 +13,7 @@ function fetchOrderRows(startDate, endDate) {
   const dateRange = getDateRange(startDate, endDate);
   const startStr = formatDateForApi(dateRange.start);
   const endStr = formatDateForApi(dateRange.end);
-  
+
   console.log(`取得対象期間: ${startStr} ～ ${endStr}`);
 
   const props = PropertiesService.getScriptProperties();
@@ -21,11 +21,11 @@ function fetchOrderRows(startDate, endDate) {
     accessToken: props.getProperty('ACCESS_TOKEN'),
     refreshToken: props.getProperty('REFRESH_TOKEN')
   };
-  
+
   if (!token.accessToken || !token.refreshToken) {
     throw new Error('ACCESS_TOKEN または REFRESH_TOKEN が取得できません。testGenerateAuthUrl()で再認証してください。');
   }
-  
+
   const url = NE_API_BASE_URL + NE_ENDPOINT_ORDER_ROW;
 
   let allRows = [];
@@ -58,7 +58,7 @@ function fetchOrderRows(startDate, endDate) {
     if (json.result !== 'success') {
       throw new Error('API取得エラー: ' + json.message + ' (code: ' + json.code + ')');
     }
-    
+
     // トークンが更新された場合はプロパティを更新
     if (json.access_token && json.access_token !== token.accessToken) {
       props.setProperty('ACCESS_TOKEN', json.access_token);
@@ -69,7 +69,7 @@ function fetchOrderRows(startDate, endDate) {
 
     const data = json.data || [];
     allRows = allRows.concat(data);
-    
+
     console.log(`${pageCount}ページ目取得完了: ${data.length}件 (合計: ${allRows.length}件)`);
 
     if (data.length < LIMIT) {
@@ -146,7 +146,7 @@ function writeOrdersToSheet(rows) {
   const config = getConfig();
   const ss = SpreadsheetApp.openById(config.targetSpreadsheetId);
   const sheet = getOrCreateSheet(ss, config.sheetNameOrders);
-  
+
   clearAndSetHeader(sheet, ORDER_HEADERS);
 
   if (rows && rows.length > 0) {
@@ -168,10 +168,10 @@ function updateOrders(startDate = null, endDate = null) {
   try {
     const range = getDateRange(startDate, endDate);
     console.log(`開始: updateOrders (${formatDate(range.start)} - ${formatDate(range.end)})`);
-    
+
     const rows = fetchOrderRows(startDate, endDate);
     writeOrdersToSheet(rows);
-    
+
     console.log('完了: updateOrders');
   } catch (error) {
     console.error('updateOrders でエラーが発生しました:', error.stack || error.message);
@@ -187,7 +187,15 @@ function updateOrders(startDate = null, endDate = null) {
 function testFetchOnly() {
   console.log('--- testFetchOnly 開始 ---');
   try {
-    const rows = fetchOrderRows(null, null);
+    // const rows = fetchOrderRows(null, null);
+
+    // 期間を明示的に指定（2025年10月）
+    const start = new Date(2025, 9, 1);  // 9 = 10月
+    const end = new Date(2025, 9, 31);
+
+    // 変更: start, end を渡す
+    const rows = fetchOrderRows(start, end);
+
     console.log(`取得件数: ${rows.length}件`);
     if (rows.length > 0) {
       const displayCount = Math.min(3, rows.length);
@@ -209,6 +217,7 @@ function testFetchOnly() {
  */
 function testUpdateOrders() {
   console.log('--- testUpdateOrders 開始 ---');
-  updateOrders(null, null);
+  // updateOrders(null, null);
+  updateOrders(new Date(2025, 9, 1), new Date(2025, 9, 31));
   console.log('--- testUpdateOrders 終了 ---');
 }
