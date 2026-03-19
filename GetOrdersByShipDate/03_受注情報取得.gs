@@ -17,8 +17,15 @@ function fetchOrderRows(startDate, endDate) {
   console.log(`取得対象期間: ${startStr} ～ ${endStr}`);
 
   const props = PropertiesService.getScriptProperties();
-  // 注意：NEAuthライブラリが有効である前提です
-  const token = NEAuth.getValidToken(props);
+  const token = {
+    accessToken: props.getProperty('ACCESS_TOKEN'),
+    refreshToken: props.getProperty('REFRESH_TOKEN')
+  };
+  
+  if (!token.accessToken || !token.refreshToken) {
+    throw new Error('ACCESS_TOKEN または REFRESH_TOKEN が取得できません。testGenerateAuthUrl()で再認証してください。');
+  }
+  
   const url = NE_API_BASE_URL + NE_ENDPOINT_ORDER_ROW;
 
   let allRows = [];
