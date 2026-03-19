@@ -141,20 +141,31 @@ function convertOrderRowToArray(row) {
 /**
  * 受注明細データをスプレッドシートの受注情報シートに書き込む
  * @param {Array} rows - APIから取得した受注明細データの配列
+ * @param {boolean} append - true の場合はクリアせずに最終行以降に追記する
  */
-function writeOrdersToSheet(rows) {
+function writeOrdersToSheet(rows, append = false) {
   const config = getConfig();
   const ss = SpreadsheetApp.openById(config.targetSpreadsheetId);
   const sheet = getOrCreateSheet(ss, config.sheetNameOrders);
 
-  clearAndSetHeader(sheet, ORDER_HEADERS);
+  if (!append) {
+    // 追記モードでなければクリアしてヘッダーを設定
+    clearAndSetHeader(sheet, ORDER_HEADERS);
+  } else {
+    // 追記モードの時、シートが完全に空であればヘッダーを設定
+    if (sheet.getLastRow() === 0) {
+      clearAndSetHeader(sheet, ORDER_HEADERS);
+    }
+  }
 
   if (rows && rows.length > 0) {
     const outputData = rows.map(convertOrderRowToArray);
-    sheet.getRange(2, 1, outputData.length, ORDER_HEADERS.length).setValues(outputData);
-    console.log(`シート「${config.sheetNameOrders}」に ${outputData.length} 件書き込みました。`);
+    // 追記の場合はデータが存在する最終行の次から書き込み開始
+    const startRow = append ? (sheet.getLastRow() + 1) : 2;
+    sheet.getRange(startRow, 1, outputData.length, ORDER_HEADERS.length).setValues(outputData);
+    console.log(`シート「${config.sheetNameOrders}」に ${outputData.length} 件${append ? '追記' : '書き込み'}しました。`);
   } else {
-    console.log('取得データが0件のため、ヘッダーのみ設定しました。');
+    console.log('取得データが0件のため、処理をスキップしました。');
   }
 }
 
@@ -163,14 +174,18 @@ function writeOrdersToSheet(rows) {
  * 手動実行・自動実行の両方から呼び出される
  * @param {Date|null} startDate - 開始日（省略時null：自動計算）
  * @param {Date|null} endDate - 終了日（省略時null：自動計算）
+ * @param {boolean} forceAppend - true の場合は日付によらず強制的に追記する
  */
-function updateOrders(startDate = null, endDate = null) {
+function updateOrders(startDate = null, endDate = null, forceAppend = false) {
   try {
     const range = getDateRange(startDate, endDate);
     console.log(`開始: updateOrders (${formatDate(range.start)} - ${formatDate(range.end)})`);
 
+    // 【仕様変更】開始日が16日である場合（=毎月1日実行等による後半分の取得）、または forceAppend が true の場合に追記モードとする。
+    const isAppendMode = forceAppend || (range.start.getDate() === 16);
+
     const rows = fetchOrderRows(startDate, endDate);
-    writeOrdersToSheet(rows);
+    writeOrdersToSheet(rows, isAppendMode);
 
     console.log('完了: updateOrders');
   } catch (error) {
