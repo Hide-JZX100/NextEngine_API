@@ -1,0 +1,5 @@
+店舗名,伝票番号,キャンセル日,商品コード（伝票）,商品名（伝票）,受注数,小計,発送代,受注日,店舗コード
+,receive_order_row_receive_order_id,receive_order_cancel_date,receive_order_row_goods_id,receive_order_row_goods_name,receive_order_row_quantity,receive_order_row_unit_price,receive_order_delivery_fee_amount,receive_order_date,receive_order_shop_id
+ベッド＆マットレス楽天市場店,1909817,2026/03/01,mc-g20-sxs-zo-30-wbe,☆Ｓ＋Ｓ−マットレスカバーＧ20／ウィンターベージュ,1,3999,0,2026/02/04,2
+ベッド＆マットレス楽天市場店,1915458,2026/03/01,0017-mb001-02-GY,マットレスバンドＭＢ002／グレー[M便 1/1],1,1599,0,2026/02/14,2
+ベッド＆マットレス楽天市場店,1915547,2026/03/01,0010-sd-bb101p-en-gy,◇ＳＤ−ＥＮ101Ｐ4Ｖ／ＧＹ,1,11999,0,2026/02/14,2
