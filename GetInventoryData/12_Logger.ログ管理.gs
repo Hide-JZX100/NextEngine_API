@@ -1,22 +1,55 @@
 /**
  * =============================================================================
- * Logger.gs - ログ管理・出力
+ * 12_Logger.gs - ログ管理・出力
  * =============================================================================
-
- 主要な処理を実行する関数
-
- --- 内部処理・統計関連関数 ---
- @see resetRetryStats                - 実行ごとにリトライ統計をリセットします。
- @see recordRetryAttempt             - リトライの試行回数を記録します。
- @see showRetryStats                 - 実行結果のリトライ統計をコンソールに表示します。
- 
-
+ *
+ * 【役割】
+ * システム全体のログ出力とリトライ統計を一元管理します。
+ * すべてのログ出力はこのファイルの関数を経由することで、
+ * ログレベルによる出力制御を統一的に行います。
+ *
+ * 【依存関係】
+ * ┌─ 参照元（このファイルを呼び出すファイル）──────────────────┐
+ * │ 10_Main.gs                メイン処理でのログ・統計管理      │
+ * │ 13_NextEngineAPI.gs       APIエラー時の詳細ログ出力         │
+ * │ 14_InventoryLogic.gs      在庫取得処理内のログ出力          │
+ * │ 15_SpreadsheetRepository.gs リトライ統計のシート書き込み    │
+ * └─────────────────────────────────────────────────────────────┘
+ * ┌─ 参照先（このファイルが使う定数）──────────────────────────┐
+ * │ 11_Config.gs              LOG_LEVEL, RETRY_CONFIG 定数      │
+ * └─────────────────────────────────────────────────────────────┘
+ *
+ * 【ログレベル（11_Config.gsで定義）】
+ *   LOG_LEVEL.MINIMAL  (1) : 開始・終了・サマリーのみ（本番推奨）
+ *   LOG_LEVEL.SUMMARY  (2) : バッチ集計＋最初/最後3件（デフォルト）
+ *   LOG_LEVEL.DETAILED (3) : 全商品コード出力（デバッグ用）
+ *
+ * 【グローバル変数】
+ *   retryStats : リトライ統計オブジェクト
+ *                実行ごとに resetRetryStats() でリセットが必要
+ *                15_SpreadsheetRepository.gs の logRetryStatsToSheet() からも参照される
+ *
+ * 【公開関数一覧】
+ *  --- ログレベル管理 ---
+ *  @see getCurrentLogLevel    - スクリプトプロパティからログレベルを取得
+ *  @see setLogLevel           - ログレベルを変更してプロパティに保存
+ *  @see showCurrentLogLevel   - 現在のログレベルと変更方法を表示
+ *
+ *  --- ログ出力 ---
+ *  @see logWithLevel          - レベル指定付きログ出力（全ファイル共通で使用）
+ *  @see logError              - エラーログ出力（標準）
+ *  @see logErrorDetail        - 商品コード単位のエラー詳細出力
+ *  @see logAPIErrorDetail     - APIエラー時のリクエスト・レスポンス詳細出力
+ *  @see logBatchErrorSummary  - バッチ単位のエラー集計出力
+ *
+ *  --- リトライ統計管理 ---
+ *  @see resetRetryStats       - 実行開始時に統計をリセット（10_Main.gsから呼び出し）
+ *  @see recordRetryAttempt    - リトライ発生時に統計を記録（13_NextEngineAPI.gsから呼び出し）
+ *  @see showRetryStats        - 実行完了後に統計をコンソール表示（10_Main.gsから呼び出し）
+ *
+ * 【バージョン】v2.1
+ * =============================================================================
  */
-
-// ============================================================================
-// ログレベル管理
-// ============================================================================
-
 /**
  * 現在のログレベルを取得
  */
@@ -25,6 +58,7 @@ function getCurrentLogLevel() {
     const logLevel = properties.getProperty('LOG_LEVEL');
 
     if (!logLevel) {
+        // 未設定の場合はSUMMARY(2)をデフォルトとしてプロパティに書き込む
         properties.setProperty('LOG_LEVEL', '2');
         return LOG_LEVEL.SUMMARY;
     }
@@ -121,6 +155,10 @@ function logErrorDetail(goodsCode, errorType, errorMessage, additionalInfo = {})
 
 /**
  * APIエラー詳細ログ
+ * @param {string} apiName      - API名称（ログ表示用ラベル）
+ * @param {Object} requestData  - リクエスト情報 { goodsCodeCount, firstCode, lastCode }
+ * @param {Object|null} responseData - APIレスポンス（通信エラー時はnull）
+ * @param {Error}  error        - 発生したエラーオブジェクト
  */
 function logAPIErrorDetail(apiName, requestData, responseData, error) {
     console.error('\n========================================');
@@ -185,10 +223,11 @@ function logBatchErrorSummary(batchNumber, errorList) {
     console.error('========================================\n');
 }
 
-// ============================================================================
-// リトライ統計管理
-// ============================================================================
-// リトライ統計（実行ごとにリセット）
+// ----------------------------------------------------------------------------
+// リトライ統計オブジェクト（グローバル変数）
+// 実行ごとに resetRetryStats() でリセットされる
+// 15_SpreadsheetRepository.gs の logRetryStatsToSheet() からも直接参照される
+// ----------------------------------------------------------------------------
 let retryStats = {
     totalRetries: 0,           // 総リトライ回数
     batchesWithRetry: 0,       // リトライが発生したバッチ数
@@ -252,6 +291,8 @@ function showRetryStats() {
         const retryRate = (retryStats.batchesWithRetry / retryStats.retriesByBatch.length * 100).toFixed(1);
         console.log(`\n⚠️ リトライ発生率: ${retryRate}%`);
 
+        // リトライ発生率 10% 超は Google側またはネットワーク不調のサイン
+        // 参考: 正常時は 0〜5% 程度、5〜10% は軽度の不調
         if (retryRate > 10) {
             console.log('⚠️⚠️ 注意: リトライ発生率が高いです（10%以上）');
             console.log('   → Google側またはネットワークの不調の可能性があります');
