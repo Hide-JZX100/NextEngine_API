@@ -1,18 +1,81 @@
 /**
  * =============================================================================
- * Tests.gs - テスト・管理用ツール
+ * 99_Tests.gs - テスト・管理・診断ツール
  * =============================================================================
-
- --- 設定・テスト用関数 ---
- @see testRetryFunction   - リトライ機能が正しく動作するかを小規模なデータでテストします。
-
+ *
+ * 【役割】
+ * システムの動作確認、設定検証、健全性チェックのための
+ * テスト関数と管理用ユーティリティを提供します。
+ * 本番処理（10_Main.gs）には影響を与えません。
+ * スプレッドシートへの書き込みを伴うテストは
+ * 本番データへの影響がないよう注意して実行してください。
+ *
+ * 【依存関係】
+ * ┌─ 参照先（このファイルが使う定数・関数）────────────────────┐
+ * │ 11_Config.gs              getSpreadsheetConfig, getStoredTokens│
+ * │                           LOG_LEVEL, RETRY_CONFIG           │
+ * │ 12_Logger.gs              resetRetryStats, showRetryStats   │
+ * │                           recordRetryAttempt, getCurrentLogLevel│
+ * │                           retryStats（グローバル変数を直接操作）│
+ * │ 14_InventoryLogic.gs      getBatchInventoryDataWithRetry    │
+ * │ 15_SpreadsheetRepository.gs getSpreadsheetConfig経由でシート参照│
+ * └─────────────────────────────────────────────────────────────┘
+ *
+ * 【推奨実行順序】
+ *   初回セットアップ時:
+ *     Step 1. verifyConfiguration()     設定値・トークンの確認
+ *     Step 2. testRetryFunction()       API接続とリトライ動作の確認
+ *     Step 3. showSREDashboard()        システム全体の健全性確認
+ *
+ *   トラブル発生時:
+ *     Step 1. verifyConfiguration()     設定値に問題がないか確認
+ *     Step 2. testRetryFunction()       APIが正常に応答しているか確認
+ *     Step 3. showSREDashboard()        エラーログ・リトライ統計を確認
+ *
+ *   リトライ機能の検証時:
+ *     Step 1. testRetryLogging()        リトライログの書き込み動作確認
+ *     Step 2. finalRetryTest()          リトライ統計の集計精度確認
+ *
+ * 【公開関数一覧】
+ *  --- 動作確認・接続テスト ---
+ *  @see testRetryFunction    - API接続とリトライ機能を小規模データで確認
+ *                              スプレッドシートの最初の10件を使用
+ *  @see verifyConfiguration  - トークン・スプレッドシート設定の疎通確認
+ *
+ *  --- システム健全性確認 ---
+ *  @see showSREDashboard     - リトライ統計・エラーログをダッシュボード形式で表示
+ *                              定期的な健全性チェックに使用
+ *
+ *  --- リトライ機能検証 ---
+ *  @see testRetryLogging     - リトライログのシート書き込み動作を3ケースで確認
+ *  @see finalRetryTest       - リトライ統計の集計精度を検証
+ *                              retryStatsを直接操作してシミュレーションを行う
+ *
+ *  --- デバッグ・診断 ---
+ *  @see checkFileUsage       - トリガー設定と主要関数の存在確認
+ *  @see locateFunctions      - 指定関数のソースコード先頭行を表示して所在を特定
+ *
+ * 【注意事項】
+ *  - finalRetryTest() は retryStats グローバル変数を直接操作するため
+ *    本番処理と並行して実行しないこと
+ *  - testRetryFunction() はAPIを実際に呼び出すため
+ *    NE APIのレート制限に注意すること
+ *
+ * 【バージョン】v2.1
+ * =============================================================================
  */
 
 /**
  * API接続・リトライ動作確認テスト
- * 
- * 指定した商品コード（またはデフォルト値）でAPIを取得し、
- * ログレベルを一時的に詳細にして動作を確認します。
+ *
+ * スプレッドシートの先頭10件を使用してAPIを実際に呼び出し
+ * リトライ機能が正常に動作するかを確認する
+ * スプレッドシートへの書き込みは行わない（読み取りのみ）
+ *
+ * 【確認内容】
+ * - NE APIへの接続が正常に行えるか
+ * - 在庫データが期待通りに取得・整形されるか
+ * - リトライ統計が正しく記録されるか
  */
 function testRetryFunction() {
     console.log('=== リトライ機能テスト ===');
@@ -27,7 +90,7 @@ function testRetryFunction() {
         const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
         const sheet = spreadsheet.getSheetByName(SHEET_NAME);
 
-        // 最初の10件でテスト
+        // シートのデータが10件未満の場合に備えてMath.minで件数を制限する
         const dataRange = sheet.getRange(2, 1, Math.min(10, sheet.getLastRow() - 1), 1);
         const values = dataRange.getValues();
         const goodsCodeList = values
@@ -73,15 +136,15 @@ function testRetryFunction() {
 }
 
 /**
- * SREダッシュボード（システムの健全性確認）
- * 
- * リトライログシートやエラーログシートの状況を集計して表示します。
- */
-// ============================================================================
-// SREダッシュボード（オプション）
-// ============================================================================
-/**
  * SREダッシュボード: システムの健全性を一覧表示
+ *
+ * 以下のシートと設定値を集計してコンソールに出力する
+ * - リトライログシート : 直近5回分のリトライ統計
+ * - エラーログシート   : 累計エラー件数と直近3件の内容
+ * - RETRY_CONFIG       : 現在のリトライ設定
+ * - LOG_LEVEL          : 現在のログレベル設定
+ *
+ * 定期的な健全性チェックや障害発生時の初動調査に使用する
  */
 function showSREDashboard() {
     console.log('==========================================================');
@@ -115,6 +178,10 @@ function showSREDashboard() {
                     const retryRate = row[4];
                     const note = row[5];
 
+                    // リトライ発生率によるステータス判定
+                    // ✓ : 0%（正常）
+                    // △ : 5%以上（軽度の不調、経過観察）
+                    // ⚠️ : 10%超（Google側またはネットワークの問題の可能性）
                     let status = '✓';
                     if (retryRate > 10) status = '⚠️';
                     else if (retryRate > 5) status = '△';
@@ -188,7 +255,13 @@ function showSREDashboard() {
 }
 
 /**
- * 構成チェック関数（デプロイ前確認用）
+ * 設定確認（デプロイ前・トラブル時の疎通確認）
+ *
+ * 以下の2項目を確認してコンソールに結果を出力する
+ * 確認1: ACCESS_TOKEN・REFRESH_TOKEN が取得できるか
+ * 確認2: SPREADSHEET_ID・SHEET_NAME でシートにアクセスできるか
+ *
+ * 初回セットアップ時やトークン再取得後に実行することを推奨する
  */
 function verifyConfiguration() {
     console.log('=== 設定確認 ===');
@@ -283,6 +356,8 @@ function locateFunctions() {
 
     functionsToLocate.forEach(funcName => {
         try {
+            // GASではReflect APIが使えないためevalで関数オブジェクトを取得する
+            // 関数が存在しない場合はReferenceErrorがスローされるためtry-catchで処理する
             const func = eval(funcName);
             if (func) {
                 // 関数のソースコードを取得して最初の数行を表示

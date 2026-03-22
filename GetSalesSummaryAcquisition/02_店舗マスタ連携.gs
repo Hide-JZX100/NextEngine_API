@@ -20,6 +20,46 @@
  * 
  * @version 1.0
  * @date 2025-11-24
+ *
+ * 【ファイル構成と依存関係】
+ * このファイルは以下の関数・定数を 01_基盤構築.gs に依存しています。
+ *
+ *   - getScriptConfig()  : スプレッドシートID・シート名の取得
+ *   - logMessage()       : ログ出力制御
+ *   - LOG_LEVEL          : ログレベル定数
+ *
+ * ※ 01_基盤構築.gs が正しく動作することを先に確認してください。
+ * ※ このファイル自体は NEAuthライブラリへの依存はありません。
+ *
+ * 【テスト関数の推奨実行順序】
+ * 初回セットアップ時は以下の順序で実行してください。
+ *
+ *   Step 1: testShopMasterConnection() → スプレッドシートへの接続確認
+ *   Step 2: testShopMasterDataLoad()   → データ読み込みの動作確認
+ *   Step 3: testShopNameMap()          → 変換マップ作成の動作確認
+ *   Step 4: testGetShopName()          → 店舗名取得の動作確認
+ *   Step 5: testShopMapCache()         → キャッシュ機能の動作確認
+ *   Step 6: testPhase2()               → 上記5つの統合テスト
+ *
+ * ※ Step 1 でエラーが出た場合は、スプレッドシートのアクセス権限と
+ *   SHOP_MASTER_SPREADSHEET_ID・SHOP_MASTER_SHEET_NAME を確認してください。
+ * ※ 通常の動作確認は testPhase2() のみで問題ありません。
+ *
+ * 【注意事項・制約】
+ * 1. キャッシュの有効範囲
+ *    - SHOP_MAP_CACHE はグローバル変数ですが、GASの仕様により
+ *      同一実行内でのみ有効です
+ *    - トリガーによる次回実行時はキャッシュがリセットされ、
+ *      スプレッドシートから再読み込みされます
+ *
+ * 2. 店舗マスタのフォーマット制約
+ *    - A列: 店舗ID(店舗コード)、B列: 店舗名 の構成が前提です
+ *    - 列構成を変更した場合は createShopNameMap() の修正が必要です
+ *    - 1行目はヘッダー行として読み飛ばされます
+ *
+ * 3. アクセス権限
+ *    - このスクリプトの実行アカウントが店舗マスタスプレッドシートへの
+ *      閲覧権限以上を持っている必要があります
  */
 
 // =============================================================================
@@ -37,25 +77,25 @@
  */
 function openShopMasterSheet() {
   const config = getScriptConfig();
-  
+
   try {
     // スプレッドシートを開く
     const spreadsheet = SpreadsheetApp.openById(config.shopMasterSpreadsheetId);
-    
+
     // シートを取得
     const sheet = spreadsheet.getSheetByName(config.shopMasterSheetName);
-    
+
     if (!sheet) {
       throw new Error(
         `シート "${config.shopMasterSheetName}" が見つかりません。\n` +
         `スプレッドシートID: ${config.shopMasterSpreadsheetId}`
       );
     }
-    
+
     logMessage(`店舗マスタシートを開きました: ${spreadsheet.getName()} / ${sheet.getName()}`);
-    
+
     return sheet;
-    
+
   } catch (error) {
     throw new Error(
       `店舗マスタスプレッドシートを開けませんでした: ${error.message}\n` +
@@ -74,22 +114,22 @@ function openShopMasterSheet() {
  */
 function loadShopMasterData() {
   const sheet = openShopMasterSheet();
-  
+
   // データ範囲を取得(1行目のヘッダーを除く)
   const lastRow = sheet.getLastRow();
   const lastColumn = sheet.getLastColumn();
-  
+
   if (lastRow <= 1) {
     logMessage('⚠️ 店舗マスタにデータが存在しません(ヘッダー行のみ)');
     return [];
   }
-  
+
   // 2行目からデータを取得
   const dataRange = sheet.getRange(2, 1, lastRow - 1, lastColumn);
   const data = dataRange.getValues();
-  
+
   logMessage(`店舗マスタデータを読み込みました: ${data.length}件`);
-  
+
   return data;
 }
 
@@ -108,30 +148,30 @@ function loadShopMasterData() {
 function createShopNameMap() {
   const data = loadShopMasterData();
   const shopMap = new Map();
-  
+
   let skippedCount = 0;
-  
+
   data.forEach((row, index) => {
     const shopCode = String(row[0]).trim(); // A列: 店舗ID
     const shopName = String(row[1]).trim(); // B列: 店舗名
-    
+
     // 店舗コードが空の場合はスキップ
     if (!shopCode) {
       skippedCount++;
       logMessage(`⚠️ 店舗コードが空です(${index + 2}行目): スキップ`, LOG_LEVEL.SAMPLE);
       return;
     }
-    
+
     // マップに登録
     shopMap.set(shopCode, shopName);
   });
-  
+
   logMessage(`店舗名マップを作成しました: ${shopMap.size}件`);
-  
+
   if (skippedCount > 0) {
     logMessage(`⚠️ スキップした行: ${skippedCount}件`);
   }
-  
+
   return shopMap;
 }
 
@@ -147,7 +187,7 @@ function createShopNameMap() {
  */
 function getShopName(shopMap, shopCode) {
   const code = String(shopCode).trim();
-  
+
   if (shopMap.has(code)) {
     return shopMap.get(code);
   } else {
@@ -179,7 +219,7 @@ function getShopMapWithCache() {
   } else {
     logMessage('店舗マスタをキャッシュから取得しました');
   }
-  
+
   return SHOP_MAP_CACHE;
 }
 
@@ -204,10 +244,10 @@ function clearShopMapCache() {
  */
 function testShopMasterConnection() {
   console.log('=== 店舗マスタシート接続テスト ===');
-  
+
   try {
     const sheet = openShopMasterSheet();
-    
+
     console.log('✅ シート接続成功!');
     console.log('');
     console.log('【シート情報】');
@@ -216,7 +256,7 @@ function testShopMasterConnection() {
     console.log('- 最終行:', sheet.getLastRow());
     console.log('- 最終列:', sheet.getLastColumn());
     console.log('');
-    
+
     // ヘッダー行を表示
     const headerRange = sheet.getRange(1, 1, 1, sheet.getLastColumn());
     const headers = headerRange.getValues()[0];
@@ -225,9 +265,9 @@ function testShopMasterConnection() {
       console.log(`${String.fromCharCode(65 + index)}列: ${header}`);
     });
     console.log('');
-    
+
     console.log('✅ 店舗マスタシート接続テスト完了!');
-    
+
   } catch (error) {
     console.error('❌ 接続エラー:', error.message);
     throw error;
@@ -241,31 +281,31 @@ function testShopMasterConnection() {
  */
 function testShopMasterDataLoad() {
   console.log('=== 店舗マスタデータ読み込みテスト ===');
-  
+
   try {
     const data = loadShopMasterData();
-    
+
     console.log(`✅ データ読み込み成功: ${data.length}件`);
     console.log('');
-    
+
     if (data.length > 0) {
       console.log('【先頭5件のデータ】');
       const sampleData = data.slice(0, 5);
-      
+
       sampleData.forEach((row, index) => {
         console.log(`[${index + 1}] 店舗コード: ${row[0]}, 店舗名: ${row[1]}`);
       });
-      
+
       if (data.length > 5) {
         console.log(`... 残り ${data.length - 5} 件`);
       }
       console.log('');
     }
-    
+
     console.log('✅ 店舗マスタデータ読み込みテスト完了!');
-    
+
     return data;
-    
+
   } catch (error) {
     console.error('❌ 読み込みエラー:', error.message);
     throw error;
@@ -279,13 +319,13 @@ function testShopMasterDataLoad() {
  */
 function testShopNameMap() {
   console.log('=== 店舗名マップ作成テスト ===');
-  
+
   try {
     const shopMap = createShopNameMap();
-    
+
     console.log(`✅ マップ作成成功: ${shopMap.size}件`);
     console.log('');
-    
+
     console.log('【マップ内容(先頭10件)】');
     let count = 0;
     for (const [code, name] of shopMap) {
@@ -293,16 +333,16 @@ function testShopNameMap() {
       count++;
       if (count >= 10) break;
     }
-    
+
     if (shopMap.size > 10) {
       console.log(`... 残り ${shopMap.size - 10} 件`);
     }
     console.log('');
-    
+
     console.log('✅ 店舗名マップ作成テスト完了!');
-    
+
     return shopMap;
-    
+
   } catch (error) {
     console.error('❌ マップ作成エラー:', error.message);
     throw error;
@@ -316,31 +356,31 @@ function testShopNameMap() {
  */
 function testGetShopName() {
   console.log('=== 店舗名取得テスト ===');
-  
+
   try {
     const shopMap = createShopNameMap();
-    
+
     // テストケース1: 存在する店舗コード
     console.log('【テストケース1: 存在する店舗コード】');
-    
+
     // マップから実際の店舗コードを取得
     const testCodes = Array.from(shopMap.keys()).slice(0, 3);
-    
+
     testCodes.forEach(code => {
       const shopName = getShopName(shopMap, code);
       console.log(`店舗コード: ${code} → 店舗名: ${shopName}`);
     });
     console.log('');
-    
+
     // テストケース2: 存在しない店舗コード
     console.log('【テストケース2: 存在しない店舗コード】');
     const invalidCode = '99999';
     const shopName = getShopName(shopMap, invalidCode);
     console.log(`店舗コード: ${invalidCode} → 店舗名: ${shopName}`);
     console.log('');
-    
+
     console.log('✅ 店舗名取得テスト完了!');
-    
+
   } catch (error) {
     console.error('❌ 取得テストエラー:', error.message);
     throw error;
@@ -354,34 +394,34 @@ function testGetShopName() {
  */
 function testShopMapCache() {
   console.log('=== キャッシュ機能テスト ===');
-  
+
   try {
     // キャッシュをクリア
     clearShopMapCache();
     console.log('1回目: キャッシュなし');
-    
+
     const startTime1 = new Date();
     const map1 = getShopMapWithCache();
     const endTime1 = new Date();
     const time1 = endTime1 - startTime1;
-    
+
     console.log(`処理時間: ${time1}ms, 件数: ${map1.size}`);
     console.log('');
-    
+
     console.log('2回目: キャッシュあり');
     const startTime2 = new Date();
     const map2 = getShopMapWithCache();
     const endTime2 = new Date();
     const time2 = endTime2 - startTime2;
-    
+
     console.log(`処理時間: ${time2}ms, 件数: ${map2.size}`);
     console.log('');
-    
+
     console.log(`高速化: ${time1 - time2}ms短縮`);
     console.log('');
-    
+
     console.log('✅ キャッシュ機能テスト完了!');
-    
+
   } catch (error) {
     console.error('❌ キャッシュテストエラー:', error.message);
     throw error;
@@ -402,40 +442,40 @@ function testPhase2() {
   console.log('║  Phase 2: 店舗マスタ連携 - 統合テスト                    ║');
   console.log('╚════════════════════════════════════════════════════════════╝');
   console.log('');
-  
+
   try {
     // 1. シート接続テスト
     console.log('【1】店舗マスタシート接続テスト');
     testShopMasterConnection();
     console.log('');
-    
+
     // 2. データ読み込みテスト
     console.log('【2】店舗マスタデータ読み込みテスト');
     testShopMasterDataLoad();
     console.log('');
-    
+
     // 3. マップ作成テスト
     console.log('【3】店舗名マップ作成テスト');
     testShopNameMap();
     console.log('');
-    
+
     // 4. 店舗名取得テスト
     console.log('【4】店舗名取得テスト');
     testGetShopName();
     console.log('');
-    
+
     // 5. キャッシュ機能テスト
     console.log('【5】キャッシュ機能テスト');
     testShopMapCache();
     console.log('');
-    
+
     console.log('╔════════════════════════════════════════════════════════════╗');
     console.log('║  ✅ Phase 2 統合テスト: すべて成功!                       ║');
     console.log('╚════════════════════════════════════════════════════════════╝');
     console.log('');
     console.log('【次のステップ】');
     console.log('Phase 3: ネクストエンジンAPI接続の開発に進みます。');
-    
+
   } catch (error) {
     console.error('');
     console.error('╔════════════════════════════════════════════════════════════╗');
@@ -449,7 +489,7 @@ function testPhase2() {
     console.error('- SHOP_MASTER_SHEET_NAME が正しいか');
     console.error('- スプレッドシートへのアクセス権限があるか');
     console.error('- 店舗マスタシートにデータが存在するか');
-    
+
     throw error;
   }
 }
