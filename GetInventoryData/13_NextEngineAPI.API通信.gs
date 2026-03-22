@@ -1,27 +1,60 @@
 /**
  * =============================================================================
- * NextEngineAPI.gs - API通信・リトライ管理
+ * 13_NextEngineAPI.gs - Next Engine API通信・リトライ管理
  * =============================================================================
-
- 主要な処理を実行する関数
-
- getBatchStockData(goodsCodeList, tokens)
- 在庫マスタAPI（／api_v1_master_stock／search）を呼び出し、
- 複数の商品について在庫情報（在庫数、引当数など）をまとめて取得します。
- これもstock_goods_id-inパラメータを利用して、効率的な一括検索を行います。
-
- updateStoredTokens(accessToken, refreshToken)
- ネクストエンジンAPIから新しいトークンが返された際に、
- スクリプトプロパティを更新し、トークン情報を保存します。
-
- --- 内部処理・統計関連関数 ---
- @see getBatchStockDataWithRetry     - APIへ接続し、リトライ処理を実行する中心的な内部関数です。
-
-*/
-
-// ============================================================================
-// APIコール基本関数
-// ============================================================================
+ *
+ * 【役割】
+ * Next Engine APIへのHTTPリクエストを担当します。
+ * 在庫マスタAPIの呼び出し、トークン自動更新、
+ * およびエクスポネンシャルバックオフによるリトライ制御を行います。
+ * ビジネスロジックには関与せず、通信層に特化しています。
+ *
+ * 【依存関係】
+ * ┌─ 参照元（このファイルを呼び出すファイル）──────────────────┐
+ * │ 14_InventoryLogic.gs      在庫データ取得処理から呼び出し    │
+ * └─────────────────────────────────────────────────────────────┘
+ * ┌─ 参照先（このファイルが使う定数・関数）────────────────────┐
+ * │ 11_Config.gs              NE_API_URL, MAX_ITEMS_PER_CALL    │
+ * │                           RETRY_CONFIG                      │
+ * │ 12_Logger.gs              logWithLevel, logError            │
+ * │                           logAPIErrorDetail                 │
+ * │                           recordRetryAttempt                │
+ * └─────────────────────────────────────────────────────────────┘
+ *
+ * 【APIエンドポイント】
+ *   POST https://api.next-engine.org/api_v1_master_stock/search
+ *   取得フィールド: stock_goods_id, stock_quantity,
+ *                   stock_allocation_quantity, stock_free_quantity,
+ *                   stock_advance_order_quantity,
+ *                   stock_advance_order_allocation_quantity,
+ *                   stock_advance_order_free_quantity,
+ *                   stock_defective_quantity,
+ *                   stock_remaining_order_quantity,
+ *                   stock_out_quantity
+ *
+ * 【トークン自動更新の仕組み】
+ *   NE APIはレスポンスに新しいトークンを返す場合がある
+ *   updateStoredTokens() で差分がある場合のみプロパティを更新し
+ *   APIクォータの浪費を防いでいる
+ *
+ * 【リトライの仕組み（エクスポネンシャルバックオフ）】
+ *   getBatchStockDataWithRetry() が getBatchStockData() をラップする構造
+ *   失敗するたびに待機時間を指数的に増やして再試行する
+ *   1回目失敗 → 1秒待機 → 2回目試行
+ *   2回目失敗 → 2秒待機 → 3回目試行
+ *   3回目失敗 → エラーをスロー（呼び出し元に伝播）
+ *   ※ 認証・権限系エラーはリトライせず即座にスロー
+ *
+ * 【公開関数一覧】
+ *  @see getBatchStockDataWithRetry - 【推奨】リトライ付き在庫マスタデータ取得
+ *                                    14_InventoryLogic.gs から呼び出される
+ *  @see getBatchStockData          - 在庫マスタAPI単体呼び出し（リトライなし）
+ *                                    通常は getBatchStockDataWithRetry 経由で使用
+ *  @see updateStoredTokens         - トークンをプロパティに保存（差分更新）
+ *
+ * 【バージョン】v2.1
+ * =============================================================================
+ */
 
 /**
  * 在庫マスタデータ取得（API呼び出し）
@@ -33,6 +66,8 @@
 function getBatchStockData(goodsCodeList, tokens, batchNumber) {
     const url = `${NE_API_URL}/api_v1_master_stock/search`;
 
+    // NE APIの複数検索パラメータ: カンマ区切りで最大1000件指定可能
+    // 例: "CODE001,CODE002,CODE003"
     const goodsIdCondition = goodsCodeList.join(',');
 
     const payload = {
@@ -60,6 +95,8 @@ function getBatchStockData(goodsCodeList, tokens, batchNumber) {
         const responseText = response.getContentText();
         const responseData = JSON.parse(responseText);
 
+        // NE APIはリクエストのたびにトークンを更新して返す仕様
+        // 変更がある場合のみプロパティを更新する（updateStoredTokensで差分チェック済み）
         if (responseData.access_token && responseData.refresh_token) {
             updateStoredTokens(responseData.access_token, responseData.refresh_token);
             tokens.accessToken = responseData.access_token;
@@ -115,7 +152,8 @@ function updateStoredTokens(accessToken, refreshToken) {
     const currentAccess = properties.getProperty('ACCESS_TOKEN');
     const currentRefresh = properties.getProperty('REFRESH_TOKEN');
 
-    // 現在の値と異なる場合のみ更新（APIクォータ節約 & ログ抑制）
+    // 値が変わっていない場合は書き込みをスキップ
+    // PropertiesServiceへの書き込みはAPIクォータを消費するため無駄な更新を避ける
     if (accessToken !== currentAccess || refreshToken !== currentRefresh) {
         properties.setProperties({
             'ACCESS_TOKEN': accessToken,
@@ -176,7 +214,8 @@ function getBatchStockDataWithRetry(goodsCodeList, tokens, batchNumber, maxRetri
             // エラーの種類を判定してリトライすべきか判断
             const errorMessage = error.message.toLowerCase();
 
-            // リトライすべきでないエラー（認証・権限系）
+            // 認証・権限系エラーはリトライしても解決しないため即座にスロー
+            // 対象キーワード: 認証, auth, permission, 権限, invalid, token
             if (
                 errorMessage.includes('認証') ||
                 errorMessage.includes('auth') ||
@@ -194,7 +233,8 @@ function getBatchStockDataWithRetry(goodsCodeList, tokens, batchNumber, maxRetri
             // 最後の試行でなければ、待機してからリトライ
             if (attempt < maxRetries) {
                 // エクスポネンシャルバックオフ（指数バックオフ）
-                // 1秒、2秒、4秒...
+                // 待機時間: 2^(attempt-1) 秒
+                // attempt=1失敗後 → 1秒, attempt=2失敗後 → 2秒, attempt=3失敗後 → 4秒
                 const waitSeconds = Math.pow(2, attempt - 1);
                 logWithLevel(LOG_LEVEL.SUMMARY, `  → ${waitSeconds}秒後にリトライします...`);
                 Utilities.sleep(waitSeconds * 1000);
