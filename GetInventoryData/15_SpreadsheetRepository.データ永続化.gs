@@ -1,34 +1,68 @@
 /**
  * =============================================================================
- * SpreadsheetRepository.gs - データ永続化（スプレッドシート操作）
+ * 15_SpreadsheetRepository.gs - データ永続化（スプレッドシート操作）
  * =============================================================================
-
- updateRowWithInventoryData(sheet, rowIndex, inventoryData)
- 取得した在庫情報（inventoryData）を基に、
- スプレッドシートの指定された行（rowIndex）の在庫関連の列を更新します。
-
- logErrorsToSheet(errorDetails)
- 処理中に発生したエラーの詳細を、スプレッドシート上の「エラーログ」シートに記録します。
- これにより、どの商品でどのような問題が発生したかを後から確認できます。
-
- recordExecutionTimestamp()
- 実行完了日時を指定されたシートに記録する関数
- シート名はスクリプトプロパティに保存するので、任意のシート名を設定してください。
- また、実行完了日時はそのシートのA1セルに記録するようにしていますので、
- A1セルには他の情報を入力しないようにしてください。
-
- --- 内部処理・統計関連関数 ---
- @see logRetryStatsToSheet           - リトライ統計をスプレッドシートの「リトライログ」シートに書き出します。
-*/
+ *
+ * 【役割】
+ * スプレッドシートへのすべての書き込み操作を担当します。
+ * 在庫データの更新、エラーログ・リトライログの記録、
+ * 実行タイムスタンプの保存を一元管理します。
+ * データの取得・整形は行わず、受け取ったデータを書き込む責務に特化しています。
+ *
+ * 【依存関係】
+ * ┌─ 参照元（このファイルを呼び出すファイル）──────────────────┐
+ * │ 10_Main.gs                updateBatchInventoryData          │
+ * │                           logErrorsToSheet                  │
+ * │                           logRetryStatsToSheet              │
+ * │                           recordExecutionTimestamp          │
+ * └─────────────────────────────────────────────────────────────┘
+ * ┌─ 参照先（このファイルが使う定数・関数・変数）──────────────┐
+ * │ 11_Config.gs              COLUMNS, getSpreadsheetConfig     │
+ * │ 12_Logger.gs              logWithLevel, logError            │
+ * │                           retryStats（グローバル変数を直接参照）│
+ * └─────────────────────────────────────────────────────────────┘
+ *
+ * 【管理するシート】
+ *   対象シート（SHEET_NAME）   : 在庫データの更新先（メインシート）
+ *   エラーログシート           : 処理中のエラーを蓄積記録（自動生成）
+ *   リトライログシート         : リトライ発生時の統計を蓄積記録（自動生成）
+ *   LOG_SHEETシート            : 実行タイムスタンプ記録先（SHEET_NAMEとは別）
+ *   ※ エラーログ・リトライログシートは存在しない場合に自動生成される
+ *
+ * 【一括更新の最適化について】
+ *   updateBatchInventoryData() では連続した行をグループ化して
+ *   1回の setValues() で複数行を一括書き込みする
+ *   これにより SpreadsheetApp への呼び出し回数を最小化し処理速度を向上させている
+ *   例）行2・3・4が連続 → 1回の setValues() で3行同時書き込み
+ *       行2・5・8が非連続 → 3回の setValues() に分割
+ *
+ * 【公開関数一覧】
+ *  @see updateBatchInventoryData  - 【メイン】在庫データをバッチ単位で一括更新
+ *                                   連続行グループ化による最適化済み
+ *  @see updateRowWithInventoryData - 単一行の在庫データ更新（個別更新用）
+ *  @see logErrorsToSheet          - エラー詳細をエラーログシートに追記
+ *  @see logRetryStatsToSheet      - リトライ統計をリトライログシートに追記
+ *                                   リトライ0回・発生率0%の場合は記録をスキップ
+ *  @see recordExecutionTimestamp  - 実行完了日時をLOG_SHEETのA1セルに記録
+ *
+ * 【バージョン】v2.1
+ * =============================================================================
+ */
 
 /**
  * バッチ単位でスプレッドシートを一括更新
- * 
- * @param {Sheet} sheet - 対象シートオブジェクト
- * @param {Array} batch - 更新対象の商品コードリスト
- * @param {Map} inventoryDataMap - 在庫データマップ
- * @param {Map} rowIndexMap - 行番号マップ
- * @return {Object} 更新結果 { updated: number, results: Array }
+ * 連続する行をグループ化して setValues() の呼び出し回数を最小化する
+ *
+ * @param {Sheet}  sheet           - 対象シートオブジェクト
+ * @param {Array}  batch           - 更新対象の商品コードリスト
+ * @param {Map}    inventoryDataMap - 在庫データマップ（14_InventoryLogic.gsで生成）
+ *                                   key: 商品コード, value: inventoryData オブジェクト
+ * @param {Map}    rowIndexMap     - 行番号マップ
+ *                                   key: 商品コード, value: スプレッドシートの行番号
+ * @return {Object} { updated: number, results: Array }
+ *   updated : 更新成功件数
+ *   results : 各商品の処理結果
+ *             { goodsCode, status: 'success'|'error'|'no_data', stock?, error? }
  */
 function updateBatchInventoryData(sheet, batch, inventoryDataMap, rowIndexMap) {
     const updateData = [];
@@ -56,10 +90,14 @@ function updateBatchInventoryData(sheet, batch, inventoryDataMap, rowIndexMap) {
         }
     }
 
-    // 行番号でソート
+    // 行番号昇順にソートすることで連続行のグループ化を可能にする
+    // ソートなしでは連続行の判定が正確に行えない
     sortedItems.sort((a, b) => a.rowIndex - b.rowIndex);
 
     // ステップ2: 連続した範囲をグループ化
+    // 連続した行番号をグループにまとめる
+    // 前のアイテムの行番号 + 1 = 現在の行番号 であれば同じグループに追加
+    // 例）行2・3・4 → 1グループ、行6・7 → 1グループ（合計2グループ）
     const rangeGroups = [];
     let currentGroup = null;
 
@@ -88,16 +126,18 @@ function updateBatchInventoryData(sheet, batch, inventoryDataMap, rowIndexMap) {
 
     for (const group of rangeGroups) {
         try {
+            // COLUMNS.STOCK_QTY(C列)から9列分を一括書き込み
+            // 列順序は 11_Config.gs の COLUMNS 定義に準拠
             const updateValues = group.items.map(item => [
-                item.inventoryData.stock_quantity || 0,
-                item.inventoryData.stock_allocated_quantity || 0,
-                item.inventoryData.stock_free_quantity || 0,
-                item.inventoryData.stock_advance_order_quantity || 0,
-                item.inventoryData.stock_advance_order_allocation_quantity || 0,
-                item.inventoryData.stock_advance_order_free_quantity || 0,
-                item.inventoryData.stock_defective_quantity || 0,
-                item.inventoryData.stock_remaining_order_quantity || 0,
-                item.inventoryData.stock_out_quantity || 0
+                item.inventoryData.stock_quantity || 0,                          // C列: 在庫数
+                item.inventoryData.stock_allocated_quantity || 0,                // D列: 引当数
+                item.inventoryData.stock_free_quantity || 0,                     // E列: フリー在庫数
+                item.inventoryData.stock_advance_order_quantity || 0,            // F列: 予約在庫数
+                item.inventoryData.stock_advance_order_allocation_quantity || 0, // G列: 予約引当数
+                item.inventoryData.stock_advance_order_free_quantity || 0,       // H列: 予約フリー在庫数
+                item.inventoryData.stock_defective_quantity || 0,                // I列: 不良在庫数
+                item.inventoryData.stock_remaining_order_quantity || 0,          // J列: 発注残数
+                item.inventoryData.stock_out_quantity || 0                       // K列: 欠品数
                 // ※COLUMNS定義とAPIフィールドに合わせて調整が必要な場合はここを修正
                 // 現状のconfig/logicに合わせています
             ]);
@@ -170,6 +210,8 @@ function logErrorsToSheet(errorDetails) {
         const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
         let errorSheet = spreadsheet.getSheetByName('エラーログ');
 
+        // エラーログシートが存在しない場合は自動生成してヘッダー行を設定する
+        // 2回目以降は既存シートの末尾に追記する
         if (!errorSheet) {
             errorSheet = spreadsheet.insertSheet('エラーログ');
             const headers = [
@@ -211,6 +253,8 @@ function logErrorsToSheet(errorDetails) {
  * リトライ統計をスプレッドシートに記録
  */
 function logRetryStatsToSheet() {
+    // 【記録スキップ条件】
+    // 条件1: リトライ総回数が0回（正常完了）
     if (retryStats.totalRetries === 0) {
         logWithLevel(LOG_LEVEL.DETAILED, 'リトライ0回: ログ記録スキップ');
         return;
@@ -238,6 +282,8 @@ function logRetryStatsToSheet() {
             : 0;
 
         // ★★★ 条件2: リトライ発生率が0% ★★★
+        // 【記録スキップ条件】
+        // 条件2: リトライ発生率が0%（統計上意味のないデータを蓄積しない）
         if (parseFloat(retryRate) === 0) {
             logWithLevel(LOG_LEVEL.DETAILED, 'リトライ発生率0%: ログ記録スキップ');
             return;
@@ -291,6 +337,8 @@ function recordExecutionTimestamp() {
             return;
         }
 
+        // 実行完了日時をA1セルに上書き保存する
+        // このセルを他の用途に使用すると日時が上書きされるため注意
         sheet.getRange(1, 1).setValue(
             Utilities.formatDate(new Date(), 'JST', 'MM月dd日HH時mm分ss秒')
         );

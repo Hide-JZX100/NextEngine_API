@@ -1,19 +1,54 @@
 /**
  * =============================================================================
- * Main.gs - アプリケーションエントリーポイント
+ * 10_Main.gs - アプリケーションエントリーポイント
  * =============================================================================
-
- --- ユーザー向け主要関数 ---
- @see updateInventoryDataBatchWithRetry - 【メイン処理】在庫情報を一括更新します。トリガーに設定する関数です。
-
-
- */
-
-/**
- * 【メイン実行関数】
- * 在庫情報をAPIから一括取得し、スプレッドシートを更新します。（リトライ機能付き）
- * 
- * この関数をトリガーに設定して定期実行してください。
+ *
+ * 【役割】
+ * このファイルは処理全体の起点です。
+ * 各モジュールを呼び出してオーケストレーション（指揮）を行います。
+ * ビジネスロジックやAPI通信の実装は各専用ファイルに委譲しています。
+ *
+ * 【依存ファイルと役割分担】
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │ 11_Config.gs              設定値・定数・トークン取得         │
+ * │ 12_Logger.gs              ログ出力・リトライ統計管理         │
+ * │ 13_NextEngineAPI.gs       NE APIへのHTTPリクエスト           │
+ * │ 14_InventoryLogic.gs      在庫データの取得・整形             │
+ * │ 15_SpreadsheetRepository.gs スプレッドシートへの書き込み     │
+ * └─────────────────────────────────────────────────────────────┘
+ *
+ * 【処理フロー】(updateInventoryDataBatchWithRetry)
+ *   Step 1. リトライ統計リセット          (12_Logger.gs)
+ *   Step 2. スプレッドシート・シート取得  (11_Config.gs)
+ *   Step 3. 商品コードリスト構築          (本ファイル内ループ)
+ *   Step 4. バッチ分割ループ
+ *     └─ 4a. 在庫データ一括取得(リトライ付き) (14_InventoryLogic.gs)
+ *     └─ 4b. スプレッドシート一括更新        (15_SpreadsheetRepository.gs)
+ *     └─ 4c. エラー情報収集
+ *   Step 5. エラーログをシートに記録      (15_SpreadsheetRepository.gs)
+ *   Step 6. リトライ統計を表示・記録      (12_Logger.gs / 15_SpreadsheetRepository.gs)
+ *   Step 7. 実行タイムスタンプを記録      (15_SpreadsheetRepository.gs)
+ *
+ * 【トリガー設定】
+ * - トリガー設定スクリプト.gsの setTrigger() で時間ベーストリガーを管理
+ * - スクリプトプロパティ TRIGGER_FUNCTION_NAME に
+ *   「updateInventoryDataBatchWithRetry」を設定してください
+ * - GASの実行時間制限（6分）に注意。バッチ数が増えた場合は
+ *   MAX_ITEMS_PER_CALL または API_WAIT_TIME の見直しを検討してください
+ *
+ * 【スクリプトプロパティ（要設定）】
+ *   SPREADSHEET_ID   : 対象スプレッドシートのID
+ *   SHEET_NAME       : 在庫データシート名
+ *   LOG_SHEET_NAME   : 実行タイムスタンプ記録先シート名
+ *   ACCESS_TOKEN     : NE APIアクセストークン（認証.gsで取得）
+ *   REFRESH_TOKEN    : NE APIリフレッシュトークン（認証.gsで取得）
+ *
+ * 【公開関数】
+ * @see updateInventoryDataBatchWithRetry - 【メイン】トリガーに設定する関数
+ * @see showUsageGuide                   - 使い方ガイドをコンソールに表示
+ *
+ * 【バージョン】v2.1 (リトライ統計対応)
+ * =============================================================================
  */
 /**
  * メイン処理関数の修正版（リトライ統計対応）
@@ -54,6 +89,9 @@ function updateInventoryDataBatchWithRetry() {
         const tokens = getStoredTokens();
 
         const goodsCodeList = [];
+
+        // 商品コードをリスト化しつつ、後でシートの行番号を逆引きできるようMapに保持する
+        // rowIndexMap: key=商品コード, value=スプレッドシートの実行番号（2始まり）
         const rowIndexMap = new Map();
 
         for (let i = 0; i < values.length; i++) {
@@ -152,6 +190,8 @@ function updateInventoryDataBatchWithRetry() {
                 // ログ出力（既存コードと同じ - 省略）
                 // ...
 
+                // バッチ間のAPI負荷分散のため待機（API_WAIT_TIME ms、11_Config.gsで定義）
+                // 連続リクエストによるレート制限エラーを防ぐ
                 if (i + MAX_ITEMS_PER_CALL < goodsCodeList.length) {
                     logWithLevel(LOG_LEVEL.SUMMARY, `次のバッチまで ${API_WAIT_TIME}ms 待機...`);
                     Utilities.sleep(API_WAIT_TIME);
