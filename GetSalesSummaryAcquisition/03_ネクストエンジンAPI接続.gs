@@ -29,6 +29,55 @@
  * 
  * @version 1.0
  * @date 2025-11-24
+ *
+ * 【ファイル構成と依存関係】
+ * このファイルは以下の関数・定数を 01_基盤構築.gs に依存しています。
+ *
+ *   - getScriptConfig()                        : トークン・設定値の取得
+ *   - logMessage()                             : ログ出力制御
+ *   - LOG_LEVEL                                : ログレベル定数
+ *   - NE_API_BASE_URL                          : APIベースURL
+ *   - NE_RECEIVEORDER_ROW_SEARCH_ENDPOINT      : 受注明細検索エンドポイント
+ *   - NE_WAIT_FLAG                             : API待機フラグ
+ *   - NE_API_LIMIT                             : 1回あたりの最大取得件数
+ *
+ * ※ 01_基盤構築.gs が正しく動作することを先に確認してください。
+ * ※ NEAuthライブラリ(識別子: NEAuth)がバージョン5で追加されている必要があります。
+ *
+ * 【テスト関数の推奨実行順序】
+ * 初回セットアップ時は以下の順序で実行してください。
+ *
+ *   Step 1: testNEApiConnection()          → API接続・トークン有効性の確認
+ *   Step 2: testSearchReceiveOrderRowPage() → 1ページ分(10件)の取得確認
+ *   Step 3: testFilterCancelledRows()      → キャンセル除外の動作確認
+ *   Step 4: testPhase3()                   → 上記3つの統合テスト
+ *   Step 5: testSearchReceiveOrderRowAll() → 全件取得テスト ※任意・重い処理
+ *
+ * ※ Step 1 でエラーが出た場合はトークンの有効性を確認してください。
+ * ※ Step 5 は実データを全件取得するため時間がかかります。
+ *   データ量が多い場合は6分のGAS実行時間制限に注意してください。
+ * ※ 通常の動作確認は testPhase3() のみで問題ありません。
+ *
+ * 【注意事項・制約】
+ * 1. ページネーション終了判定の仕様
+ *    - NE APIの count フィールドは総件数ではなく最大1000を返します
+ *    - このため「返却レコード数が limit 未満かどうか」で終了を判定しています
+ *    - count の値だけで終了判定すると無限ループになるため変更しないでください
+ *
+ * 2. API実行時間の目安
+ *    - ページ取得間隔に500msの待機が入っています
+ *    - 例: 9,000件取得の場合 → 9ページ × 500ms = 約4.5秒の待機が発生
+ *    - データ量が増えた場合はGASの6分制限に注意してください
+ *
+ * 3. API推奨実行時間帯
+ *    - NE公式推奨: アクセス集中時間帯(07:00〜22:00)を避けることを推奨
+ *    - 現在のトリガー設定(8:00・12:00・17:00)は集中時間帯と重なっています
+ *    - エラーが頻発する場合は深夜・早朝帯へのシフトを検討してください
+ *
+ * 4. トークン自動更新の挙動
+ *    - APIレスポンスに新しいトークンが含まれる場合、
+ *      ACCESS_TOKEN と REFRESH_TOKEN がスクリプトプロパティに自動上書きされます
+ *    - 手動でトークンを設定している場合でも上書きされる点に注意してください
  */
 
 // =============================================================================
@@ -48,7 +97,7 @@
  */
 function callNextEngineApi(endpoint, params = {}) {
   const config = getScriptConfig();
-  
+
   // アクセストークンとリフレッシュトークンを追加
   const requestParams = {
     access_token: config.accessToken,
@@ -56,14 +105,14 @@ function callNextEngineApi(endpoint, params = {}) {
     wait_flag: NE_WAIT_FLAG,
     ...params
   };
-  
+
   // URLエンコードされたペイロードを作成
   const payload = Object.keys(requestParams)
     .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(requestParams[key])}`)
     .join('&');
-  
+
   const url = `${NE_API_BASE_URL}${endpoint}`;
-  
+
   const options = {
     method: 'POST',
     headers: {
@@ -72,16 +121,16 @@ function callNextEngineApi(endpoint, params = {}) {
     payload: payload,
     muteHttpExceptions: true // HTTPエラーでも例外を投げない
   };
-  
+
   logMessage(`API呼び出し: ${endpoint}`, LOG_LEVEL.SAMPLE);
-  
+
   try {
     const response = UrlFetchApp.fetch(url, options);
     const responseCode = response.getResponseCode();
     const responseText = response.getContentText();
-    
+
     logMessage(`レスポンスコード: ${responseCode}`, LOG_LEVEL.SAMPLE);
-    
+
     // レスポンスをパース
     let responseData;
     try {
@@ -89,7 +138,7 @@ function callNextEngineApi(endpoint, params = {}) {
     } catch (parseError) {
       throw new Error(`JSONパースエラー: ${responseText.substring(0, 200)}`);
     }
-    
+
     // エラーチェック
     if (responseData.result !== 'success') {
       throw new Error(
@@ -97,7 +146,7 @@ function callNextEngineApi(endpoint, params = {}) {
         `メッセージ: ${JSON.stringify(responseData)}`
       );
     }
-    
+
     // トークンが更新された場合はスクリプトプロパティに保存
     if (responseData.access_token && responseData.refresh_token) {
       const props = PropertiesService.getScriptProperties();
@@ -106,12 +155,12 @@ function callNextEngineApi(endpoint, params = {}) {
         'REFRESH_TOKEN': responseData.refresh_token,
         'TOKEN_UPDATED_AT': new Date().getTime().toString()
       });
-      
+
       logMessage('✅ トークンが更新されました', LOG_LEVEL.SAMPLE);
     }
-    
+
     return responseData;
-    
+
   } catch (error) {
     throw new Error(`API呼び出しエラー: ${error.message}`);
   }
@@ -152,10 +201,10 @@ const RECEIVEORDER_ROW_FIELDS = [
  */
 function searchReceiveOrderRowPage(startDate, endDate, offset = 0, limit = NE_API_LIMIT) {
   logMessage(`受注明細検索: offset=${offset}, limit=${limit}`, LOG_LEVEL.SAMPLE);
-  
+
   // デバッグ: 日付パラメータを確認
   logMessage(`検索期間: ${startDate} ～ ${endDate}`, LOG_LEVEL.SAMPLE);
-  
+
   // 検索パラメータ
   // ※受注明細検索APIで受注伝票のフィールドを検索条件に使う場合、
   //   パラメータ名は「receiveorder_」プレフィックスなしで指定します
@@ -168,20 +217,20 @@ function searchReceiveOrderRowPage(startDate, endDate, offset = 0, limit = NE_AP
     offset: offset,
     limit: limit
   };
-  
+
   // API呼び出し
   const response = callNextEngineApi(NE_RECEIVEORDER_ROW_SEARCH_ENDPOINT, params);
-  
+
   // レスポンスから必要な情報を抽出
   const data = response.data || [];
   const count = response.count || 0;
   const hasMore = (offset + data.length) < count;
-  
+
   logMessage(
     `取得結果: ${data.length}件 (このページのcount: ${count}件)`,
     LOG_LEVEL.SAMPLE
   );
-  
+
   return {
     data,
     count,
@@ -202,62 +251,62 @@ function searchReceiveOrderRowPage(startDate, endDate, offset = 0, limit = NE_AP
 function searchReceiveOrderRowAll(startDate, endDate) {
   logMessage('=== 受注明細全件取得開始 ===');
   logMessage(`期間: ${startDate} ～ ${endDate}`);
-  
+
   const allData = [];
   let offset = 0;
   let pageCount = 0;
   let totalCount = 0;
-  
+
   const startTime = new Date();
-  
+
   // ページネーション処理
   while (true) {
     pageCount++;
-    
+
     logMessage(`--- ページ ${pageCount} 取得中 (offset: ${offset}) ---`, LOG_LEVEL.SAMPLE);
-    
+
     const result = searchReceiveOrderRowPage(startDate, endDate, offset, NE_API_LIMIT);
-    
+
     // 初回でtotalCountを保存
     if (totalCount === 0) {
       totalCount = result.count;
       logMessage(`API返却の全体件数: ${totalCount}件`);
     }
-    
+
     // データがない場合は終了
     if (result.data.length === 0) {
       logMessage('データ取得完了: これ以上データがありません', LOG_LEVEL.SAMPLE);
       break;
     }
-    
+
     // データを追加
     allData.push(...result.data);
-    
+
     logMessage(`累計: ${allData.length}件`, LOG_LEVEL.SAMPLE);
-    
+
     // 取得件数がlimitより少ない場合は最後のページ
     if (result.data.length < NE_API_LIMIT) {
       logMessage('最終ページに到達しました', LOG_LEVEL.SAMPLE);
       break;
     }
-    
+
     // オフセットを更新
     offset += NE_API_LIMIT;
-    
+
     // API負荷軽減のため少し待機
     Utilities.sleep(500); // 0.5秒待機
   }
-  
+
   const endTime = new Date();
   const elapsedTime = (endTime - startTime) / 1000;
-  
+
   logMessage('');
   logMessage('=== 受注明細全件取得完了 ===');
   logMessage(`実際の取得件数: ${allData.length}件`);
   logMessage(`ページ数: ${pageCount}ページ`);
   logMessage(`処理時間: ${elapsedTime.toFixed(2)}秒`);
   logMessage(`平均速度: ${(allData.length / elapsedTime).toFixed(0)}件/秒`);
-  
+
   return allData;
 }
 
@@ -276,17 +325,17 @@ function searchReceiveOrderRowAll(startDate, endDate) {
 function filterCancelledRows(data) {
   logMessage('=== キャンセル明細除外処理 ===');
   logMessage(`除外前: ${data.length}件`);
-  
+
   const filtered = data.filter(row => {
     // cancel_flag が "1" の場合は除外(false を返す)
     return row.receive_order_row_cancel_flag !== '1';
   });
-  
+
   const cancelledCount = data.length - filtered.length;
-  
+
   logMessage(`除外後: ${filtered.length}件`);
   logMessage(`除外数: ${cancelledCount}件`);
-  
+
   return filtered;
 }
 
@@ -304,17 +353,17 @@ function filterCancelledRows(data) {
  */
 function testNEApiConnection() {
   console.log('=== ネクストエンジンAPI接続テスト ===');
-  
+
   try {
     const props = PropertiesService.getScriptProperties();
     const result = NEAuth.testApiConnection(props);
-    
+
     console.log('✅ API接続成功!');
     console.log('ユーザー情報:', result);
     console.log('');
-    
+
     return result;
-    
+
   } catch (error) {
     console.error('❌ API接続エラー:', error.message);
     console.error('');
@@ -333,35 +382,35 @@ function testNEApiConnection() {
  */
 function testSearchReceiveOrderRowPage() {
   console.log('=== 受注明細検索テスト(1ページ) ===');
-  
+
   try {
     const dateRange = getSearchDateRange();
-    
+
     console.log('検索期間:');
     console.log(`  開始: ${dateRange.startDateStr}`);
     console.log(`  終了: ${dateRange.endDateStr}`);
     console.log('');
-    
+
     const result = searchReceiveOrderRowPage(
       dateRange.startDateStr,
       dateRange.endDateStr,
       0,    // offset
       10    // limit(テストなので10件のみ)
     );
-    
+
     console.log('✅ 検索成功!');
     console.log(`取得件数: ${result.data.length}件`);
     console.log(`全体件数: ${result.count}件`);
     console.log(`次ページあり: ${result.hasMore ? 'はい' : 'いいえ'}`);
     console.log('');
-    
+
     if (result.data.length > 0) {
       console.log('【先頭3件のデータ】');
       logData(result.data.slice(0, 3), '受注明細サンプル');
     }
-    
+
     return result;
-    
+
   } catch (error) {
     console.error('❌ 検索エラー:', error.message);
     throw error;
@@ -378,34 +427,34 @@ function testSearchReceiveOrderRowAll() {
   console.log('=== 受注明細全件取得テスト ===');
   console.log('⚠️ 実データを取得します。データ量によっては時間がかかります。');
   console.log('');
-  
+
   try {
     const dateRange = getSearchDateRange();
-    
+
     console.log('検索期間:');
     console.log(`  開始: ${dateRange.startDateStr}`);
     console.log(`  終了: ${dateRange.endDateStr}`);
     console.log('');
-    
+
     const data = searchReceiveOrderRowAll(
       dateRange.startDateStr,
       dateRange.endDateStr
     );
-    
+
     console.log('✅ 全件取得成功!');
     console.log(`取得件数: ${data.length}件`);
     console.log('');
-    
+
     if (data.length > 0) {
       console.log('【データサンプル(先頭3件)】');
       logData(data.slice(0, 3), '受注明細');
-      
+
       console.log('【データサンプル(末尾3件)】');
       logData(data.slice(-3), '受注明細');
     }
-    
+
     return data;
-    
+
   } catch (error) {
     console.error('❌ 全件取得エラー:', error.message);
     throw error;
@@ -419,15 +468,15 @@ function testSearchReceiveOrderRowAll() {
  */
 function debugDateRange() {
   console.log('=== 日付範囲デバッグ ===');
-  
+
   const dateRange = getSearchDateRange();
-  
+
   console.log('startDate:', dateRange.startDate);
   console.log('endDate:', dateRange.endDate);
   console.log('startDateStr:', dateRange.startDateStr);
   console.log('endDateStr:', dateRange.endDateStr);
   console.log('');
-  
+
   // 型チェック
   console.log('startDateStr type:', typeof dateRange.startDateStr);
   console.log('endDateStr type:', typeof dateRange.endDateStr);
@@ -442,41 +491,41 @@ function debugDateRange() {
  */
 function testFilterCancelledRows() {
   console.log('=== キャンセル除外テスト ===');
-  
+
   try {
     const dateRange = getSearchDateRange();
-    
+
     // データ取得
     console.log('データ取得中...');
     const allData = searchReceiveOrderRowAll(
       dateRange.startDateStr,
       dateRange.endDateStr
     );
-    
+
     console.log('');
-    
+
     // キャンセル除外
     const filtered = filterCancelledRows(allData);
-    
+
     console.log('');
     console.log('✅ キャンセル除外テスト完了!');
     console.log('');
-    
+
     // キャンセルフラグの内訳を表示
     const cancelCounts = {};
     allData.forEach(row => {
       const flag = row.receive_order_row_cancel_flag || '0';
       cancelCounts[flag] = (cancelCounts[flag] || 0) + 1;
     });
-    
+
     console.log('【キャンセルフラグ内訳】');
     Object.keys(cancelCounts).forEach(flag => {
       const label = flag === '1' ? 'キャンセル' : '有効';
       console.log(`  ${label}(${flag}): ${cancelCounts[flag]}件`);
     });
-    
+
     return filtered;
-    
+
   } catch (error) {
     console.error('❌ キャンセル除外エラー:', error.message);
     throw error;
@@ -500,23 +549,23 @@ function testPhase3() {
   console.log('');
   console.log('⚠️ 実際のAPIを呼び出します。本番環境での実行には注意してください。');
   console.log('');
-  
+
   try {
     // 1. API接続テスト
     console.log('【1】ネクストエンジンAPI接続テスト');
     testNEApiConnection();
     console.log('');
-    
+
     // 2. 受注明細検索テスト(1ページ)
     console.log('【2】受注明細検索テスト(1ページ)');
     testSearchReceiveOrderRowPage();
     console.log('');
-    
+
     // 3. キャンセル除外テスト
     console.log('【3】キャンセル除外テスト');
     testFilterCancelledRows();
     console.log('');
-    
+
     console.log('╔════════════════════════════════════════════════════════════╗');
     console.log('║  ✅ Phase 3 統合テスト: すべて成功!                       ║');
     console.log('╚════════════════════════════════════════════════════════════╝');
@@ -527,7 +576,7 @@ function testPhase3() {
     console.log('【オプションテスト】');
     console.log('全件取得テストを実行する場合:');
     console.log('  testSearchReceiveOrderRowAll()');
-    
+
   } catch (error) {
     console.error('');
     console.error('╔════════════════════════════════════════════════════════════╗');
@@ -541,7 +590,7 @@ function testPhase3() {
     console.error('- ネクストエンジンAPIが正常に動作しているか');
     console.error('- 認証ライブラリ(NEAuth)がバージョン5で追加されているか');
     console.error('- ネットワーク接続が正常か');
-    
+
     throw error;
   }
 }
