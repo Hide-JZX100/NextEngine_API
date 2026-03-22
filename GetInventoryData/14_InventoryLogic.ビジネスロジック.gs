@@ -1,22 +1,58 @@
 /**
  * =============================================================================
- * InventoryLogic.gs - ビジネスロジック
+ * 14_InventoryLogic.gs - 在庫データ取得・整形（ビジネスロジック）
  * =============================================================================
-
- --- 内部処理・統計関連関数 ---
- @see getBatchInventoryDataWithRetry - バッチ単位で在庫データを取得・整形する内部関数です。
-
+ *
+ * 【役割】
+ * API通信層（13_NextEngineAPI.gs）とデータ永続化層（15_SpreadsheetRepository.gs）
+ * の橋渡しを担います。
+ * APIから返却された生データをスプレッドシートへの書き込みに適した
+ * 構造に変換・整形する責務を持ちます。
+ *
+ * 【依存関係】
+ * ┌─ 参照元（このファイルを呼び出すファイル）──────────────────┐
+ * │ 10_Main.gs                メイン処理から getBatchInventoryDataWithRetry を呼び出し│
+ * └─────────────────────────────────────────────────────────────┘
+ * ┌─ 参照先（このファイルが使う定数・関数）────────────────────┐
+ * │ 11_Config.gs              LOG_LEVEL 定数                    │
+ * │ 12_Logger.gs              logWithLevel, logError            │
+ * │                           logErrorDetail, logAPIErrorDetail │
+ * │ 13_NextEngineAPI.gs       getBatchStockDataWithRetry        │
+ * └─────────────────────────────────────────────────────────────┘
+ *
+ * 【処理フロー】(getBatchInventoryDataWithRetry)
+ *   Step 1. 商品コードの大文字小文字正規化マップを構築（codeMapping）
+ *   Step 2. API呼び出し（13_NextEngineAPI.gs に委譲）
+ *   Step 3. API返却コードを元の商品コードに逆引き（codeMapping経由）
+ *   Step 4. 生データを inventoryData オブジェクトに整形
+ *   Step 5. 整形済みデータを Map で返却
+ *
+ * 【大文字小文字の正規化について】
+ *   NE APIは商品コードを小文字で返却する場合がある
+ *   スプレッドシート側の商品コードと大文字小文字が異なると
+ *   マッチングに失敗するため、両者を toLowerCase() で統一して照合する
+ *   元の表記はcodeMappingで保持し、整形後のMapのキーは元の表記を使用する
+ *
+ * 【返却データ構造】(inventoryData オブジェクト)
+ *   goods_id                             : 商品コード
+ *   goods_name                           : 商品名（現在は空文字、拡張用）
+ *   stock_quantity                       : 在庫数
+ *   stock_allocated_quantity             : 引当数
+ *   stock_free_quantity                  : フリー在庫数
+ *   stock_advance_order_quantity         : 予約在庫数
+ *   stock_advance_order_allocation_quantity : 予約引当数
+ *   stock_advance_order_free_quantity    : 予約フリー在庫数
+ *   stock_defective_quantity             : 不良在庫数
+ *   stock_remaining_order_quantity       : 発注残数
+ *   stock_out_quantity                   : 欠品数
+ *
+ * 【公開関数一覧】
+ *  @see getBatchInventoryDataWithRetry - バッチ単位で在庫データを取得・整形して返す
+ *                                        10_Main.gs から呼び出される
+ *
+ * 【バージョン】v2.1
+ * =============================================================================
  */
-
-
-/**
- * Old  バッチ単位で在庫情報を取得（リトライ対応版）
- * 
- * 【変更内容】
- * - getBatchStockData → getBatchStockDataWithRetry に変更
- * - その他の処理は既存のまま維持
- */
-
 /**
  * バッチ単位で在庫情報を取得・整形
  * 
@@ -31,6 +67,9 @@ function getBatchInventoryDataWithRetry(goodsCodeList, tokens, batchNumber) {
     try {
         logWithLevel(LOG_LEVEL.DETAILED, `  在庫マスタ一括検索: ${goodsCodeList.length}件`);
 
+        // 商品コードの大文字小文字表記ゆれを吸収するための変換マップを構築
+        // NE APIは小文字で返却することがあるため toLowerCase() で統一して照合する
+        // key: 小文字に変換した商品コード, value: 元の表記（スプレッドシート側）
         const codeMapping = new Map();
         for (const code of goodsCodeList) {
             codeMapping.set(code.toLowerCase(), code);
@@ -41,6 +80,8 @@ function getBatchInventoryDataWithRetry(goodsCodeList, tokens, batchNumber) {
 
         logWithLevel(LOG_LEVEL.DETAILED, `  在庫マスタ取得完了: ${stockDataMap.size}件`);
 
+        // 正常なAPIレスポンスでもデータが0件の場合は設定ミスや権限不足の可能性がある
+        // エラーとして記録し、後続の調査に役立てる
         if (stockDataMap.size === 0) {
             logWithLevel(LOG_LEVEL.SUMMARY, '  在庫データが見つかりませんでした');
 
@@ -55,10 +96,14 @@ function getBatchInventoryDataWithRetry(goodsCodeList, tokens, batchNumber) {
                 new Error('API応答にデータが含まれていません')
             );
 
+            // エラー時は例外をスローせず空のMapを返す
+            // 呼び出し元（10_Main.gs）でバッチ単位のエラーとして処理を継続させるため
             return inventoryDataMap;
         }
 
         for (const [goodsCode, stockData] of stockDataMap) {
+            // API返却コード（小文字）を元の表記に逆引きする
+            // 一致しない場合は商品コードの表記ゆれ以外の問題（未登録など）の可能性がある
             const originalCode = codeMapping.get(goodsCode.toLowerCase());
 
             if (!originalCode) {
@@ -71,6 +116,8 @@ function getBatchInventoryDataWithRetry(goodsCodeList, tokens, batchNumber) {
                 continue;
             }
 
+            // NE APIの数値フィールドは文字列で返却される場合があるため parseInt で変換
+            // 値が取得できない・nullの場合は 0 をセットして以降の計算エラーを防ぐ
             const inventoryData = {
                 goods_id: stockData.stock_goods_id,
                 goods_name: '',
