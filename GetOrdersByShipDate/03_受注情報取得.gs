@@ -42,6 +42,7 @@ function fetchOrderRows(startDate, endDate) {
       'receive_order_send_plan_date-gte': startStr,
       'receive_order_send_plan_date-lte': endStr,
       'receive_order_row_cancel_flag-eq': '0',
+      'receive_order_cancel_type_id-eq': '0',
       offset: String(offset),
       limit: String(LIMIT)
     };
