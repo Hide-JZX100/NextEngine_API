@@ -85,7 +85,7 @@ const COLUMNS = {
 
 // 処理設定値
 const MAX_ITEMS_PER_CALL = 1000;
-const API_WAIT_TIME = 500;
+const API_WAIT_TIME = 1000;
 
 // ログレベル設定
 const LOG_LEVEL = {
