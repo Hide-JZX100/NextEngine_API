@@ -554,8 +554,8 @@ function writeAllInventoryData(sheet, rows) {
     // getLastRow() が1以下の場合（データなし）はクリア不要
     const lastRow = sheet.getLastRow();
     if (lastRow > 1) {
-        sheet.getRange(2, 1, lastRow - 1, INVENTORY_SHEET_HEADERS.length)
-            .clearContents();
+        const clearRange = sheet.getRange(2, 1, lastRow - 1, 12);
+        clearRange.clearContents();
         logWithLevel(LOG_LEVEL.SUMMARY, `既存データ削除完了: ${lastRow - 1}行`);
     }
 
