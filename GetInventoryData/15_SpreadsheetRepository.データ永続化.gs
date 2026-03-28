@@ -635,7 +635,11 @@ function testPhase4_WriteTest() {
 
         // APIから先頭5件のみ取得（テスト用）
         const tokens = getStoredTokens();
-        const { data: sampleData } = fetchGoodsDataOnePage_(tokens, 5, 0);
+        const { data: sampleData, updatedTokens } = fetchGoodsDataOnePage_(tokens, 5, 0);
+        // トークンが更新された場合はスクリプトプロパティに保存する
+        if (updatedTokens) {
+            updateStoredTokens(updatedTokens.accessToken, updatedTokens.refreshToken);
+        }
 
         // テスト用ダミー Map を構築
         const testMap = new Map();
