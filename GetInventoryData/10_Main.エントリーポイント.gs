@@ -373,6 +373,10 @@ function updateInventoryDataFromGoodsMaster() {
         // Step 6: 実行タイムスタンプ記録
         recordExecutionTimestamp();
 
+        // Step 7: 翌日分のトリガーを自動登録（自己スケジューリング）
+        setTriggerForGoodsMaster();
+        logWithLevel(LOG_LEVEL.MINIMAL, '翌日分トリガー登録完了');
+
         // 完了ログ
         const duration = ((new Date() - startTime) / 1000).toFixed(1);
         logWithLevel(LOG_LEVEL.MINIMAL, '\n=== 全件更新完了 ===');
