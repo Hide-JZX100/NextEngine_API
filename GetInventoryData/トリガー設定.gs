@@ -87,7 +87,6 @@ function setTrigger() {
 
     // 実行したい時刻（[時, 分]）の配列
     const executionTimes = [
-        [0, 10],    // 0:10
         [8, 0],     // 8:00
         [10, 0],    // 10:00
         [13, 30],   // 13:30
@@ -190,4 +189,68 @@ function deleteTriggersForFunction(functionName) {
     });
 
     Logger.log(`既存トリガー削除: ${deletedCount} 件`);
+}
+
+/**
+ * updateInventoryDataFromGoodsMaster 専用トリガー設定
+ *
+ * 【目的】
+ * 商品マスタAPI全件取得関数を1日1回（0:10）実行するトリガーを設定する
+ * updateInventoryDataBatchWithRetry のトリガーとは独立して管理する
+ *
+ * 【実行タイミング】
+ * 毎日 0:10（在庫更新の最初のサイクルと同じ時刻）
+ *
+ * 【使用方法】
+ * 1. setTriggerForGoodsMaster() を手動実行してトリガーを登録する
+ * 2. 以降は自動実行されるため再実行不要
+ * 3. トリガーを削除したい場合は deleteTriggerForGoodsMaster() を実行する
+ */
+function setTriggerForGoodsMaster() {
+    const FUNCTION_NAME = 'updateInventoryDataFromGoodsMaster';
+    const TRIGGER_HOUR = 0;
+    const TRIGGER_MIN = 10;
+
+    Logger.log(`=== ${FUNCTION_NAME} トリガー設定開始 ===`);
+
+    // 既存トリガーを削除（重複登録防止）
+    deleteTriggersForFunction(FUNCTION_NAME);
+
+    // 翌日の 0:10 にトリガーを設定
+    const triggerTime = new Date();
+    triggerTime.setDate(triggerTime.getDate() + 1);
+    triggerTime.setHours(TRIGGER_HOUR);
+    triggerTime.setMinutes(TRIGGER_MIN);
+    triggerTime.setSeconds(0);
+    triggerTime.setMilliseconds(0);
+
+    try {
+        ScriptApp.newTrigger(FUNCTION_NAME)
+            .timeBased()
+            .at(triggerTime)
+            .create();
+
+        const dateStr = `${triggerTime.getMonth() + 1}/${triggerTime.getDate()}`;
+        Logger.log(`✓ トリガー作成: ${dateStr} ${TRIGGER_HOUR}:${String(TRIGGER_MIN).padStart(2, '0')}`);
+        Logger.log(`実行関数: ${FUNCTION_NAME}`);
+        Logger.log('=== トリガー設定完了 ===');
+
+    } catch (error) {
+        Logger.log(`✗ トリガー作成失敗: ${error.message}`);
+    }
+}
+
+/**
+ * updateInventoryDataFromGoodsMaster のトリガーを削除
+ *
+ * 【使用場面】
+ * - トリガーを一時停止したい場合
+ * - トリガーを再設定したい場合（削除後に setTriggerForGoodsMaster() を実行）
+ */
+function deleteTriggerForGoodsMaster() {
+    const FUNCTION_NAME = 'updateInventoryDataFromGoodsMaster';
+
+    Logger.log(`=== ${FUNCTION_NAME} トリガー削除 ===`);
+    deleteTriggersForFunction(FUNCTION_NAME);
+    Logger.log('=== 削除完了 ===');
 }

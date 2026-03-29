@@ -372,3 +372,482 @@ function locateFunctions() {
         }
     });
 }
+
+/**
+ * =============================================================================
+ * 商品マスタAPIへのエンドポイント変更テスト
+ * =============================================================================
+ *
+ * 【目的】
+ * 在庫マスタAPI (/api_v1_master_stock/search) から
+ * 商品マスタAPI (/api_v1_master_goods/search) への変更が可能かを検証する
+ *
+ * 【確認ポイント】
+ * 1. goods_id-in による複数コード一括検索が動作するか
+ * 2. goods_name, goods_jan_code が取得できるか（新規取得項目）
+ * 3. stock_allocation_quantity 等の在庫詳細フィールドが返ってくるか
+ *
+ * 【注意】
+ * - 既存コードへの影響はありません（読み取りのみ）
+ * - スプレッドシートへの書き込みは行いません
+ * =============================================================================
+ */
+function testGoodsMasterApiEndpoint() {
+    console.log('=== 商品マスタAPIエンドポイント変更テスト ===\n');
+
+    try {
+        // スプレッドシートから先頭3件の商品コードを取得（テスト用）
+        const { SPREADSHEET_ID, SHEET_NAME } = getSpreadsheetConfig();
+        const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = spreadsheet.getSheetByName(SHEET_NAME);
+
+        const TEST_COUNT = 3;
+        const dataRange = sheet.getRange(2, 1, TEST_COUNT, 1);
+        const goodsCodeList = dataRange.getValues()
+            .map(row => row[0])
+            .filter(code => code && code.toString().trim())
+            .slice(0, TEST_COUNT);
+
+        if (goodsCodeList.length === 0) {
+            console.log('テスト用商品コードが取得できませんでした');
+            return;
+        }
+
+        console.log(`テスト対象: ${goodsCodeList.join(', ')}\n`);
+
+        const tokens = getStoredTokens();
+
+        // -----------------------------------------------------------------------
+        // 商品マスタAPIへのリクエスト
+        // -----------------------------------------------------------------------
+        const url = `${NE_API_URL}/api_v1_master_goods/search`;
+
+        // 在庫マスタAPIとの変更点:
+        //   検索キー : stock_goods_id-in → goods_id-in
+        //   エンドポイント: /api_v1_master_stock/search → /api_v1_master_goods/search
+        //   fieldsに追加 : goods_name, goods_jan_code（新規取得項目）
+        const payload = {
+            'access_token': tokens.accessToken,
+            'refresh_token': tokens.refreshToken,
+            'goods_id-in': goodsCodeList.join(','),
+            'fields': [
+                'goods_id',
+                'goods_name',
+                'goods_jan_code',
+                'stock_quantity',
+                'stock_allocation_quantity',
+                'stock_free_quantity',
+                'stock_advance_order_quantity',
+                'stock_advance_order_allocation_quantity',
+                'stock_advance_order_free_quantity',
+                'stock_defective_quantity',
+                'stock_remaining_order_quantity',
+                'stock_out_quantity'
+            ].join(','),
+            'limit': TEST_COUNT.toString()
+        };
+
+        const options = {
+            'method': 'POST',
+            'headers': { 'Content-Type': 'application/x-www-form-urlencoded' },
+            'payload': Object.keys(payload)
+                .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(payload[key]))
+                .join('&')
+        };
+
+        console.log('APIリクエスト送信中...\n');
+        const startTime = new Date();
+        const response = UrlFetchApp.fetch(url, options);
+        const responseData = JSON.parse(response.getContentText());
+        const duration = ((new Date() - startTime) / 1000).toFixed(2);
+
+        // -----------------------------------------------------------------------
+        // 結果の検証
+        // -----------------------------------------------------------------------
+        console.log(`レスポンスコード : ${response.getResponseCode()}`);
+        console.log(`処理時間         : ${duration}秒`);
+        console.log(`APIレスポンス    : ${responseData.result}\n`);
+
+        if (responseData.result !== 'success') {
+            console.log('❌ APIエラー');
+            console.log(`メッセージ: ${responseData.message || '不明'}`);
+            return;
+        }
+
+        const data = responseData.data;
+        console.log(`取得件数: ${data ? data.length : 0}件`);
+
+        if (!data || data.length === 0) {
+            console.log('❌ データが0件でした');
+            return;
+        }
+
+        // -----------------------------------------------------------------------
+        // 確認ポイント別の結果表示
+        // -----------------------------------------------------------------------
+        const sample = data[0];
+
+        console.log('\n【確認1】goods_id-in による一括検索');
+        console.log(data.length === goodsCodeList.length
+            ? `  ✓ 要求 ${goodsCodeList.length}件 / 取得 ${data.length}件`
+            : `  △ 要求 ${goodsCodeList.length}件 / 取得 ${data.length}件（件数が一致しません）`
+        );
+
+        console.log('\n【確認2】新規取得項目（商品マスタ固有フィールド）');
+        console.log(`  goods_name    : ${sample.goods_name !== undefined ? '✓ 取得可' : '❌ 取得不可'} → ${sample.goods_name}`);
+        console.log(`  goods_jan_code: ${sample.goods_jan_code !== undefined ? '✓ 取得可' : '❌ 取得不可'} → ${sample.goods_jan_code}`);
+
+        console.log('\n【確認3】在庫詳細フィールド（在庫マスタ由来）');
+        const stockFields = [
+            'stock_quantity',
+            'stock_allocation_quantity',
+            'stock_free_quantity',
+            'stock_advance_order_quantity',
+            'stock_advance_order_allocation_quantity',
+            'stock_advance_order_free_quantity',
+            'stock_defective_quantity',
+            'stock_remaining_order_quantity',
+            'stock_out_quantity'
+        ];
+        stockFields.forEach(field => {
+            const exists = sample[field] !== undefined;
+            console.log(`  ${field.padEnd(42)}: ${exists ? '✓' : '❌'} → ${sample[field]}`);
+        });
+
+        // -----------------------------------------------------------------------
+        // 全件サンプル表示
+        // -----------------------------------------------------------------------
+        console.log('\n【全取得データ】');
+        data.forEach((item, index) => {
+            console.log(`\n  [${index + 1}] ${item.goods_id}`);
+            console.log(`      商品名      : ${item.goods_name}`);
+            console.log(`      JANコード   : ${item.goods_jan_code}`);
+            console.log(`      在庫数      : ${item.stock_quantity}`);
+            console.log(`      引当数      : ${item.stock_allocation_quantity}`);
+            console.log(`      フリー在庫  : ${item.stock_free_quantity}`);
+        });
+
+        console.log('\n=== テスト完了 ===');
+        console.log('上記の確認3の結果が全て ✓ であれば、エンドポイント変更が可能です。');
+
+    } catch (error) {
+        console.error(`テストエラー: ${error.message}`);
+        console.error(error.stack);
+    }
+}
+
+/**
+ * =============================================================================
+ * Phase 1: 商品マスタAPI全件取得テスト
+ * =============================================================================
+ *
+ * 【目的】
+ * エンドポイント変更にあたり以下の3点を段階的に検証する
+ *
+ * 【実行順序】
+ * Step 1: testPhase1_Step1() → フィルタ動作確認（1件取得）
+ * Step 2: testPhase1_Step2() → ページネーション動作確認（2ページ分）
+ * Step 3: testPhase1_Step3() → 全件取得して総件数を把握
+ *
+ * 【注意】
+ * - 既存コードへの影響はありません（読み取りのみ）
+ * - スプレッドシートへの書き込みは行いません
+ * =============================================================================
+ */
+
+// ============================================================================
+// Phase 1 共通設定
+// ============================================================================
+
+// xxxxxxを含む商品を除外するフィルタ値
+// MySQLのLIKE演算子と同じ書式: % は任意の文字列にマッチする
+const PHASE1_LOCATION_EXCLUDE = '%xxxxxx%';
+
+// 取得するフィールド一覧（変更後のスプレッドシート列と対応）
+// A列: goods_id          B列: goods_name
+// C列: stock_quantity    D列: stock_allocation_quantity
+// E列: stock_free_quantity
+// F列: stock_advance_order_quantity
+// G列: stock_advance_order_allocation_quantity
+// H列: stock_advance_order_free_quantity
+// I列: stock_defective_quantity
+// J列: stock_remaining_order_quantity
+// K列: stock_out_quantity
+// L列: goods_jan_code
+const PHASE1_FIELDS = [
+    'goods_id',
+    'goods_name',
+    'goods_jan_code',
+    'goods_location',                              // フィルタ結果の確認用（本番では不要）
+    'stock_quantity',
+    'stock_allocation_quantity',
+    'stock_free_quantity',
+    'stock_advance_order_quantity',
+    'stock_advance_order_allocation_quantity',
+    'stock_advance_order_free_quantity',
+    'stock_defective_quantity',
+    'stock_remaining_order_quantity',
+    'stock_out_quantity'
+].join(',');
+
+/**
+ * Phase 1 共通APIリクエスト関数
+ *
+ * @param {Object} tokens    - 認証トークン
+ * @param {number} limit     - 取得件数
+ * @param {number} offset    - 取得開始位置（0始まり）
+ * @return {Object}          - APIレスポンスオブジェクト
+ */
+function phase1_fetchGoodsData_(tokens, limit, offset) {
+    const url = `${NE_API_URL}/api_v1_master_goods/search`;
+
+    const payload = {
+        'access_token': tokens.accessToken,
+        'refresh_token': tokens.refreshToken,
+        'fields': PHASE1_FIELDS,
+        'goods_location-nlikeornull': PHASE1_LOCATION_EXCLUDE,
+        'limit': limit.toString(),
+        'offset': offset.toString()
+    };
+
+    const options = {
+        'method': 'POST',
+        'headers': { 'Content-Type': 'application/x-www-form-urlencoded' },
+        'payload': Object.keys(payload)
+            .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(payload[key]))
+            .join('&')
+    };
+
+    const startTime = new Date();
+    const response = UrlFetchApp.fetch(url, options);
+    const responseData = JSON.parse(response.getContentText());
+    const duration = ((new Date() - startTime) / 1000).toFixed(2);
+
+    return { responseData, duration };
+}
+
+// ============================================================================
+// Step 1: フィルタ動作確認（1件取得）
+// ============================================================================
+
+/**
+ * Phase1 Step1: フィルタ動作確認
+ *
+ * 【確認内容】
+ * - goods_location-nlikeornull で xxxxxx を含む商品が除外されているか
+ * - 空欄ロケーションの商品が含まれているか
+ * - 全フィールドが正しく取得できているか
+ *
+ * 【まずこの関数から実行してください】
+ */
+function testPhase1_Step1() {
+    console.log('=== Phase1 Step1: フィルタ動作確認 ===\n');
+
+    try {
+        const tokens = getStoredTokens();
+        const { responseData, duration } = phase1_fetchGoodsData_(tokens, 1, 0);
+
+        console.log(`処理時間: ${duration}秒`);
+        console.log(`APIレスポンス: ${responseData.result}\n`);
+
+        if (responseData.result !== 'success') {
+            console.log('❌ APIエラー');
+            console.log(`メッセージ: ${responseData.message || '不明'}`);
+            return;
+        }
+
+        const data = responseData.data;
+
+        if (!data || data.length === 0) {
+            console.log('❌ データが0件でした');
+            console.log('フィルタ条件が厳しすぎる可能性があります');
+            return;
+        }
+
+        // フィールド取得確認
+        const sample = data[0];
+        console.log('【フィールド取得確認】');
+        console.log(`  goods_id        : ${sample.goods_id !== undefined ? '✓' : '❌'} → ${sample.goods_id}`);
+        console.log(`  goods_name      : ${sample.goods_name !== undefined ? '✓' : '❌'} → ${sample.goods_name}`);
+        console.log(`  goods_jan_code  : ${sample.goods_jan_code !== undefined ? '✓' : '❌'} → ${sample.goods_jan_code}`);
+        console.log(`  goods_location  : ${sample.goods_location !== undefined ? '✓' : '❌'} → "${sample.goods_location}"`);
+        console.log(`  stock_quantity  : ${sample.stock_quantity !== undefined ? '✓' : '❌'} → ${sample.stock_quantity}`);
+
+        // フィルタ確認
+        console.log('\n【フィルタ確認】');
+        const location = sample.goods_location || '';
+        if (location.includes('xxxxxx')) {
+            console.log('❌ xxxxxxを含む商品が取得されています（フィルタが機能していません）');
+        } else {
+            console.log(`✓ xxxxxxを含まない商品のみ取得されています`);
+            console.log(`  ロケーション値: "${location}" ${location === '' ? '（空欄）' : ''}`);
+        }
+
+        console.log('\n✓ Step1 完了 → 問題なければ testPhase1_Step2() を実行してください');
+
+    } catch (error) {
+        console.error(`テストエラー: ${error.message}`);
+    }
+}
+
+// ============================================================================
+// Step 2: ページネーション動作確認（2ページ分）
+// ============================================================================
+
+/**
+ * Phase1 Step2: ページネーション動作確認
+ *
+ * 【確認内容】
+ * - offset=0 と offset=1000 で異なるデータが返ってくるか
+ * - 返却件数が limit 未満になったタイミングが最終ページかどうか
+ * - 重複データがないか（1ページ目の末尾と2ページ目の先頭を比較）
+ *
+ * 【Step1 完了後に実行してください】
+ */
+function testPhase1_Step2() {
+    console.log('=== Phase1 Step2: ページネーション動作確認 ===\n');
+
+    try {
+        const tokens = getStoredTokens();
+        const LIMIT = 1000;
+
+        // 1ページ目
+        console.log('--- 1ページ目 (offset=0) ---');
+        const page1 = phase1_fetchGoodsData_(tokens, LIMIT, 0);
+
+        if (page1.responseData.result !== 'success') {
+            console.log(`❌ 1ページ目 APIエラー: ${page1.responseData.message}`);
+            return;
+        }
+
+        const page1Data = page1.responseData.data || [];
+        const page1Count = page1Data.length;
+        console.log(`処理時間: ${page1.duration}秒`);
+        console.log(`取得件数: ${page1Count}件`);
+        console.log(`最終ページ判定: ${page1Count < LIMIT ? '✓ これが最終ページ' : '次のページあり'}`);
+
+        // 1ページ目が既に最終ページの場合
+        if (page1Count < LIMIT) {
+            console.log(`\n総件数: ${page1Count}件（1ページで全件取得完了）`);
+            console.log('\n✓ Step2 完了 → testPhase1_Step3() を実行してください');
+            return;
+        }
+
+        // 2ページ目
+        console.log('\n--- 2ページ目 (offset=1000) ---');
+        Utilities.sleep(500); // API負荷分散
+        const page2 = phase1_fetchGoodsData_(tokens, LIMIT, LIMIT);
+
+        if (page2.responseData.result !== 'success') {
+            console.log(`❌ 2ページ目 APIエラー: ${page2.responseData.message}`);
+            return;
+        }
+
+        const page2Data = page2.responseData.data || [];
+        const page2Count = page2Data.length;
+        console.log(`処理時間: ${page2.duration}秒`);
+        console.log(`取得件数: ${page2Count}件`);
+        console.log(`最終ページ判定: ${page2Count < LIMIT ? '✓ これが最終ページ' : '次のページあり'}`);
+
+        // 重複チェック（1ページ目末尾と2ページ目先頭の比較）
+        console.log('\n【重複チェック】');
+        const page1Last = page1Data[page1Data.length - 1].goods_id;
+        const page2First = page2Data[0].goods_id;
+        console.log(`1ページ目の末尾: ${page1Last}`);
+        console.log(`2ページ目の先頭: ${page2First}`);
+        console.log(page1Last !== page2First ? '✓ 重複なし' : '❌ 重複あり（ページネーションに問題あり）');
+
+        // 2ページ目以降があるかの情報
+        if (page2Count === LIMIT) {
+            console.log('\n3ページ目以降が存在します → testPhase1_Step3() で全件数を確認してください');
+        }
+
+        console.log('\n✓ Step2 完了 → 問題なければ testPhase1_Step3() を実行してください');
+
+    } catch (error) {
+        console.error(`テストエラー: ${error.message}`);
+    }
+}
+
+// ============================================================================
+// Step 3: 全件取得して総件数を把握
+// ============================================================================
+
+/**
+ * Phase1 Step3: 全件取得・総件数把握
+ *
+ * 【確認内容】
+ * - 全ページを取得して総件数を確認
+ * - 各ページの処理時間と合計処理時間を計測
+ * - xxxxxxを含む商品が1件も含まれていないかを抽出確認
+ *
+ * 【Step2 完了後に実行してください】
+ * 【注意】全件取得するため数秒かかります
+ */
+function testPhase1_Step3() {
+    console.log('=== Phase1 Step3: 全件取得・総件数把握 ===\n');
+
+    try {
+        const tokens = getStoredTokens();
+        const LIMIT = 1000;
+        let offset = 0;
+        let page = 1;
+        let totalCount = 0;
+        let hasNext = true;
+        const allStartTime = new Date();
+
+        // ページネーションループ
+        // 返却件数が limit 未満になったら最終ページと判定して終了
+        while (hasNext) {
+            console.log(`--- ${page}ページ目 (offset=${offset}) ---`);
+
+            const { responseData, duration } = phase1_fetchGoodsData_(tokens, LIMIT, offset);
+
+            if (responseData.result !== 'success') {
+                console.log(`❌ APIエラー: ${responseData.message}`);
+                break;
+            }
+
+            const data = responseData.data || [];
+            const count = data.length;
+            totalCount += count;
+
+            console.log(`処理時間: ${duration}秒 | 取得件数: ${count}件 | 累計: ${totalCount}件`);
+
+            // xxxxxxフィルタ漏れチェック（各ページのサンプルを確認）
+            const leaked = data.filter(item =>
+                item.goods_location && item.goods_location.includes('xxxxxx')
+            );
+            if (leaked.length > 0) {
+                console.log(`  ⚠️ xxxxxxを含む商品が${leaked.length}件混入: ${leaked.map(i => i.goods_id).join(', ')}`);
+            }
+
+            // 最終ページ判定
+            if (count < LIMIT) {
+                hasNext = false;
+                console.log('  → 最終ページ');
+            } else {
+                offset += LIMIT;
+                page++;
+
+                // API負荷分散のため待機（現在の本番設定と同じ500ms）
+                if (hasNext) Utilities.sleep(500);
+            }
+        }
+
+        // 結果サマリー
+        const totalDuration = ((new Date() - allStartTime) / 1000).toFixed(1);
+        console.log('\n=== Phase1 Step3 結果サマリー ===');
+        console.log(`総ページ数  : ${page}ページ`);
+        console.log(`総件数      : ${totalCount}件`);
+        console.log(`合計処理時間: ${totalDuration}秒`);
+        console.log(`APIコール数 : ${page}回`);
+
+        console.log('\n【Phase1 完了後の次のステップ】');
+        console.log('上記の結果に問題がなければ Phase2 に進めます。');
+        console.log('結果をお知らせください。');
+
+    } catch (error) {
+        console.error(`テストエラー: ${error.message}`);
+    }
+}

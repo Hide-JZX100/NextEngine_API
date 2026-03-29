@@ -483,3 +483,203 @@ function finalRetryTest() {
 
     console.log('\n=== テスト完了 ===');
 }
+
+/**
+ * =============================================================================
+ * Phase 4: 全件データ書き込み関数
+ * =============================================================================
+ *
+ * 【追加内容】
+ * - writeAllInventoryData() : ヘッダー行を書き込んだ後、
+ *                             全商品データをA〜L列に一括書き込みする
+ * - testPhase4_WriteTest()  : テスト用スプレッドシートで書き込み動作を確認する
+ *
+ * 【既存コードへの影響】
+ * 追記のみのため既存関数への影響はありません
+ *
+ * 【書き込み仕様】
+ * - 1行目: ヘッダー行（固定）を毎回上書き
+ * - 2行目以降: 既存データを全削除してから全件書き込み
+ * - setValues() を2回（ヘッダー1回＋データ1回）で完結させる設計
+ *   → SpreadsheetApp への呼び出し回数を最小化して処理速度を向上
+ * =============================================================================
+ */
+
+// ----------------------------------------------------------------------------
+// 定数定義
+// ----------------------------------------------------------------------------
+
+// スプレッドシートのヘッダー行（1行目）
+// COLUMNS 定義（11_Config.gs）の列順序と対応
+const INVENTORY_SHEET_HEADERS = [
+    '商品コード',       // A列
+    '商品名',           // B列
+    '在庫数',           // C列
+    '引当数',           // D列
+    'フリー在庫数',     // E列
+    '予約在庫数',       // F列
+    '予約引当数',       // G列
+    '予約フリー在庫数', // H列
+    '不良在庫数',       // I列
+    '発注残数',         // J列
+    '欠品数',           // K列
+    'JANコード'         // L列
+];
+
+// ----------------------------------------------------------------------------
+// 公開関数
+// ----------------------------------------------------------------------------
+
+/**
+ * 全商品データをスプレッドシートに一括書き込み
+ *
+ * 【処理フロー】
+ * 1. シートの2行目以降を全削除（既存データをクリア）
+ * 2. 1行目にヘッダー行を書き込み
+ * 3. 2行目以降にデータを一括書き込み（setValues() 1回で完結）
+ *
+ * 【削除範囲について】
+ * deleteRows() ではなく clearContents() を使用する
+ * deleteRows() は行数が多い場合に処理が遅くなるため
+ * clearContents() で内容のみ削除してから上書きする方式を採用
+ *
+ * @param {Sheet}  sheet - 書き込み対象のシートオブジェクト
+ * @param {Array}  rows  - buildInventoryDataRows() の返却値（2次元配列）
+ * @return {Object}      - { headerWritten: boolean, dataRows: number }
+ */
+function writeAllInventoryData(sheet, rows) {
+    logWithLevel(LOG_LEVEL.SUMMARY, `シート書き込み開始: ${rows.length}行`);
+
+    // Step 1: 2行目以降の既存データをクリア
+    // getLastRow() が1以下の場合（データなし）はクリア不要
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+        sheet.getRange(2, 1, lastRow - 1, 12).clear({ contentsOnly: true });
+        logWithLevel(LOG_LEVEL.SUMMARY, `既存データ削除完了: ${lastRow - 1}行`);
+    }
+
+    // Step 2: ヘッダー行を1行目に書き込み
+    sheet.getRange(1, 1, 1, INVENTORY_SHEET_HEADERS.length)
+        .setValues([INVENTORY_SHEET_HEADERS]);
+    logWithLevel(LOG_LEVEL.SUMMARY, 'ヘッダー行書き込み完了');
+
+    // Step 3: データを2行目以降に一括書き込み
+    // データが0件の場合は書き込みをスキップ
+    if (rows.length === 0) {
+        logWithLevel(LOG_LEVEL.SUMMARY, 'データが0件のため書き込みをスキップ');
+        return { headerWritten: true, dataRows: 0 };
+    }
+
+    sheet.getRange(2, 1, rows.length, INVENTORY_SHEET_HEADERS.length)
+        .setValues(rows);
+
+    logWithLevel(LOG_LEVEL.SUMMARY, `データ書き込み完了: ${rows.length}行`);
+
+    return {
+        headerWritten: true,
+        dataRows: rows.length
+    };
+}
+
+// ----------------------------------------------------------------------------
+// テスト関数
+// ----------------------------------------------------------------------------
+
+/**
+ * Phase 4 書き込み動作確認テスト
+ *
+ * 【確認内容】
+ * 1. テスト用スプレッドシートにヘッダーが正しく書き込まれるか
+ * 2. データが正しく書き込まれるか（先頭5件のみ）
+ * 3. 既存データが正しくクリアされるか
+ *
+ * 【注意】
+ * テスト用スプレッドシートのIDをスクリプトプロパティ
+ * 「TEST_SPREADSHEET_ID」に設定してから実行してください
+ * 本番スプレッドシートへの書き込みは行いません
+ *
+ * 【テスト用スプレッドシートの準備】
+ * 1. 本番スプレッドシートをコピーして別のスプレッドシートを作成
+ * 2. そのIDをスクリプトプロパティ TEST_SPREADSHEET_ID に設定
+ * 3. この関数を実行
+ */
+function testPhase4_WriteTest() {
+    console.log('=== Phase 4 書き込みテスト ===\n');
+
+    try {
+        // テスト用スプレッドシートIDの確認
+        const properties = PropertiesService.getScriptProperties();
+        const testSheetId = properties.getProperty('TEST_SPREADSHEET_ID');
+
+        if (!testSheetId) {
+            console.log('❌ TEST_SPREADSHEET_ID が設定されていません');
+            console.log('スクリプトプロパティに TEST_SPREADSHEET_ID を設定してください');
+            console.log('値: 本番スプレッドシートのコピーのID');
+            return;
+        }
+
+        // テスト用スプレッドシートへの接続確認
+        const testSpreadsheet = SpreadsheetApp.openById(testSheetId);
+        const { SHEET_NAME } = getSpreadsheetConfig();
+        const testSheet = testSpreadsheet.getSheetByName(SHEET_NAME);
+
+        if (!testSheet) {
+            console.log(`❌ テスト用シート "${SHEET_NAME}" が見つかりません`);
+            return;
+        }
+
+        console.log(`テスト用スプレッドシート: ${testSpreadsheet.getName()}`);
+        console.log(`テスト用シート: ${SHEET_NAME}`);
+        console.log(`書き込み前の行数: ${testSheet.getLastRow()}行\n`);
+
+        // APIから先頭5件のみ取得（テスト用）
+        const tokens = getStoredTokens();
+        const { data: sampleData, updatedTokens } = fetchGoodsDataOnePage_(tokens, 5, 0);
+        // トークンが更新された場合はスクリプトプロパティに保存する
+        if (updatedTokens) {
+            updateStoredTokens(updatedTokens.accessToken, updatedTokens.refreshToken);
+        }
+
+        // テスト用ダミー Map を構築
+        const testMap = new Map();
+        sampleData.forEach(item => testMap.set(item.goods_id, item));
+
+        console.log(`テストデータ: ${testMap.size}件\n`);
+
+        // データ整形
+        const rows = buildInventoryDataRows(testMap);
+
+        // 書き込み実行
+        const result = writeAllInventoryData(testSheet, rows);
+
+        // 結果確認
+        console.log('\n【書き込み結果確認】');
+        console.log(`ヘッダー書き込み: ${result.headerWritten ? '✓' : '❌'}`);
+        console.log(`データ行数: ${result.dataRows}行`);
+
+        // ヘッダー内容確認
+        const writtenHeaders = testSheet.getRange(1, 1, 1, INVENTORY_SHEET_HEADERS.length)
+            .getValues()[0];
+        console.log('\n【ヘッダー確認】');
+        INVENTORY_SHEET_HEADERS.forEach((expected, index) => {
+            const actual = writtenHeaders[index];
+            const isMatch = actual === expected;
+            console.log(`  ${String.fromCharCode(65 + index)}列: ${isMatch ? '✓' : '❌'} "${actual}"`);
+        });
+
+        // データ内容確認（先頭3行）
+        const writtenData = testSheet.getRange(2, 1, Math.min(3, result.dataRows), 12)
+            .getValues();
+        console.log('\n【データ確認（先頭3件）】');
+        writtenData.forEach((row, index) => {
+            console.log(`  [${index + 1}] ${row[0]} | ${row[1]} | 在庫:${row[2]} | JANコード:${row[11]}`);
+        });
+
+        console.log('\n✓ Phase 4 テスト完了');
+        console.log('上記の結果に問題がなければ Phase 5 に進めます');
+
+    } catch (error) {
+        console.error(`テストエラー: ${error.message}`);
+        console.error(error.stack);
+    }
+}
