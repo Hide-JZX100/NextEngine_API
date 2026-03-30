@@ -443,6 +443,12 @@ function fetchAllShippingData(startDate = '2025-10-03', endDate = '2025-10-05') 
         } else {
           // 次のページへ
           offset += limit;
+
+          // APIコールが30秒を超えた場合は5秒待機、それ以外は2秒待機
+          const waitTime = apiCallElapsedTime > 30 ? 5000 : 2000;
+          console.log(`次ページ取得まで ${waitTime / 1000}秒待機`);
+          Utilities.sleep(waitTime);
+
           console.log('');
         }
 
