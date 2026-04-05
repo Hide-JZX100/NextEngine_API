@@ -130,6 +130,14 @@ function warmUp() {
     }
 
     console.log(`ウォームアップ完了 (${elapsed}秒)`);
+
+    // 10分後に scheduledRun を動的トリガーで予約
+    ScriptApp.newTrigger('scheduledRun')
+      .timeBased()
+      .after(10 * 60 * 1000)
+      .create();
+    console.log('scheduledRun を10分後に予約しました');
+
   } catch (e) {
     // ウォームアップ失敗は本番処理に影響させない
     console.warn('ウォームアップ失敗（本番処理は続行します）:', e.message);
