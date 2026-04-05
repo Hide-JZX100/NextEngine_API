@@ -132,11 +132,14 @@ function warmUp() {
     console.log(`ウォームアップ完了 (${elapsed}秒)`);
 
     // 10分後に scheduledRun を動的トリガーで予約
-    ScriptApp.newTrigger('scheduledRun')
+    const newTrigger = ScriptApp.newTrigger('scheduledRun')
       .timeBased()
       .after(10 * 60 * 1000)
       .create();
-    console.log('scheduledRun を10分後に予約しました');
+    // 動的トリガーのUIDを保存（scheduledRun 側で削除するために使用）
+    PropertiesService.getScriptProperties()
+      .setProperty('WARMUP_TRIGGER_UIDS', newTrigger.getUniqueId());
+    console.log('scheduledRun を10分後に予約しました (UID: ' + newTrigger.getUniqueId() + ')');
 
   } catch (e) {
     // ウォームアップ失敗は本番処理に影響させない
