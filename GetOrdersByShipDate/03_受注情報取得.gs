@@ -86,6 +86,57 @@ function fetchOrderRows(startDate, endDate) {
 }
 
 /**
+ * ウォームアップ関数
+ * 本番取得前に同じエンドポイントへ limit=1 で空打ちし、
+ * コールドスタートの遅延を事前に吸収する
+ * ※ウォームアップ失敗時は警告のみ出力し、本番処理は続行する
+ */
+function warmUp() {
+  console.log('ウォームアップ開始...');
+
+  const props = PropertiesService.getScriptProperties();
+  const token = {
+    accessToken: props.getProperty('ACCESS_TOKEN'),
+    refreshToken: props.getProperty('REFRESH_TOKEN')
+  };
+
+  const url = NE_API_BASE_URL + NE_ENDPOINT_ORDER_ROW;
+  const payload = {
+    access_token: token.accessToken,
+    refresh_token: token.refreshToken,
+    wait_flag: '1',
+    fields: 'receive_order_row_receive_order_id',
+    offset: '0',
+    limit: '1'
+  };
+
+  const options = {
+    method: 'post',
+    contentType: 'application/x-www-form-urlencoded',
+    payload: payload
+  };
+
+  try {
+    const startTime = new Date();
+    const response = UrlFetchApp.fetch(url, options);
+    const json = JSON.parse(response.getContentText());
+    const elapsed = ((new Date() - startTime) / 1000).toFixed(1);
+
+    // トークンが更新された場合はプロパティを更新
+    if (json.access_token && json.access_token !== token.accessToken) {
+      props.setProperty('ACCESS_TOKEN', json.access_token);
+      props.setProperty('REFRESH_TOKEN', json.refresh_token);
+      console.log('ウォームアップ中にトークンを更新しました');
+    }
+
+    console.log(`ウォームアップ完了 (${elapsed}秒)`);
+  } catch (e) {
+    // ウォームアップ失敗は本番処理に影響させない
+    console.warn('ウォームアップ失敗（本番処理は続行します）:', e.message);
+  }
+}
+
+/**
  * APIレスポンスの1行データをスプレッドシート書き込み用配列に変換する
  * @param {Object} row - APIレスポンスの1件分データ
  * @return {Array} ORDER_HEADERS の順序に対応した値の配列
@@ -182,8 +233,8 @@ function updateOrders(startDate = null, endDate = null, forceAppend = false) {
     const range = getDateRange(startDate, endDate);
     console.log(`開始: updateOrders (${formatDate(range.start)} - ${formatDate(range.end)})`);
 
-    // 【仕様変更】開始日が16日である場合（=毎月1日実行等による後半分の取得）、または forceAppend が true の場合に追記モードとする。
-    const isAppendMode = forceAppend || (range.start.getDate() === 16);
+    // 開始日が1日（月初め）の場合のみ上書き、それ以外（10日・20日スタート）は追記
+    const isAppendMode = forceAppend || (range.start.getDate() !== 1);
 
     const rows = fetchOrderRows(startDate, endDate);
     writeOrdersToSheet(rows, isAppendMode);
