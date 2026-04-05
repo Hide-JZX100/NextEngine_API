@@ -26,9 +26,6 @@ function scheduledRun() {
     return;
   }
 
-  // ウォームアップ（コールドスタート対策）
-  warmUp();
-
   // 受注情報は毎月1日・10日・20日すべてで実行
 
   try {
