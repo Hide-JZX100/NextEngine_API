@@ -82,8 +82,14 @@ function setTrigger() {
     Logger.log(`実行関数: ${functionToTrigger}`);
     Logger.log(`実行モード: ${triggerMode}`);
 
-    // 既存のトリガーを削除
-    deleteTriggersForFunction(functionToTrigger);
+    // 既存のトリガーを削除(リトライ機能付き)
+    try {
+        deleteTriggersForFunction(functionToTrigger, 3, 500);
+    } catch (error) {
+        Logger.log(`⚠️ 既存トリガー削除で重大なエラー: ${error.message}`);
+        Logger.log(`処理を継続しますが、トリガーが重複登録される可能性があります`);
+        // エラーを記録するが、新規トリガー作成は続行
+    }
 
     // 実行したい時刻（[時, 分]）の配列
     const executionTimes = [
@@ -173,22 +179,87 @@ function setTrigger() {
 }
 
 /**
- * 特定の関数に紐づく既存のトリガーをすべて削除します。
- * 削除対象のトリガーが実行する関数名を指定します。
+ * 特定の関数に紐づく既存のトリガーをすべて削除(リトライ機能付き)
+ * 
+ * 【改修内容(Phase 1)】
+ * - 各トリガー削除を個別にリトライ(最大3回)
+ * - 削除失敗時は指数バックオフで待機
+ * - トリガー間に500msのスリープを挿入(レート制限対策)
+ * - 部分的な削除失敗時も処理を継続
+ * - 全削除失敗時のみ例外をスロー
+ * 
  * @param {string} functionName 削除対象のトリガーが実行する関数名
+ * @param {number} maxRetry 最大リトライ回数(デフォルト: 3)
+ * @param {number} baseSleepMs トリガー間のスリープ時間(デフォルト: 500ms)
  */
-function deleteTriggersForFunction(functionName) {
+function deleteTriggersForFunction(functionName, maxRetry = 3, baseSleepMs = 500) {
     const triggers = ScriptApp.getProjectTriggers();
-    let deletedCount = 0;
+    const targetTriggers = triggers.filter(t => t.getHandlerFunction() === functionName);
 
-    triggers.forEach(function (trigger) {
-        if (trigger.getHandlerFunction() === functionName) {
-            ScriptApp.deleteTrigger(trigger);
-            deletedCount++;
+    if (targetTriggers.length === 0) {
+        Logger.log(`既存トリガー削除: 0 件 (対象なし)`);
+        return;
+    }
+
+    Logger.log(`削除対象トリガー: ${targetTriggers.length} 件`);
+
+    let deletedCount = 0;
+    let failedCount = 0;
+    const failedTriggers = [];
+
+    // 各トリガーを個別に削除(リトライ付き)
+    targetTriggers.forEach(function (trigger, index) {
+        let success = false;
+
+        for (let attempt = 0; attempt < maxRetry; attempt++) {
+            try {
+                // リトライ時は指数バックオフで待機
+                if (attempt > 0) {
+                    const waitTime = baseSleepMs * Math.pow(2, attempt - 1);
+                    Logger.log(`  トリガー削除リトライ ${attempt + 1}/${maxRetry} (${waitTime}ms待機)`);
+                    Utilities.sleep(waitTime);
+                }
+
+                ScriptApp.deleteTrigger(trigger);
+                deletedCount++;
+                success = true;
+
+                // 削除成功後、次のトリガー削除前に短い待機(レート制限対策)
+                if (index < targetTriggers.length - 1) {
+                    Utilities.sleep(baseSleepMs);
+                }
+
+                break; // 成功したらリトライループを抜ける
+
+            } catch (error) {
+                if (attempt === maxRetry - 1) {
+                    // 最終リトライでも失敗
+                    Logger.log(`  ✗ トリガー削除失敗(${maxRetry}回試行): ${error.message}`);
+                    failedCount++;
+                    failedTriggers.push({
+                        handlerFunction: trigger.getHandlerFunction(),
+                        triggerId: trigger.getUniqueId(),
+                        errorMessage: error.message
+                    });
+                }
+            }
         }
     });
 
-    Logger.log(`既存トリガー削除: ${deletedCount} 件`);
+    Logger.log(`既存トリガー削除: 成功 ${deletedCount} 件, 失敗 ${failedCount} 件`);
+
+    // 失敗があった場合は詳細を記録
+    if (failedCount > 0) {
+        Logger.log(`⚠️ トリガー削除に失敗したトリガーが ${failedCount} 件あります`);
+        failedTriggers.forEach((failed, idx) => {
+            Logger.log(`  [失敗${idx + 1}] ID: ${failed.triggerId}, エラー: ${failed.errorMessage}`);
+        });
+
+        // 部分的な失敗は処理を継続するが、全失敗の場合は警告
+        if (failedCount === targetTriggers.length) {
+            throw new Error(`全${targetTriggers.length}件のトリガー削除に失敗しました`);
+        }
+    }
 }
 
 /**
@@ -213,8 +284,13 @@ function setTriggerForGoodsMaster() {
 
     Logger.log(`=== ${FUNCTION_NAME} トリガー設定開始 ===`);
 
-    // 既存トリガーを削除（重複登録防止）
-    deleteTriggersForFunction(FUNCTION_NAME);
+    // 既存トリガーを削除(重複登録防止、リトライ機能付き)
+    try {
+        deleteTriggersForFunction(FUNCTION_NAME, 3, 500);
+    } catch (error) {
+        Logger.log(`⚠️ 既存トリガー削除で重大なエラー: ${error.message}`);
+        Logger.log(`処理を継続しますが、トリガーが重複登録される可能性があります`);
+    }
 
     // 翌日の 0:10 にトリガーを設定
     const triggerTime = new Date();
