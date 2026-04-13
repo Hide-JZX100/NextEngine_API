@@ -103,6 +103,10 @@ function manualRun(startDateStr, endDateStr, append = false) {
   }
 }
 
+function manualtest() {
+  manualRun('2026/04/01', '2026/04/09', false);
+}
+
 /**
  * キャンセル情報の手動実行用関数（任意の受注日範囲で再取得したい場合に使用）
  * @param {string} startDateStr - 受注日の開始日文字列 'YYYY/MM/DD' 形式
