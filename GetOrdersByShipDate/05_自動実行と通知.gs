@@ -18,22 +18,37 @@ function scheduledRun() {
   const today = new Date();
   const date = today.getDate();
 
-  // warmUp が動的に作成したトリガーを削除（トリガーの蓄積を防ぐ）
-  ScriptApp.getProjectTriggers().forEach(trigger => {
-    if (trigger.getHandlerFunction() === 'scheduledRun'
-      && trigger.getEventType() === ScriptApp.EventType.CLOCK
-      && trigger.getTriggerSource() === ScriptApp.TriggerSource.CLOCK) {
-      // 月次固定トリガー（毎月1日・10日・20日）は削除しない
-      // after() で作成された一回限りのトリガーのみ削除する
-      const triggerUid = trigger.getUniqueId();
-      const savedUids = (PropertiesService.getScriptProperties()
-        .getProperty('WARMUP_TRIGGER_UIDS') || '').split(',');
-      if (savedUids.includes(triggerUid)) {
-        ScriptApp.deleteTrigger(trigger);
-        console.log('動的トリガーを削除しました: ' + triggerUid);
+  // 動的トリガー経由でない場合（手動実行）はトリガー削除処理をスキップ
+  const uid = PropertiesService.getScriptProperties()
+    .getProperty('WARMUP_TRIGGER_UIDS');
+
+  if (!uid) {
+    console.log('手動実行のためトリガー削除処理をスキップします');
+  } else {
+
+    // warmUp が動的に作成したトリガーを削除（トリガーの蓄積を防ぐ）
+    ScriptApp.getProjectTriggers().forEach(trigger => {
+      if (
+        trigger.getHandlerFunction() === 'scheduledRun' &&
+        trigger.getEventType() === ScriptApp.EventType.CLOCK &&
+        trigger.getTriggerSource() === ScriptApp.TriggerSource.CLOCK
+      ) {
+        // 月次固定トリガー（毎月1日・10日・20日）は削除しない
+        // after() で作成された一回限りのトリガーのみ削除する
+        const triggerUid = trigger.getUniqueId();
+
+        const savedUids = (
+          PropertiesService.getScriptProperties()
+            .getProperty('WARMUP_TRIGGER_UIDS') || ''
+        ).split(',');
+
+        if (savedUids.includes(triggerUid)) {
+          ScriptApp.deleteTrigger(trigger);
+          console.log('動的トリガーを削除しました: ' + triggerUid);
+        }
       }
-    }
-  });
+    });
+  }
 
   console.log(`定期実行開始 (実行日: ${date}日)`);
 
@@ -44,7 +59,6 @@ function scheduledRun() {
   }
 
   // 受注情報は毎月1日・10日・20日すべてで実行
-
   try {
     updateOrders(null, null);
   } catch (e) {
