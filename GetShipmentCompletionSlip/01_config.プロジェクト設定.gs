@@ -77,6 +77,7 @@ const CONFIG = {
         { api: 'receive_order_other_amount', header: '他費用' },
         { api: 'receive_order_point_amount', header: 'ポイント数' },
         { api: 'receive_order_delivery_cut_form_id', header: '発送伝票番号' },
+        { api: 'receive_order_shop_id', header: '店舗コード' },
         { api: 'receive_order_payment_method_id', header: '支払区分' },
         { api: 'receive_order_include_to_order_id', header: '同梱先伝票番号' },
         { api: 'receive_order_multi_delivery_parent_order_id', header: '複数配送親伝票番号' },
