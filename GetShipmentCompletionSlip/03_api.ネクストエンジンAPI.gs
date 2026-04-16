@@ -74,6 +74,17 @@ function searchCompletedSlips(targetDate) {
             throw new Error(`APIエラー: ${json.message}`);
         }
 
+        // トークンが更新された場合は保存(ネクストエンジンAPI仕様)
+        if (json.access_token && json.refresh_token) {
+            const props = PropertiesService.getScriptProperties();
+            props.setProperties({
+                'ACCESS_TOKEN': json.access_token,
+                'REFRESH_TOKEN': json.refresh_token,
+                'TOKEN_UPDATED_AT': new Date().getTime().toString()
+            });
+            console.log('APIトークンを更新しました');
+        }
+
         const data = json.data;
         if (!data || data.length === 0) {
             hasMore = false;
