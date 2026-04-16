@@ -9,36 +9,41 @@
  * @param {Date|null} endDate - 終了日
  * @return {Object} { start: Date, end: Date }
  * 引数が両方nullの場合、実行日から自動計算する:
- *  - 1日の場合：前月16日〜前月末日
- *  - 16日以降の場合：当月1日〜当月15日
+ *  - 1日の場合：前月20日〜前月末日
+ *  - 10日の場合：当月1日〜9日
+ *  - 20日の場合：当月10日〜19日
  *  - それ以外の日付の場合：当月1日〜実行前日
  */
 function getDateRange(startDate, endDate) {
   if (startDate && endDate) {
     return { start: startDate, end: endDate };
   }
-  
+
   const today = new Date();
   const date = today.getDate();
   const year = today.getFullYear();
   const month = today.getMonth(); // 0-based
-  
+
   let start, end;
-  
+
   if (date === 1) {
-    // 実行日が1日の場合：前月16日〜前月末日
-    start = new Date(year, month - 1, 16);
+    // 実行日が1日の場合：前月20日〜前月末日
+    start = new Date(year, month - 1, 20);
     end = new Date(year, month, 0); // 前月末日
-  } else if (date >= 16) {
-    // 実行日が16日以降の場合：当月1日〜当月15日
+  } else if (date === 10) {
+    // 実行日が10日の場合：当月1日〜9日（月の上書き起点）
     start = new Date(year, month, 1);
-    end = new Date(year, month, 15);
+    end = new Date(year, month, 9);
+  } else if (date === 20) {
+    // 実行日が20日の場合：当月10日〜19日
+    start = new Date(year, month, 10);
+    end = new Date(year, month, 19);
   } else {
-    // それ以外の日付の場合：当月1日〜実行前日
+    // それ以外の日付の場合（手動実行）：当月1日〜実行前日
     start = new Date(year, month, 1);
     end = new Date(year, month, date - 1);
   }
-  
+
   return { start: start, end: end };
 }
 
@@ -76,24 +81,24 @@ function getShopNameMap() {
   const config = getConfig();
   const masterSs = SpreadsheetApp.openById(config.masterSpreadsheetId);
   const sheet = masterSs.getSheetByName(config.sheetNameShop);
-  
+
   if (!sheet) {
     throw new Error('店舗情報マスタシートが見つかりません: ' + config.sheetNameShop);
   }
-  
+
   const data = sheet.getDataRange().getValues();
   const shopMap = new Map();
-  
+
   // 空行は無視
   for (let i = 0; i < data.length; i++) {
     const code = String(data[i][SHOP_CODE_COLUMN - 1]).trim();
     const name = String(data[i][SHOP_NAME_COLUMN - 1]).trim();
-    
+
     if (code !== '' && name !== '') {
       shopMap.set(code, name);
     }
   }
-  
+
   return shopMap;
 }
 

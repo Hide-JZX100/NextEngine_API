@@ -26,11 +26,6 @@
 function searchCompletedSlips(targetDate) {
     console.log(`=== API検索開始: 対象日 ${targetDate} ===`);
 
-    const accessToken = getAccessToken_();
-    if (!accessToken) {
-        throw new Error('アクセストークンが取得できませんでした。認証を行ってください。');
-    }
-
     let allData = [];
     let offset = 0;
     let hasMore = true;
@@ -39,11 +34,21 @@ function searchCompletedSlips(targetDate) {
     while (hasMore) {
         console.log(`取得中... Offset: ${offset}`);
 
+        // アクセストークンとリフレッシュトークンを取得
+        const props = PropertiesService.getScriptProperties();
+        const accessToken = props.getProperty('ACCESS_TOKEN');
+        const refreshToken = props.getProperty('REFRESH_TOKEN');
+
+        if (!accessToken || !refreshToken) {
+            throw new Error('トークンが見つかりません。認証を行ってください。');
+        }
+
         // パラメータ構築
         // 出荷予定日が対象日であるデータを検索
         // wait_flag=1: 処理待ち等の制御用(通常指定推奨)
         const params = {
             'access_token': accessToken,
+            'refresh_token': refreshToken,
             'wait_flag': '1',
             'fields': CONFIG.FIELDS.map(f => f.api).join(','),
             'receive_order_send_plan_date-eq': targetDate,
@@ -74,6 +79,17 @@ function searchCompletedSlips(targetDate) {
             throw new Error(`APIエラー: ${json.message}`);
         }
 
+        // トークンが更新された場合は保存(ネクストエンジンAPI仕様)
+        if (json.access_token && json.refresh_token) {
+            const props = PropertiesService.getScriptProperties();
+            props.setProperties({
+                'ACCESS_TOKEN': json.access_token,
+                'REFRESH_TOKEN': json.refresh_token,
+                'TOKEN_UPDATED_AT': new Date().getTime().toString()
+            });
+            console.log('APIトークンを更新しました');
+        }
+
         const data = json.data;
         if (!data || data.length === 0) {
             hasMore = false;
@@ -94,16 +110,6 @@ function searchCompletedSlips(targetDate) {
 
     console.log(`=== API検索終了: 合計 ${allData.length} 件 ===`);
     return allData;
-}
-
-/**
- * スクリプトプロパティからアクセストークンを取得する
- * 
- * @return {string|null} アクセストークン
- */
-function getAccessToken_() {
-    const props = PropertiesService.getScriptProperties();
-    return props.getProperty('ACCESS_TOKEN');
 }
 
 /**

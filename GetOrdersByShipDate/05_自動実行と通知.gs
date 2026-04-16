@@ -17,18 +17,55 @@
 function scheduledRun() {
   const today = new Date();
   const date = today.getDate();
-  
+
+  // 動的トリガー経由でない場合（手動実行）はトリガー削除処理をスキップ
+  const uid = PropertiesService.getScriptProperties()
+    .getProperty('WARMUP_TRIGGER_UIDS');
+
+  if (!uid) {
+    console.log('手動実行のためトリガー削除処理をスキップします');
+  } else {
+
+    // warmUp が動的に作成したトリガーを削除（トリガーの蓄積を防ぐ）
+    ScriptApp.getProjectTriggers().forEach(trigger => {
+      if (
+        trigger.getHandlerFunction() === 'scheduledRun' &&
+        trigger.getEventType() === ScriptApp.EventType.CLOCK &&
+        trigger.getTriggerSource() === ScriptApp.TriggerSource.CLOCK
+      ) {
+        // 月次固定トリガー（毎月1日・10日・20日）は削除しない
+        // after() で作成された一回限りのトリガーのみ削除する
+        const triggerUid = trigger.getUniqueId();
+
+        const savedUids = (
+          PropertiesService.getScriptProperties()
+            .getProperty('WARMUP_TRIGGER_UIDS') || ''
+        ).split(',');
+
+        if (savedUids.includes(triggerUid)) {
+          ScriptApp.deleteTrigger(trigger);
+          console.log('動的トリガーを削除しました: ' + triggerUid);
+        }
+      }
+    });
+  }
+
   console.log(`定期実行開始 (実行日: ${date}日)`);
-  
-  // 受注情報は毎月1日・16日どちらでも実行される
-  // 1日の場合は updateOrders 内部の判定により「追記」され、16日の場合は「クリアして新規書き込み」となる。
+
+  // 対象日以外はスキップ（誤トリガー対策）
+  if (date !== 1 && date !== 10 && date !== 20) {
+    console.log('本日は定期実行対象日ではありません。処理をスキップします。');
+    return;
+  }
+
+  // 受注情報は毎月1日・10日・20日すべてで実行
   try {
     updateOrders(null, null);
   } catch (e) {
     sendErrorNotification('updateOrders', e);
   }
-  
-  // キャンセル情報は1日のみ実行される
+
+  // キャンセル情報は1日のみ実行
   if (date === 1) {
     try {
       updateCancels(null, null);
@@ -36,7 +73,7 @@ function scheduledRun() {
       sendErrorNotification('updateCancels', e);
     }
   }
-  
+
   console.log('定期実行完了');
 }
 
@@ -53,17 +90,21 @@ function manualRun(startDateStr, endDateStr, append = false) {
   try {
     const start = new Date(startDateStr);
     const end = new Date(endDateStr);
-    
+
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       throw new Error('日付の形式が正しくありません。YYYY/MM/DD形式で指定してください。');
     }
-    
+
     console.log(`手動実行(受注): ${startDateStr} - ${endDateStr} (追記=${append})`);
     updateOrders(start, end, append);
   } catch (e) {
     console.error('手動実行エラー:', e.message);
     throw e;
   }
+}
+
+function manualtest() {
+  manualRun('2026/04/01', '2026/04/09', false);
 }
 
 /**
@@ -78,11 +119,11 @@ function manualRunCancels(startDateStr, endDateStr) {
   try {
     const start = new Date(startDateStr);
     const end = new Date(endDateStr);
-    
+
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       throw new Error('日付の形式が正しくありません。YYYY/MM/DD形式で指定してください。');
     }
-    
+
     console.log(`手動実行(キャンセル): ${startDateStr} - ${endDateStr}`);
     updateCancels(start, end);
   } catch (e) {
@@ -102,7 +143,7 @@ function sendErrorNotification(functionName, error) {
   if (!email) {
     email = Session.getActiveUser().getEmail();
   }
-  
+
   const subject = '[エラー] 受注情報取得システム - ' + functionName;
   const body = `自動実行中にエラーが発生しました。
 
@@ -119,7 +160,7 @@ ${error.stack ? error.stack : ''}
 ■ 対処方法
 Google Apps Script エディタを開き、ログを確認してください。
 必要に応じて、manualRun('YYYY/MM/DD', 'YYYY/MM/DD') または manualRunCancels() にて手動実行によるリカバリを行ってください。`;
-  
+
   MailApp.sendEmail(email, subject, body);
   console.log(`エラーメールを送信しました: ${email}`);
 }
@@ -131,7 +172,7 @@ Google Apps Script エディタを開き、ログを確認してください。
 function checkSetup() {
   console.log('=== セットアップ状態の確認 ===');
   const props = PropertiesService.getScriptProperties().getProperties();
-  
+
   const checkProp = (key, name) => {
     if (props[key]) {
       console.log(`✅ ${name} (${key}): 設定済み`);
@@ -141,7 +182,7 @@ function checkSetup() {
       return false;
     }
   };
-  
+
   checkProp('ACCESS_TOKEN', 'アクセストークン');
   checkProp('REFRESH_TOKEN', 'リフレッシュトークン');
   checkProp('TARGET_SPREADSHEET_ID', '書き込み先SS ID');
@@ -165,7 +206,7 @@ function checkSetup() {
       console.error(`❌ 店舗マスタスプレッドシートへのアクセス: 失敗 (${e.message})`);
     }
   }
-  
+
   console.log('==============================');
 }
 
@@ -176,7 +217,7 @@ function checkSpreadsheet() {
   console.log('=== スプレッドシートの状態確認 ===');
   const config = getConfig();
   const ss = SpreadsheetApp.openById(config.targetSpreadsheetId);
-  
+
   // 受注情報シート
   const orderSheet = ss.getSheetByName(config.sheetNameOrders);
   if (orderSheet) {
@@ -185,7 +226,7 @@ function checkSpreadsheet() {
   } else {
     console.error(`❌ 受注情報シートが見つかりません: ${config.sheetNameOrders}`);
   }
-  
+
   // キャンセル情報シート
   const cancelSheet = ss.getSheetByName(config.sheetNameCancel);
   if (cancelSheet) {
@@ -194,6 +235,6 @@ function checkSpreadsheet() {
   } else {
     console.error(`❌ キャンセル情報シートが見つかりません: ${config.sheetNameCancel}`);
   }
-  
+
   console.log('==============================');
 }
