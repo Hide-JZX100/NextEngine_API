@@ -119,8 +119,8 @@ function searchCompletedSlips(startDate, endDate) {
  */
 function testSearchApi() {
     try {
-        const targetDate = getTargetDate();
-        const results = searchCompletedSlips(targetDate);
+        const dateRange = getTargetDateRange(1); // バッチ1でテスト
+        const results = searchCompletedSlips(dateRange.startDate, dateRange.endDate);
 
         if (results.length > 0) {
             console.log('先頭データのサンプル:', JSON.stringify(results[0], null, 2));
