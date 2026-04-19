@@ -74,20 +74,105 @@ function main(batchNumber) {
     }
 }
 
-function maintest1() {
-    // 前月1日～10日取得
-    console.log('=== バッチ1開始 ===');
+/**
+ * ウォームアップ関数
+ * コールドスタートを回避し、メイン処理の実行速度を向上させる
+ * 
+ * 【実行フロー】
+ * 1. この関数をトリガーで実行
+ * 2. APIに軽量リクエストを送信してサーバー側キャッシュを準備
+ * 3. 2分後にmain関数を実行するトリガーを登録
+ * 
+ * @param {number} batchNumber - バッチ番号（1, 2, 3）省略時は1
+ */
+function warmupAndScheduleMain(batchNumber) {
+    batchNumber = batchNumber || 1;
+
+    console.log(`=== ウォームアップ開始 (バッチ${batchNumber}用) ===`);
+
+    try {
+        // 1. 対象日付範囲の取得
+        const dateRange = getTargetDateRange(batchNumber);
+
+        // 2. スクリプトプロパティからトークン取得
+        const props = PropertiesService.getScriptProperties();
+        const accessToken = props.getProperty('ACCESS_TOKEN');
+        const refreshToken = props.getProperty('REFRESH_TOKEN');
+
+        if (!accessToken || !refreshToken) {
+            throw new Error('トークンが見つかりません。認証を行ってください。');
+        }
+
+        // 3. メイン処理と同じエンドポイントに最小限のリクエスト
+        const params = {
+            'access_token': accessToken,
+            'refresh_token': refreshToken,
+            'wait_flag': '1',
+            'fields': 'receive_order_id',  // 最小限のフィールド
+            'receive_order_send_plan_date-gte': dateRange.startDate,
+            'limit': '1',  // 1件のみ
+            'offset': '0'
+        };
+
+        const url = CONFIG.API.BASE_URL + CONFIG.API.ENDPOINT_SEARCH;
+        const options = {
+            'method': 'post',
+            'payload': params,
+            'muteHttpExceptions': true
+        };
+
+        console.log('ウォームアップリクエスト送信中...');
+        const response = UrlFetchApp.fetch(url, options);
+        const json = JSON.parse(response.getContentText());
+
+        if (json.result !== 'success') {
+            throw new Error(`ウォームアップ失敗: ${json.message}`);
+        }
+
+        // 4. トークン更新
+        if (json.access_token && json.refresh_token) {
+            props.setProperties({
+                'ACCESS_TOKEN': json.access_token,
+                'REFRESH_TOKEN': json.refresh_token,
+                'TOKEN_UPDATED_AT': new Date().getTime().toString()
+            });
+            console.log('トークンを更新しました');
+        }
+
+        console.log('✅ ウォームアップ完了');
+
+        // 5. 2分後にmain関数を実行するトリガーを作成
+        const triggerTime = new Date(new Date().getTime() + 2 * 60 * 1000); // 2分後
+        ScriptApp.newTrigger('executeBatch' + batchNumber)
+            .timeBased()
+            .at(triggerTime)
+            .create();
+
+        console.log(`${triggerTime.toLocaleString('ja-JP')} にバッチ${batchNumber}を実行するトリガーを作成しました`);
+
+    } catch (error) {
+        console.error('❌ ウォームアップエラー:', error.message);
+        throw error;
+    }
+}
+
+/**
+ * バッチ1実行関数（トリガーから呼ばれる）
+ */
+function executeBatch1() {
     main(1);
 }
 
-function maintest2() {
-    // 前月11日～20日取得
-    console.log('=== バッチ2開始 ===');
+/**
+ * バッチ2実行関数（トリガーから呼ばれる）
+ */
+function executeBatch2() {
     main(2);
 }
 
-function maintest3() {
-    // 前月21日～月末日取得
-    console.log('=== バッチ3開始 ===');
+/**
+ * バッチ3実行関数（トリガーから呼ばれる）
+ */
+function executeBatch3() {
     main(3);
 }
