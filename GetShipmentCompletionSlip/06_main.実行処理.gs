@@ -73,3 +73,21 @@ function main(batchNumber) {
         console.log(`処理時間: ${duration}秒`);
     }
 }
+
+function maintest1() {
+    // 前月1日～10日取得
+    console.log('=== バッチ1開始 ===');
+    main(1);
+}
+
+function maintest2() {
+    // 前月11日～20日取得
+    console.log('=== バッチ2開始 ===');
+    main(2);
+}
+
+function maintest3() {
+    // 前月21日～月末日取得
+    console.log('=== バッチ3開始 ===');
+    main(3);
+}
