@@ -16,28 +16,32 @@
  * - main(): 全体の処理フローを制御するメイン関数（トリガー実行対象）
  * 
  * 【依存関係】
- * - utils.gs: 日付取得
- * - api.gs: データ検索
- * - process.gs: データ加工
- * - sheet.gs: シート出力
+ * - utils.ユーティリティ.gs: 日付取得
+ * - api.ネクストエンジンAPI.gs: データ検索
+ * - process.フィルタとマッピング.gs: データ加工
+ * - sheet.スプレッドシート書込.gs: シート出力
  */
 
 /**
  * メイン関数
- * 定期実行（タイムトリガー）の対象となる関数
+ *
+ * @param {number} batchNumber - バッチ番号（1, 2, 3）省略時は1
  */
-function main() {
+function main(batchNumber) {
+    // バッチ番号のデフォルト値
+    batchNumber = batchNumber || 1;
+
     const startTime = new Date();
-    console.log(`=== 出荷済み伝票取得処理開始 ${startTime.toLocaleString('ja-JP')} ===`);
+    console.log(`=== 出荷済み伝票取得処理開始 (バッチ${batchNumber}) ${startTime.toLocaleString('ja-JP')} ===`);
 
     try {
-        // 1. 対象日の取得
-        const targetDate = getTargetDate();
-        console.log(`対象日: ${targetDate}`);
+        // 1. 対象日付範囲の取得
+        const dateRange = getTargetDateRange(batchNumber);
+        console.log(`対象範囲: ${dateRange.startDate} ～ ${dateRange.endDate}`);
 
         // 2. APIからデータ取得
-        // 指定された対象日の「出荷予定日」を持つ伝票を全件取得
-        const rawData = searchCompletedSlips(targetDate);
+        // 指定された日付範囲の「出荷予定日」を持つ伝票を全件取得
+        const rawData = searchCompletedSlips(dateRange.startDate, dateRange.endDate);
 
         if (rawData.length === 0) {
             console.log('APIからの取得データが0件でした。処理を終了します。');
