@@ -50,8 +50,8 @@ function filterAndMapSlips(rawData) {
  */
 function testProcessData() {
     try {
-        const targetDate = getTargetDate();
-        const rawResults = searchCompletedSlips(targetDate);
+        const dateRange = getTargetDateRange(1); // バッチ1でテスト
+        const rawResults = searchCompletedSlips(dateRange.startDate, dateRange.endDate);
 
         if (rawResults.length === 0) {
             console.log('テストデータがないため、処理をスキップします。');
