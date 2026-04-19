@@ -64,6 +64,11 @@ function main(batchNumber) {
 
         console.log('=== 全処理が正常に完了しました ===');
 
+        // 次のバッチをスケジュール
+        if (batchNumber < 3) {
+            scheduleNextBatch(batchNumber + 1);
+        }
+
     } catch (e) {
         console.error(`❌ エラーが発生しました: ${e.message}`);
         // 必要に応じて管理者へのメール通知などを実装
@@ -91,6 +96,11 @@ function warmupAndScheduleMain(batchNumber) {
     console.log(`=== ウォームアップ開始 (バッチ${batchNumber}用) ===`);
 
     try {
+        // バッチ1の場合、事前クリーンアップを実行
+        if (batchNumber === 1) {
+            cleanupOldTriggersAndData();
+        }
+
         // 1. 対象日付範囲の取得
         const dateRange = getTargetDateRange(batchNumber);
 
@@ -157,9 +167,32 @@ function warmupAndScheduleMain(batchNumber) {
 }
 
 /**
+ * 次のバッチを5分後に実行するトリガーを作成
+ * 
+ * @param {number} nextBatchNumber - 次のバッチ番号（2 or 3）
+ */
+function scheduleNextBatch(nextBatchNumber) {
+    if (nextBatchNumber < 2 || nextBatchNumber > 3) {
+        console.log('次のバッチはありません。処理完了');
+        return;
+    }
+
+    const intervalMinutes = CONFIG.BATCH.INTERVAL_MINUTES;
+    const triggerTime = new Date(new Date().getTime() + intervalMinutes * 60 * 1000);
+
+    ScriptApp.newTrigger(`executeBatch${nextBatchNumber}`)
+        .timeBased()
+        .at(triggerTime)
+        .create();
+
+    console.log(`${triggerTime.toLocaleString('ja-JP')} にバッチ${nextBatchNumber}を実行するトリガーを作成しました`);
+}
+
+/**
  * バッチ1実行関数（トリガーから呼ばれる）
  */
 function executeBatch1() {
+    deleteMyTrigger('executeBatch1'); // 自分のトリガーを削除
     main(1);
 }
 
@@ -167,6 +200,7 @@ function executeBatch1() {
  * バッチ2実行関数（トリガーから呼ばれる）
  */
 function executeBatch2() {
+    deleteMyTrigger('executeBatch2'); // 自分のトリガーを削除
     main(2);
 }
 
@@ -174,5 +208,6 @@ function executeBatch2() {
  * バッチ3実行関数（トリガーから呼ばれる）
  */
 function executeBatch3() {
+    deleteMyTrigger('executeBatch3'); // 自分のトリガーを削除
     main(3);
 }
