@@ -62,7 +62,7 @@ function writeToSpreadsheet(data) {
         };
 
         const options = {
-            valueInputOption: 'RAW'  // RAWデータとして書き込み
+            valueInputOption: 'USER_ENTERED'  // スプレッドシートが自動判定
         };
 
         // values.append を使用して最終行の次に追記
