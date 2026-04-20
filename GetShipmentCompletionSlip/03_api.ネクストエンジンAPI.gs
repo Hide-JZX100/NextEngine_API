@@ -18,13 +18,14 @@
 
 /**
  * 出荷完了伝票を検索して取得する
- * 対象日(出荷予定日)を指定して全件取得する(ページネーション対応)
+ * 日付範囲(出荷予定日)を指定して全件取得する(ページネーション対応)
  * 
- * @param {string} targetDate - 'YYYY-MM-DD' 形式の対象日
+ * @param {string} startDate - 'YYYY-MM-DD' 形式の開始日
+ * @param {string} endDate - 'YYYY-MM-DD' 形式の終了日
  * @return {Array<Object>} 取得した伝票データの配列
  */
-function searchCompletedSlips(targetDate) {
-    console.log(`=== API検索開始: 対象日 ${targetDate} ===`);
+function searchCompletedSlips(startDate, endDate) {
+    console.log(`=== API検索開始: ${startDate} ～ ${endDate} ===`);
 
     let allData = [];
     let offset = 0;
@@ -44,14 +45,15 @@ function searchCompletedSlips(targetDate) {
         }
 
         // パラメータ構築
-        // 出荷予定日が対象日であるデータを検索
+        // 出荷予定日が指定範囲内であるデータを検索
         // wait_flag=1: 処理待ち等の制御用(通常指定推奨)
         const params = {
             'access_token': accessToken,
             'refresh_token': refreshToken,
             'wait_flag': '1',
             'fields': CONFIG.FIELDS.map(f => f.api).join(','),
-            'receive_order_send_plan_date-eq': targetDate,
+            'receive_order_send_plan_date-gte': startDate,
+            'receive_order_send_plan_date-lte': endDate,
             'limit': LIMIT.toString(),
             'offset': offset.toString()
         };
@@ -117,8 +119,8 @@ function searchCompletedSlips(targetDate) {
  */
 function testSearchApi() {
     try {
-        const targetDate = getTargetDate();
-        const results = searchCompletedSlips(targetDate);
+        const dateRange = getTargetDateRange(1); // バッチ1でテスト
+        const results = searchCompletedSlips(dateRange.startDate, dateRange.endDate);
 
         if (results.length > 0) {
             console.log('先頭データのサンプル:', JSON.stringify(results[0], null, 2));

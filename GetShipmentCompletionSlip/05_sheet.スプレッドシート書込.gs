@@ -21,7 +21,7 @@
  */
 
 /**
- * データをスプレッドシートに書き込む
+ * データをスプレッドシートに書き込む（Sheets API版）
  * 指定されたタブが存在しない場合は新規作成する
  * 
  * @param {Array<Array>} data - 書き込むデータの2次元配列
@@ -32,7 +32,7 @@ function writeToSpreadsheet(data) {
         return;
     }
 
-    console.log(`=== スプレッドシート書込開始: ${data.length} 件 ===`);
+    console.log(`=== スプレッドシート書込開始 (Sheets API): ${data.length} 件 ===`);
 
     try {
         const props = PropertiesService.getScriptProperties();
@@ -42,30 +42,33 @@ function writeToSpreadsheet(data) {
         if (!sheetId) throw new Error('スクリプトプロパティにスプレッドシートID (SPREADSHEET_ID) が設定されていません。');
         if (!sheetName) throw new Error('スクリプトプロパティにシート名 (SHEET_NAME) が設定されていません。');
 
+        // シートの存在確認とヘッダー確認（SpreadsheetAppを使用）
         const ss = SpreadsheetApp.openById(sheetId);
         let sheet = ss.getSheetByName(sheetName);
 
-        // シートが存在しない場合は作成
         if (!sheet) {
             console.log(`シート '${sheetName}' が存在しないため作成します。`);
             sheet = ss.insertSheet(sheetName);
-            // ヘッダー行を追加 (もし空の場合)
             appendHeader(sheet);
-        } else {
-            // シートが存在しても、データが空(1行目がない)ならヘッダー追加
-            if (sheet.getLastRow() === 0) {
-                appendHeader(sheet);
-            }
+        } else if (sheet.getLastRow() === 0) {
+            appendHeader(sheet);
         }
 
-        // データの書き込み (最終行の次に追加)
-        const startRow = sheet.getLastRow() + 1;
-        const numRows = data.length;
-        const numCols = data[0].length;
+        // Sheets API でデータを追記
+        const range = `${sheetName}!A:A`; // A列を基準に最終行を自動判定
 
-        sheet.getRange(startRow, 1, numRows, numCols).setValues(data);
+        const resource = {
+            values: data
+        };
 
-        console.log(`書込完了: ${numRows} 行追記しました。`);
+        const options = {
+            valueInputOption: 'USER_ENTERED'  // スプレッドシートが自動判定
+        };
+
+        // values.append を使用して最終行の次に追記
+        Sheets.Spreadsheets.Values.append(resource, sheetId, range, options);
+
+        console.log(`書込完了: ${data.length} 行追記しました (Sheets API)`);
 
     } catch (e) {
         console.error('スプレッドシート書込エラー:', e.message);
