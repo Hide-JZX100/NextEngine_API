@@ -7,8 +7,9 @@
  * ネクストエンジンAPIからキャンセル情報を全件取得する（ページネーション対応）
  *
  * 【検索ロジック】
- * 受注日（receive_order_date）が指定期間内で、かつキャンセルフラグが立っている明細を取得する。
- * 月をまたいでキャンセルされた伝票を捕捉するため、検索条件はキャンセル日ではなく受注日を基準にする。
+ * 出荷予定日（receive_order_send_plan_date）が指定期間内で、かつ受注キャンセル区分（receive_order_cancel_type_id）が0以外の受注を取得する。
+ * 注文分割された明細を除外するため、明細行キャンセルフラグではなく受注キャンセル区分を条件とする。
+ * 出荷後キャンセルも対象とするため、出荷予定日ベースで絞り込む。
  *
  * @param {Date} startDate - 受注日の開始日（nullの場合は自動計算：前月1日）
  * @param {Date} endDate - 受注日の終了日（nullの場合は自動計算：前月末日）
@@ -30,15 +31,15 @@ function fetchCancelRows(startDate, endDate) {
 
   const startStr = formatDateForApi(start);
   const endStr = formatDateForApi(end);
-  
-  console.log(`キャンセル取得対象期間(受注日ベース): ${startStr} ～ ${endStr}`);
+
+  console.log(`キャンセル取得対象期間(出荷予定日ベース): ${startStr} ～ ${endStr}`);
 
   const props = PropertiesService.getScriptProperties();
   const token = {
     accessToken: props.getProperty('ACCESS_TOKEN'),
     refreshToken: props.getProperty('REFRESH_TOKEN')
   };
-  
+
   if (!token.accessToken || !token.refreshToken) {
     throw new Error('ACCESS_TOKEN または REFRESH_TOKEN が取得できません。testGenerateAuthUrl()で再認証してください。');
   }
@@ -56,9 +57,9 @@ function fetchCancelRows(startDate, endDate) {
       refresh_token: token.refreshToken,
       wait_flag: '1',
       fields: CANCEL_FIELDS,
-      'receive_order_date-gte': startStr,
-      'receive_order_date-lte': endStr,
-      'receive_order_row_cancel_flag-eq': '1',
+      'receive_order_send_plan_date-gte': startStr,
+      'receive_order_send_plan_date-lte': endStr,
+      'receive_order_cancel_type_id-gte': '1',
       offset: String(offset),
       limit: String(LIMIT)
     };
@@ -75,7 +76,7 @@ function fetchCancelRows(startDate, endDate) {
     if (json.result !== 'success') {
       throw new Error('API取得エラー(キャンセル): ' + json.message + ' (code: ' + json.code + ')');
     }
-    
+
     // トークンが更新された場合はプロパティを更新
     if (json.access_token && json.access_token !== token.accessToken) {
       props.setProperty('ACCESS_TOKEN', json.access_token);
@@ -86,7 +87,7 @@ function fetchCancelRows(startDate, endDate) {
 
     const data = json.data || [];
     allRows = allRows.concat(data);
-    
+
     console.log(`キャンセル情報 ${pageCount}ページ目取得完了: ${data.length}件 (合計: ${allRows.length}件)`);
 
     if (data.length < LIMIT) {
@@ -140,7 +141,7 @@ function writeCancelsToSheet(rows, shopNameMap) {
   const config = getConfig();
   const ss = SpreadsheetApp.openById(config.targetSpreadsheetId);
   const sheet = getOrCreateSheet(ss, config.sheetNameCancel);
-  
+
   clearAndSetHeader(sheet, CANCEL_HEADERS);
 
   if (rows && rows.length > 0) {
@@ -171,13 +172,13 @@ function updateCancels(startDate = null, endDate = null) {
     }
 
     console.log(`開始: updateCancels (${formatDate(start)} - ${formatDate(end)})`);
-    
+
     // 店舗マスタ取得
     const shopNameMap = getShopNameMap();
-    
+
     const rows = fetchCancelRows(startDate, endDate);
     writeCancelsToSheet(rows, shopNameMap);
-    
+
     console.log('完了: updateCancels');
   } catch (error) {
     console.error('updateCancels でエラーが発生しました:', error.stack || error.message);
@@ -195,7 +196,7 @@ function testFetchCancelOnly() {
   try {
     const start = new Date(2025, 9, 1);
     const end = new Date(2025, 9, 31);
-    
+
     const rows = fetchCancelRows(start, end);
     console.log(`キャンセルデータ取得件数: ${rows.length}件`);
     if (rows.length > 0) {
