@@ -60,6 +60,7 @@ function fetchCancelRows(startDate, endDate) {
       'receive_order_send_plan_date-gte': startStr,
       'receive_order_send_plan_date-lte': endStr,
       'receive_order_cancel_type_id-neq': '0',
+      'receive_order_order_status_id-eq': '50',
       offset: String(offset),
       limit: String(LIMIT)
     };
