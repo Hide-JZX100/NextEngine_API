@@ -59,7 +59,7 @@ function fetchCancelRows(startDate, endDate) {
       fields: CANCEL_FIELDS,
       'receive_order_send_plan_date-gte': startStr,
       'receive_order_send_plan_date-lte': endStr,
-      'receive_order_cancel_type_id-gte': '1',
+      'receive_order_cancel_type_id-neq': '0',
       offset: String(offset),
       limit: String(LIMIT)
     };
