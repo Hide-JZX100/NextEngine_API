@@ -82,9 +82,10 @@ function clearSheetData() {
         const lastRow = sheet.getLastRow();
 
         if (lastRow > 1) {
-            // 2行目以降（データ行）を削除
-            sheet.deleteRows(2, lastRow - 1);
-            console.log(`${lastRow - 1} 行のデータを削除しました`);
+            // 2行目以降のデータをクリア（行削除ではなく内容クリア）
+            const lastCol = sheet.getLastColumn();
+            sheet.getRange(2, 1, lastRow - 1, lastCol).clearContent();
+            console.log(`${lastRow - 1} 行のデータをクリアしました`);
         } else {
             console.log('削除するデータがありません');
         }
