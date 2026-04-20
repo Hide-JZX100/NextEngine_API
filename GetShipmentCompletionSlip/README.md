@@ -49,6 +49,7 @@ executeBatch1() → main(1)
 └─ 5分後にバッチ2をスケジュール
 ↓ 5分後
 executeBatch2() → main(2)
+
 ├─ 前月11日～20日のデータ取得
 ├─ フィルタリング・加工
 ├─ Sheets APIで書き込み
