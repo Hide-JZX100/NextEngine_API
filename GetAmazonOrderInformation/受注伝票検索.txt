@@ -1,0 +1,159 @@
+受注伝票検索
+
+リクエストURL
+ホスト　　https://api.next-engine.org
+エンドポイント　　/api_v1_receiveorder_base/search
+
+フィールド一覧
+
+受注伝票
+項目名	フィールド名	データ型	備考
+店舗コード	receive_order_shop_id	数値型	店舗マスタの店舗コード
+伝票番号	receive_order_id	数値型	ネクストエンジン内で一意に付与される番号
+受注番号	receive_order_shop_cut_form_id	文字列型	原則、店舗内で一意に付与される番号（重複する可能性あり。）
+受注日	receive_order_date	日時型	店舗側で受注した日
+取込日	receive_order_import_date	日時型	ネクストエンジンに取り込まれた日
+重要チェック区分	receive_order_important_check_id	文字列型	1:重要
+重要チェック名	receive_order_important_check_name	文字列型	重要チェックを付けた担当者名
+確認チェック区分	receive_order_confirm_check_id	文字列型	0:確認不要、1:確認必要、2:確認済み
+確認チェック名	receive_order_confirm_check_name	文字列型	確認チェックを付けた担当者名
+受注確認内容ID	receive_order_confirm_ids	文字列型	受注確認内容IDが":"区切りで設定されます。明細行に対する確認は"#"の後に明細行番号が設定されます。　Ex: "AO:AA#1:AA#2"の場合　送り先の郵便番号と住所があってません。商品コードが商品マスタに存在しません。：1行目　商品コードが商品マスタに存在しません。：2行目
+メール送信状態値	receive_order_mail_status	文字列型	次の値によりどの種類のメール送信が終了したかを表します。区切り文字はありません。例えばJHとあれば受注メールと発送完了メールが送信済みです。　J:受注確認メール、B:印刷日待ち連絡メール、C:印刷待ち以降連絡メール、H:発送メール、N:入金確認メール、F:フォローメール
+受注分類タグ	receive_order_gruoping_tag	文字列型	[]区切りでタグの名称が設定されている。受注分類タグ自体の検索には未対応。例:[連絡待ち][ゴールド会員]
+取込種類区分	receive_order_import_type_id	文字列型	0:メール、1:CSV、2:手入力
+取込種類名	receive_order_import_type_name	文字列型	
+受注キャンセル区分	receive_order_cancel_type_id	文字列型	受注キャンセル区分
+受注キャンセル名	receive_order_cancel_type_name	文字列型	
+受注キャンセル日	receive_order_cancel_date	日時型	
+受注状態区分	receive_order_order_status_id	文字列型	受注状態区分
+受注状態名	receive_order_order_status_name	文字列型	
+発送方法区分	receive_order_delivery_id	文字列型	発送方法区分
+発送方法名	receive_order_delivery_name	文字列型	
+支払区分	receive_order_payment_method_id	文字列型	支払区分
+受注伝票の支払方法の値
+支払名	receive_order_payment_method_name	文字列型	
+総合計	receive_order_total_amount	数値型	商品計+税金+手数料+発送代+他費用-ポイント数
+税金	receive_order_tax_amount	数値型	
+手数料	receive_order_charge_amount	数値型	
+発送代	receive_order_delivery_fee_amount	数値型	
+他費用	receive_order_other_amount	数値型	
+ポイント数	receive_order_point_amount	数値型	
+商品計	receive_order_goods_amount	数値型	
+入金額	receive_order_deposit_amount	文字列型	
+入金状況区分	receive_order_deposit_type_id	文字列型	入金区分
+入金状況名	receive_order_deposit_type_name	文字列型	
+入金日	receive_order_deposit_date	日時型	
+備考	receive_order_note	文字列型	
+同梱候補伝票番号	receive_order_include_possible_order_id	数値型	ネクストエンジンが自動判定した同梱候補の伝票番号
+同梱先伝票番号	receive_order_include_to_order_id	数値型	同梱した場合の同梱先の伝票番号
+複数配送親伝票番号	receive_order_multi_delivery_parent_order_id	数値型	複数配送の親の伝票番号
+分割元伝票番号	receive_order_divide_from_order_id	数値型	分割元の伝票番号
+複写元伝票番号	receive_order_copy_from_order_id	数値型	複写元の伝票番号
+複数配送親フラグ	receive_order_multi_delivery_parent_flag	文字列型	複数配送の親か否か
+納品書印刷指示日	receive_order_statement_delivery_instruct_printing_date	日時型	
+納品書発行日	receive_order_statement_delivery_printing_date	日時型	納品書をダウンロードした日
+納品書特記事項	receive_order_statement_delivery_text	文字列型	
+出荷確定日	receive_order_send_date	日時型	受注状態が出荷確定済みになった日
+出荷予定日	receive_order_send_plan_date	日時型	
+出荷順序	receive_order_send_sequence	文字列型	ラベル発行フラグがたった順序
+作業用欄	receive_order_worker_text	文字列型	
+ピッキング指示内容	receive_order_picking_instruct	文字列型	
+ラベル発行日	receive_order_label_print_date	日時型	
+ラベル発行フラグ	receive_order_label_print_flag	文字列型	配送伝票の印刷対象か否か　0:対象外、1:対象、2:発行済み
+配達希望日	receive_order_hope_delivery_date	日時型	
+配達希望時間帯区分	receive_order_hope_delivery_time_slot_id	文字列型	指定の発送方法の伝票印字ソフト用の値が設定されます。
+配達希望時間帯名	receive_order_hope_delivery_time_slot_name	文字列型	
+便種区分	receive_order_delivery_method_id	文字列型	指定の発送方法の伝票印字ソフト用の値が設定されます。
+便種名	receive_order_delivery_method_name	文字列型	
+シール1区分	receive_order_seal1_id	文字列型	指定の発送方法の伝票印字ソフト用の値が設定されます。
+シール1名	receive_order_seal1_name	文字列型	
+シール2区分	receive_order_seal2_id	文字列型	指定の発送方法の伝票印字ソフト用の値が設定されます。
+シール2名	receive_order_seal2_name	文字列型	
+シール3区分	receive_order_seal3_id	文字列型	指定の発送方法の伝票印字ソフト用の値が設定されます。
+シール3名	receive_order_seal3_name	文字列型	
+シール4区分	receive_order_seal4_id	文字列型	指定の発送方法の伝票印字ソフト用の値が設定されます。
+シール4名	receive_order_seal4_name	文字列型	
+営業止め区分	receive_order_business_office_stop_id	文字列型	指定の発送方法の伝票印字ソフト用の値が設定されます。
+営業止め名	receive_order_business_office_stop_name	文字列型	
+送り状区分	receive_order_invoice_id	文字列型	指定の発送方法の伝票印字ソフト用の値が設定されます。
+送り状名	receive_order_invoice_name	文字列型	
+温度区分	receive_order_temperature_id	文字列型	指定の発送方法の伝票印字ソフト用の値が設定されます。
+温度名	receive_order_temperature_name	文字列型	
+営業所名	receive_order_business_office_name	文字列型	
+ギフトフラグ	receive_order_gift_flag	文字列型	0:ギフトではない、1:ギフト
+発送伝票番号	receive_order_delivery_cut_form_id	文字列型	各発送方法の問い合わせ番号が設定されます。
+発送伝票備考欄	receive_order_delivery_cut_form_note	文字列型	
+クレジット区分	receive_order_credit_type_id	文字列型	クレジット種類区分
+クレジット名	receive_order_credit_type_name	文字列型	
+クレジット承認番号	receive_order_credit_approval_no	文字列型	
+クレジット承認額	receive_order_credit_approval_amount	文字列型	
+クレジット承認区分	receive_order_credit_approval_type_id	文字列型	クレジット承認区分
+クレジット承認名	receive_order_credit_approval_type_name	文字列型	
+クレジット承認日	receive_order_credit_approval_date	日時型	
+クレジット承認時レート	receive_order_credit_approval_rate	数値型	
+クレジット支払い回数	receive_order_credit_number_payments	文字列型	受注伝票の支払区分の値
+クレジット承認センター区分	receive_order_credit_authorization_center_id	文字列型	
+クレジット承認センター名	receive_order_credit_authorization_center_name	文字列型	
+クレジット承認FAX印刷日	receive_order_credit_approval_fax_printing_date	日時型	
+顧客区分	receive_order_customer_type_id	文字列型	顧客区分
+顧客名	receive_order_customer_type_name	文字列型	
+顧客コード	receive_order_customer_id	文字列型	顧客区分が9:卸 だった場合に卸先コードが設定されます。
+購入者名	receive_order_purchaser_name	文字列型	
+購入者カナ	receive_order_purchaser_kana	文字列型	
+購入者郵便番号	receive_order_purchaser_zip_code	文字列型	
+購入者住所1	receive_order_purchaser_address1	文字列型	
+購入者住所2	receive_order_purchaser_address2	文字列型	
+購入者電話番号	receive_order_purchaser_tel	文字列型	
+購入者FAX	receive_order_purchaser_fax	文字列型	
+購入者メールアドレス	receive_order_purchaser_mail_address	文字列型	
+送り先名	receive_order_consignee_name	文字列型	
+送り先カナ	receive_order_consignee_kana	文字列型	
+送り先郵便番号	receive_order_consignee_zip_code	文字列型	
+送り先住所1	receive_order_consignee_address1	文字列型	
+送り先住所2	receive_order_consignee_address2	文字列型	
+送り先電話番号	receive_order_consignee_tel	文字列型	
+送り先FAX	receive_order_consignee_fax	文字列型	
+重要チェック担当者ID	receive_order_important_check_pic_id	数値型	
+重要チェック担当者名	receive_order_important_check_pic_name	文字列型	
+受注担当者ID	receive_order_pic_id	数値型	
+受注担当者名	receive_order_pic_name	文字列型	
+出荷担当者ID	receive_order_send_pic_id	数値型	
+出荷担当者名	receive_order_send_pic_name	文字列型	
+作成日	receive_order_creation_date	日時型	
+最終更新日	receive_order_last_modified_date	日時型	
+最終更新日	receive_order_last_modified_null_safe_date	日時型	NULLの場合作成日
+作成担当者ID	receive_order_creator_id	数値型	
+作成担当者名	receive_order_creator_name	文字列型	
+最終更新者ID	receive_order_last_modified_by_id	数値型	
+最終更新者ID	receive_order_last_modified_by_null_safe_id	数値型	NULLの場合作成者ID
+最終更新者名	receive_order_last_modified_by_name	文字列型	
+最終更新者名	receive_order_last_modified_by_null_safe_name	文字列型	NULLの場合作成者名
+
+受注伝票オプション
+項目名	フィールド名	データ型	備考
+伝票番号	receive_order_option_receive_order_id	数値型	ネクストエンジン内で一意に付与される番号
+一言メモ	receive_order_option_single_word_memo	文字列型	
+メッセージ	receive_order_option_message	文字列型	
+のし	receive_order_option_noshi	文字列型	
+ラッピング	receive_order_option_rapping	文字列型	
+オプション1	receive_order_option_1	文字列型	
+オプション2	receive_order_option_2	文字列型	
+オプション3	receive_order_option_3	文字列型	
+オプション4	receive_order_option_4	文字列型	
+オプション5	receive_order_option_5	文字列型	
+オプション6	receive_order_option_6	文字列型	
+オプション7	receive_order_option_7	文字列型	
+オプション8	receive_order_option_8	文字列型	
+オプション9	receive_order_option_9	文字列型	
+オプション10	receive_order_option_10	文字列型	
+受注時店舗原資クーポン	receive_order_option_received_time_shop_coupon	数値型	楽天とYahoo!に対応しています。
+受注時モール原資クーポン	receive_order_option_received_time_mall_coupon	数値型	楽天とYahoo!に対応しています。
+作成日	receive_order_option_creation_date	日時型	
+最終更新日	receive_order_option_last_modified_date	日時型	
+最終更新日	receive_order_option_last_modified_null_safe_date	日時型	NULLの場合作成日
+作成担当者ID	receive_order_option_creator_id	数値型	
+作成担当者名	receive_order_option_creator_name	文字列型	
+最終更新者ID	receive_order_option_last_modified_by_id	数値型	
+最終更新者ID	receive_order_option_last_modified_by_null_safe_id	数値型	NULLの場合作成者ID
+最終更新者名	receive_order_option_last_modified_by_name	文字列型	
+最終更新者名	receive_order_option_last_modified_by_null_safe_name	文字列型	NULLの場合作成者名
