@@ -267,9 +267,9 @@ function getShopId() {
 
 **処理フロー：**
 1. `getOutputSpreadsheetId()` と `getOutputSheetName()` の戻り値でシートを取得
-2. シートの既存データをすべてクリア（`clearContents()`）
-3. 1行目にヘッダーを書き込む（`CONFIG_FIELDS` の `header` を使用）
-4. 2行目以降にデータを書き込む（`setValues()` で一括書き込み）
+2. シートの最終行を取得し、最終行の下からデータを追記する
+3. まだデータがない（空のシート）場合のみ、1行目にヘッダーを書き込む（`CONFIG_FIELDS` の `header` を使用）
+4. `setValues()` でデータを一括書き込み
 
 **ヘッダー行のスタイル：**
 - 背景色: `#e67e22`（オレンジ）
