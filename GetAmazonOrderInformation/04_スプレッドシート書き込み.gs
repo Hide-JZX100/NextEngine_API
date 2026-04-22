@@ -32,23 +32,25 @@ function writeToSheet(data) {
     throw new Error('指定されたシート名（' + sheetName + '）が見つかりません。シートタブを作成するか、スクリプトプロパティ「OUTPUT_SHEET_NAME」を確認してください。');
   }
   
-  // 1. シートの既存データをすべてクリア
-  sheet.clearContents();
+  // 既存の最終行を取得
+  const lastRow = sheet.getLastRow();
   
-  // 2. ヘッダー行のデータを生成
-  const headers = CONFIG_FIELDS.map(function(f) { return f.header; });
+  // 1. ヘッダーの書き込み（シートが空の場合のみ）
+  if (lastRow === 0) {
+    const headers = CONFIG_FIELDS.map(function(f) { return f.header; });
+    const headerRange = sheet.getRange(1, 1, 1, headers.length);
+    headerRange.setValues([headers]);
+    headerRange.setBackground('#e67e22');
+    headerRange.setFontColor('#ffffff');
+    headerRange.setFontWeight('bold');
+    headerRange.setHorizontalAlignment('center');
+  }
   
-  // 3. ヘッダーの書き込みとスタイル設定
-  const headerRange = sheet.getRange(1, 1, 1, headers.length);
-  headerRange.setValues([headers]);
-  headerRange.setBackground('#e67e22');
-  headerRange.setFontColor('#ffffff');
-  headerRange.setFontWeight('bold');
-  headerRange.setHorizontalAlignment('center');
-  
-  // 4. データ行の書き込み
+  // 2. データ行の書き込み（最終行の下から追記）
   if (data && data.length > 0) {
-    const dataRange = sheet.getRange(2, 1, data.length, data[0].length);
+    // 現在の最終行を再度取得し、その次の行（最低でも2行目）を開始行とする
+    const startRow = Math.max(sheet.getLastRow() + 1, 2);
+    const dataRange = sheet.getRange(startRow, 1, data.length, data[0].length);
     dataRange.setValues(data);
   }
 }
