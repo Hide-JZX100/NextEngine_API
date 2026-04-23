@@ -31,34 +31,63 @@ function callNeApi(endpoint, payload) {
     throw new Error('アクセストークンまたはリフレッシュトークンが設定されていません。00_NE_認証ライブラリ使用必須関数 を用いて再度認証を行ってください。');
   }
 
-  // ペイロードにトークンを追加
-  payload.access_token = accessToken;
-  payload.refresh_token = refreshToken;
+  let attempt = 0;
+  
+  while (true) {
+    try {
+      // ペイロードにトークンを追加
+      payload.access_token = accessToken;
+      payload.refresh_token = refreshToken;
 
-  const url = NE_API_BASE_URL + endpoint;
+      const url = NE_API_BASE_URL + endpoint;
 
-  const options = {
-    method: 'post',
-    payload: payload,
-    muteHttpExceptions: true
-  };
+      const options = {
+        method: 'post',
+        payload: payload,
+        muteHttpExceptions: true
+      };
 
-  const response = UrlFetchApp.fetch(url, options);
-  const responseData = JSON.parse(response.getContentText());
+      const response = UrlFetchApp.fetch(url, options);
+      const responseData = JSON.parse(response.getContentText());
 
-  // API側でエラーが返された場合
-  if (responseData.result !== 'success') {
-    throw new Error('APIリクエストエラー: ' + JSON.stringify(responseData));
+      // API側でエラーが返された場合
+      if (responseData.result !== 'success') {
+        // 認証エラー（tokenを含む）なら即座にスロー（リトライしない）
+        if (responseData.message && responseData.message.indexOf('token') !== -1) {
+          throw new Error('認証エラー: ' + JSON.stringify(responseData));
+        }
+        throw new Error('APIリクエストエラー: ' + JSON.stringify(responseData));
+      }
+
+      // 新しいトークンをスクリプトプロパティへ上書き保存（ローテーション対応）
+      props.setProperties({
+        'ACCESS_TOKEN': responseData.access_token,
+        'REFRESH_TOKEN': responseData.refresh_token,
+        'TOKEN_UPDATED_AT': new Date().getTime().toString()
+      });
+
+      return responseData;
+      
+    } catch (error) {
+      // 即時スロー対象の認証エラーなどはそのままスローする
+      if (error.message.indexOf('認証エラー') !== -1) {
+        throw error;
+      }
+      
+      // リトライ判定
+      if (attempt < API_RETRY_MAX) {
+        attempt++;
+        console.warn(`API通信エラー（リトライ ${attempt}/${API_RETRY_MAX}回目）: ${error.message}`);
+        
+        // 指数バックオフによるウェイト
+        const waitTime = API_RETRY_BASE_WAIT_MS * Math.pow(2, attempt - 1);
+        Utilities.sleep(waitTime);
+      } else {
+        // リトライ上限に達した場合
+        throw new Error(`APIリトライ上限（${API_RETRY_MAX}回）に到達しました。最後のエラー: ${error.message}`);
+      }
+    }
   }
-
-  // 新しいトークンをスクリプトプロパティへ上書き保存（ローテーション対応）
-  props.setProperties({
-    'ACCESS_TOKEN': responseData.access_token,
-    'REFRESH_TOKEN': responseData.refresh_token,
-    'TOKEN_UPDATED_AT': new Date().getTime().toString()
-  });
-
-  return responseData;
 }
 
 /**
@@ -167,4 +196,20 @@ function testPhase2() {
   }
 
   console.log('=== Phase 2 テスト完了 ===');
+}
+
+/**
+ * 【Phase 5-2 テスト用】動作確認関数
+ * 意図的に無効なエンドポイントを指定してリトライ処理の動作を確認する
+ */
+function testPhase5_2() {
+  console.log('=== Phase 5-2 テスト開始 ===');
+  try {
+    console.log('存在しないエンドポイントへAPIリクエストを送信します...');
+    // 存在しないエンドポイントを指定して意図的にエラーを発生させる
+    callNeApi('/api_v1_dummy_error_endpoint', { 'limit': 1 });
+  } catch (error) {
+    console.log('最終的にエラーがスローされました（想定通り）: ' + error.message);
+  }
+  console.log('=== Phase 5-2 テスト完了 ===');
 }

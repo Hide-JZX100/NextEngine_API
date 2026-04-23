@@ -22,6 +22,12 @@ const API_PAGE_LIMIT = 1000;
 /** ページ間ウェイト（ミリ秒） */
 const API_PAGE_WAIT_MS = 500;
 
+/** APIリトライ最大回数 */
+const API_RETRY_MAX = 3;
+
+/** APIリトライ初回ウェイト（ミリ秒）。指数バックオフで倍増する */
+const API_RETRY_BASE_WAIT_MS = 1000;
+
 /**
  * 取得フィールド定義
  * api  : ネクストエンジンAPIのフィールド名

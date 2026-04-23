@@ -32,13 +32,19 @@ function getYesterdayString() {
  */
 function dailyRun() {
   console.log('=== dailyRun 開始 ===');
+  const targetDate = getYesterdayString();
   try {
-    const targetDate = getYesterdayString();
     console.log('対象日付（前日）: ' + targetDate);
 
     // 1. データ取得
     const rawOrders = fetchOrdersByShipDate(targetDate);
     console.log('データ取得件数: ' + rawOrders.length + ' 件');
+
+    if (rawOrders.length === 0) {
+      writeLog({ targetDate: targetDate, funcName: 'dailyRun', count: 0, status: '0件' });
+      console.log('取得データが0件のため終了します。');
+      return;
+    }
 
     // 2. データ整形
     const formattedData = formatOrderData(rawOrders);
@@ -49,10 +55,12 @@ function dailyRun() {
     console.log('スプレッドシートへの書き込みが完了しました。');
   } catch (error) {
     console.error('dailyRun 実行中にエラーが発生しました: ' + error.message);
-    // エラーハンドリング・通知機能（Phase 5）を実装した場合はここで通知を行う
+    writeLog({ targetDate: targetDate, funcName: 'dailyRun', count: 0, status: 'エラー', errorMsg: error.message });
+    sendErrorNotification({ targetDate: targetDate, funcName: 'dailyRun', errorMsg: error.message });
     throw error;
+  } finally {
+    console.log('=== dailyRun 完了 ===');
   }
-  console.log('=== dailyRun 完了 ===');
 }
 
 /**
@@ -71,13 +79,18 @@ function dailyRun() {
  */
 function manualRun(dateStr) {
   console.log('=== manualRun 開始 ===');
+  const targetDate = dateStr ? dateStr : getYesterdayString();
   try {
-    // 引数がない場合は前日を取得
-    const targetDate = dateStr ? dateStr : getYesterdayString();
     console.log('対象日付: ' + targetDate);
 
     const rawOrders = fetchOrdersByShipDate(targetDate);
     console.log('データ取得件数: ' + rawOrders.length + ' 件');
+
+    if (rawOrders.length === 0) {
+      writeLog({ targetDate: targetDate, funcName: 'manualRun', count: 0, status: '0件' });
+      console.log('取得データが0件のため終了します。');
+      return;
+    }
 
     const formattedData = formatOrderData(rawOrders);
     writeToSheet(formattedData);
@@ -85,8 +98,12 @@ function manualRun(dateStr) {
     console.log('スプレッドシートへの書き込みが完了しました。');
   } catch (error) {
     console.error('manualRun 実行中にエラーが発生しました: ' + error.message);
+    writeLog({ targetDate: targetDate, funcName: 'manualRun', count: 0, status: 'エラー', errorMsg: error.message });
+    sendErrorNotification({ targetDate: targetDate, funcName: 'manualRun', errorMsg: error.message });
+    throw error;
+  } finally {
+    console.log('=== manualRun 完了 ===');
   }
-  console.log('=== manualRun 完了 ===');
 }
 
 /**
@@ -144,4 +161,39 @@ function testRun() {
 
 function manualRuntest() {
   manualRun('2026-03-19');
+}
+
+/**
+ * 【Phase 5-3 テスト用】動作確認関数
+ * 開発モードで手動実行（manualRun）を呼び出し、全体統合動作を確認する
+ */
+function testPhase5_3() {
+  console.log('=== Phase 5-3 テスト開始 ===');
+  const props = PropertiesService.getScriptProperties();
+  const originalMode = props.getProperty('DEVELOPMENT_MODE');
+
+  try {
+    // 開発モードをONにする
+    props.setProperty('DEVELOPMENT_MODE', 'true');
+    console.log('開発モードに設定しました。');
+
+    // 開発環境でテストデータが存在する日付
+    const testDate = '2026-03-19';
+    console.log('テスト対象日付: ' + testDate);
+
+    // manualRunを実行して統合動作（取得・書込・ログ・エラー通知）を確認
+    manualRun(testDate);
+
+    console.log('=== テスト完了 ===');
+    console.log('スプレッドシートの書き込み、および LOG シートへの記録を確認してください。');
+  } catch (error) {
+    console.error('テスト中にエラーが発生しました: ' + error.message);
+  } finally {
+    // 元のモードに戻す
+    if (originalMode !== null) {
+      props.setProperty('DEVELOPMENT_MODE', originalMode);
+    } else {
+      props.deleteProperty('DEVELOPMENT_MODE');
+    }
+  }
 }
