@@ -134,16 +134,13 @@ function testPhase5_1() {
     console.log('1. LOGシートの初期化を実行します');
     initLogSheet();
     
-    console.log('2. 成功パターンのログを書き込みます');
-    writeLog({ targetDate: '2026-04-22', funcName: 'dailyRun', count: 42, status: '成功', errorMsg: '' });
-    
-    console.log('3. 0件パターンのログを書き込みます');
+    console.log('2. 0件パターンのログを書き込みます');
     writeLog({ targetDate: '2026-04-21', funcName: 'dailyRun', count: 0,  status: '0件', errorMsg: '' });
     
-    console.log('4. エラーパターンのログを書き込みます');
+    console.log('3. エラーパターンのログを書き込みます');
     writeLog({ targetDate: '2026-04-20', funcName: 'dailyRun', count: 0,  status: 'エラー', errorMsg: 'APIリクエストエラー: {"result":"error","message":"token error"}' });
     
-    console.log('=== テスト完了。スプレッドシートのLOGタブに3行のデータが追記されているか確認してください ===');
+    console.log('=== テスト完了。スプレッドシートのLOGタブに2行のデータが追記されているか確認してください ===');
   } catch (error) {
     console.error('テスト中にエラーが発生しました: ' + error.message);
   }
