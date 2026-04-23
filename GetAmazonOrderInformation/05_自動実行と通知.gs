@@ -52,7 +52,6 @@ function dailyRun() {
     // 3. スプレッドシートへ書き込み
     writeToSheet(formattedData);
 
-    writeLog({ targetDate: targetDate, funcName: 'dailyRun', count: rawOrders.length, status: '成功' });
     console.log('スプレッドシートへの書き込みが完了しました。');
   } catch (error) {
     console.error('dailyRun 実行中にエラーが発生しました: ' + error.message);
@@ -96,7 +95,6 @@ function manualRun(dateStr) {
     const formattedData = formatOrderData(rawOrders);
     writeToSheet(formattedData);
 
-    writeLog({ targetDate: targetDate, funcName: 'manualRun', count: rawOrders.length, status: '成功' });
     console.log('スプレッドシートへの書き込みが完了しました。');
   } catch (error) {
     console.error('manualRun 実行中にエラーが発生しました: ' + error.message);
