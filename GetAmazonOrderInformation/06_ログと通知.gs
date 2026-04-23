@@ -148,3 +148,64 @@ function testPhase5_1() {
     console.error('テスト中にエラーが発生しました: ' + error.message);
   }
 }
+
+/**
+ * エラー発生時に通知先メールアドレスへエラー通知メールを送信する
+ * 
+ * 【処理フロー】
+ * 1. スクリプトプロパティ NOTIFY_EMAIL から通知先メールアドレスを取得
+ * 2. 未設定の場合はコンソールにエラーを出力してメール送信をスキップ
+ * 3. 件名・本文を組み立てて MailApp.sendEmail() で送信
+ * 
+ * @param {Object} params - 通知パラメータ
+ * @param {string} params.targetDate - 取得対象日付
+ * @param {string} params.funcName   - エラーが発生した関数名
+ * @param {string} params.errorMsg   - エラー内容
+ */
+function sendErrorNotification(params) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const email = props.getProperty('NOTIFY_EMAIL');
+    
+    if (!email) {
+      console.warn('通知先メールアドレス(NOTIFY_EMAIL)が未設定のため、エラー通知メールをスキップします。');
+      return;
+    }
+    
+    const subject = '[エラー] NE_(Amazon)受注情報取得失敗';
+    
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const MM = ('0' + (now.getMonth() + 1)).slice(-2);
+    const dd = ('0' + now.getDate()).slice(-2);
+    const HH = ('0' + now.getHours()).slice(-2);
+    const mm = ('0' + now.getMinutes()).slice(-2);
+    const ss = ('0' + now.getSeconds()).slice(-2);
+    const datetimeStr = yyyy + '-' + MM + '-' + dd + ' ' + HH + ':' + mm + ':' + ss;
+    
+    const body = `NE(Amazon)受注データの自動取得中にエラーが発生しました。
+
+■ 対象日付: ${params.targetDate || '不明'}
+■ 実行関数: ${params.funcName || '不明'}
+■ 発生時刻: ${datetimeStr}
+■ エラー内容:
+${params.errorMsg || '不明なエラー'}
+
+【対処方法】
+1. GASエディタのログを確認してください
+2. トークンエラーの場合は testGenerateAuthUrl() を実行して再認証してください
+3. ネクストエンジン側の一時的なエラーの場合は manualRun('YYYY-MM-DD') で手動再実行してください
+
+このメールは自動送信されています。`;
+
+    MailApp.sendEmail({
+      to: email,
+      subject: subject,
+      body: body
+    });
+    
+  } catch (error) {
+    // メール送信エラーで本処理を止めない
+    console.error('エラー通知メールの送信に失敗しました: ' + error.message);
+  }
+}
