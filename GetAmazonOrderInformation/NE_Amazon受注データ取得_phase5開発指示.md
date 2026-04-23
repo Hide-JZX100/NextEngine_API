@@ -62,9 +62,9 @@ Phase 5 で以下のスクリプトプロパティを追加する。
 | A | 実行日時 | `yyyy-MM-dd HH:mm:ss` 形式 |
 | B | 対象日付 | `YYYY-MM-DD` 形式（取得対象の出荷確定日） |
 | C | 実行関数名 | `dailyRun` / `manualRun` |
-| D | 取得件数 | 数値（0件の場合も記録） |
-| E | 実行結果 | `成功` / `0件` / `エラー` |
-| F | エラー内容 | エラー時のみ記載。正常時は空文字 |
+| D | 取得件数 | 数値 |
+| E | 実行結果 | `0件` / `エラー` |
+| F | エラー内容 | エラー時のみ記載 |
 
 ---
 
@@ -120,8 +120,8 @@ Phase 5 で以下のスクリプトプロパティを追加する。
  * @param {string} params.targetDate   - 取得対象日付（"YYYY-MM-DD"）
  * @param {string} params.funcName     - 実行関数名（"dailyRun" など）
  * @param {number} params.count        - 取得件数
- * @param {string} params.status       - 実行結果（"成功" / "0件" / "エラー"）
- * @param {string} [params.errorMsg]   - エラー内容（省略可。正常時は空文字）
+ * @param {string} params.status       - 実行結果（"0件" / "エラー"）
+ * @param {string} [params.errorMsg]   - エラー内容
  */
 ```
 
@@ -135,18 +135,14 @@ Phase 5 で以下のスクリプトプロパティを追加する。
 
 **処理フロー:**
 1. `initLogSheet()` を呼び出してLOGシートを初期化（既存なら何もしない）
-2. 成功ログのダミーデータで `writeLog()` を呼び出す
-3. 0件ログのダミーデータで `writeLog()` を呼び出す
-4. エラーログのダミーデータで `writeLog()` を呼び出す
-5. コンソールに完了メッセージを出力
-6. スプレッドシートのLOGタブを目視確認するよう促す
+2. 0件ログのダミーデータで `writeLog()` を呼び出す
+3. エラーログのダミーデータで `writeLog()` を呼び出す
+4. コンソールに完了メッセージを出力
+5. スプレッドシートのLOGタブを目視確認するよう促す
 
 **ダミーデータ例:**
 
 ```javascript
-// 成功ログ
-writeLog({ targetDate: '2026-04-22', funcName: 'dailyRun', count: 42, status: '成功', errorMsg: '' });
-
 // 0件ログ
 writeLog({ targetDate: '2026-04-21', funcName: 'dailyRun', count: 0,  status: '0件', errorMsg: '' });
 
@@ -291,11 +287,9 @@ NE(Amazon)受注データの自動取得中にエラーが発生しました。
      a. fetchOrdersByShipDate(targetDate) でデータ取得（リトライ処理は callNeApi 内で自動実行）
      b. 取得件数が 0 件の場合:
           - writeLog({ status: '0件', ... }) でログ記録
-          - メール通知はしない
           - 処理を終了する（書き込みはしない）
      c. formatOrderData() で整形
      d. writeToSheet() でスプレッドシートへ書き込み
-     e. writeLog({ status: '成功', count: 件数, ... }) でログ記録
 3. catch(error):
      a. writeLog({ status: 'エラー', errorMsg: error.message, ... }) でログ記録
      b. sendErrorNotification({ errorMsg: error.message, ... }) でメール通知
@@ -312,8 +306,8 @@ NE(Amazon)受注データの自動取得中にエラーが発生しました。
 1. 引数の日付を取得（省略時は前日）
 2. try:
      a. fetchOrdersByShipDate(targetDate)
-     b. 取得件数 0 件 → writeLog({ status: '0件', ... })
-     c. 正常取得 → formatOrderData() → writeToSheet() → writeLog({ status: '成功', ... })
+     b. 取得件数 0 件 → writeLog({ status: '0件', ... }) を記録して処理終了
+     c. 正常取得 → formatOrderData() → writeToSheet()
 3. catch(error):
      a. writeLog({ status: 'エラー', ... })
      b. sendErrorNotification()
