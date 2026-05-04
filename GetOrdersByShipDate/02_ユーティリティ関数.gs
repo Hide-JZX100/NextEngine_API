@@ -30,12 +30,12 @@ function getDateRange(startDate, endDate) {
     // 実行日が3日の場合：前月20日〜前月末日
     start = new Date(year, month - 1, 20);
     end = new Date(year, month, 0); // 前月末日
-  } else if (date === 10) {
-    // 実行日が10日の場合：当月1日〜9日（月の上書き起点）
+  } else if (date === 13) {
+    // 実行日が13日の場合：当月1日〜9日（月の上書き起点）
     start = new Date(year, month, 1);
     end = new Date(year, month, 9);
-  } else if (date === 20) {
-    // 実行日が20日の場合：当月10日〜19日
+  } else if (date === 23) {
+    // 実行日が23日の場合：当月10日〜19日
     start = new Date(year, month, 10);
     end = new Date(year, month, 19);
   } else {
