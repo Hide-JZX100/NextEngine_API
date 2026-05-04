@@ -66,7 +66,7 @@ function scheduledRun() {
   }
 
   // キャンセル情報は1日のみ実行
-  if (date === 1) {
+  if (date === 3) {
     try {
       updateCancels(null, null);
     } catch (e) {
