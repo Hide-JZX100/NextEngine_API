@@ -53,7 +53,7 @@ function scheduledRun() {
   console.log(`定期実行開始 (実行日: ${date}日)`);
 
   // 対象日以外はスキップ（誤トリガー対策）
-  if (date !== 1 && date !== 10 && date !== 20) {
+  if (date !== 3 && date !== 10 && date !== 20) {
     console.log('本日は定期実行対象日ではありません。処理をスキップします。');
     return;
   }
