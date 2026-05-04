@@ -297,5 +297,6 @@ function testUpdateOrders() {
   console.log('--- testUpdateOrders 開始 ---');
   // updateOrders(null, null);
   updateOrders(new Date(2025, 9, 1), new Date(2025, 9, 31));
+  //                   9=10月(0始まり)          9=10月(0始まり)
   console.log('--- testUpdateOrders 終了 ---');
 }

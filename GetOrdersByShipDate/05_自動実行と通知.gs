@@ -33,7 +33,7 @@ function scheduledRun() {
         trigger.getEventType() === ScriptApp.EventType.CLOCK &&
         trigger.getTriggerSource() === ScriptApp.TriggerSource.CLOCK
       ) {
-        // 月次固定トリガー（毎月1日・10日・20日）は削除しない
+        // 月次固定トリガー（毎月3日・13日・23日）は削除しない
         // after() で作成された一回限りのトリガーのみ削除する
         const triggerUid = trigger.getUniqueId();
 
@@ -53,20 +53,20 @@ function scheduledRun() {
   console.log(`定期実行開始 (実行日: ${date}日)`);
 
   // 対象日以外はスキップ（誤トリガー対策）
-  if (date !== 1 && date !== 10 && date !== 20) {
+  if (date !== 3 && date !== 13 && date !== 23) {
     console.log('本日は定期実行対象日ではありません。処理をスキップします。');
     return;
   }
 
-  // 受注情報は毎月1日・10日・20日すべてで実行
+  // 受注情報は毎月3日・13日・23日すべてで実行
   try {
     updateOrders(null, null);
   } catch (e) {
     sendErrorNotification('updateOrders', e);
   }
 
-  // キャンセル情報は1日のみ実行
-  if (date === 1) {
+  // キャンセル情報は3日のみ実行
+  if (date === 3) {
     try {
       updateCancels(null, null);
     } catch (e) {
