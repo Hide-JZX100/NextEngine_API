@@ -26,8 +26,8 @@ function getDateRange(startDate, endDate) {
 
   let start, end;
 
-  if (date === 1) {
-    // 実行日が1日の場合：前月20日〜前月末日
+  if (date === 3) {
+    // 実行日が3日の場合：前月20日〜前月末日
     start = new Date(year, month - 1, 20);
     end = new Date(year, month, 0); // 前月末日
   } else if (date === 10) {
