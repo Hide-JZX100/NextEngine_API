@@ -34,8 +34,11 @@
  * @param {number} batchNumber - バッチ番号（1, 2, 3）省略時は1
  */
 function main(batchNumber) {
-    // バッチ番号のデフォルト値
-    batchNumber = batchNumber || 1;
+    // トリガーから実行された場合、第1引数はイベントオブジェクトになる
+    // 数値でない場合はデフォルト値1を使用
+    if (typeof batchNumber !== 'number' || batchNumber < 1 || batchNumber > 3) {
+        batchNumber = 1;
+    }
 
     const startTime = new Date();
     console.log(`=== 出荷済み伝票取得処理開始 (バッチ${batchNumber}) ${startTime.toLocaleString('ja-JP')} ===`);
