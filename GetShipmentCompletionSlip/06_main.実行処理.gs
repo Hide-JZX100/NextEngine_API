@@ -97,7 +97,11 @@ function main(batchNumber) {
  * @param {number} batchNumber - バッチ番号（1, 2, 3）省略時は1
  */
 function warmupAndScheduleMain(batchNumber) {
-    batchNumber = batchNumber || 1;
+    // トリガーから実行された場合、第1引数はイベントオブジェクトになる
+    // 数値でない場合はデフォルト値1を使用
+    if (typeof batchNumber !== 'number' || batchNumber < 1 || batchNumber > 3) {
+        batchNumber = 1;
+    }
 
     console.log(`=== ウォームアップ開始 (バッチ${batchNumber}用) ===`);
 
