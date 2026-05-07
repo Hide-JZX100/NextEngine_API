@@ -1,52 +1,32 @@
 /**
- * =============================================================================
- * 15_SpreadsheetRepository.gs - データ永続化（スプレッドシート操作）
- * =============================================================================
- *
- * 【役割】
+ * @file 15_SpreadsheetRepository.gs
+ * @description データ永続化（スプレッドシート操作）モジュール。
  * スプレッドシートへのすべての書き込み操作を担当します。
- * 在庫データの更新、エラーログ・リトライログの記録、
- * 実行タイムスタンプの保存を一元管理します。
+ * 在庫データの更新、エラーログ・リトライログの記録、実行タイムスタンプの保存を一元管理します。
  * データの取得・整形は行わず、受け取ったデータを書き込む責務に特化しています。
  *
- * 【依存関係】
- * ┌─ 参照元（このファイルを呼び出すファイル）──────────────────┐
- * │ 10_Main.gs                updateBatchInventoryData          │
- * │                           logErrorsToSheet                  │
- * │                           logRetryStatsToSheet              │
- * │                           recordExecutionTimestamp          │
- * └─────────────────────────────────────────────────────────────┘
- * ┌─ 参照先（このファイルが使う定数・関数・変数）──────────────┐
- * │ 11_Config.gs              COLUMNS, getSpreadsheetConfig     │
- * │ 12_Logger.gs              logWithLevel, logError            │
- * │                           retryStats（グローバル変数を直接参照）│
- * └─────────────────────────────────────────────────────────────┘
+ * ### 依存関係
+ * - **参照元**: 10_Main.gs (updateBatchInventoryData, logErrorsToSheet, logRetryStatsToSheet, recordExecutionTimestamp)
+ * - **参照先**:
+ *   - 11_Config.gs (COLUMNS, getSpreadsheetConfig)
+ *   - 12_Logger.gs (logWithLevel, logError, retryStats)
  *
- * 【管理するシート】
- *   対象シート（SHEET_NAME）   : 在庫データの更新先（メインシート）
- *   エラーログシート           : 処理中のエラーを蓄積記録（自動生成）
- *   リトライログシート         : リトライ発生時の統計を蓄積記録（自動生成）
- *   LOG_SHEETシート            : 実行タイムスタンプ記録先（SHEET_NAMEとは別）
- *   ※ エラーログ・リトライログシートは存在しない場合に自動生成される
+ * ### 管理するシート
+ * - **対象シート (SHEET_NAME)**: 在庫データの更新先（メインシート）
+ * - **エラーログシート**: 処理中のエラーを蓄積記録（自動生成）
+ * - **リトライログシート**: リトライ発生時の統計を蓄積記録（自動生成）
+ * - **LOG_SHEETシート**: 実行タイムスタンプ記録先
  *
- * 【一括更新の最適化について】
- *   updateBatchInventoryData() では連続した行をグループ化して
- *   1回の setValues() で複数行を一括書き込みする
- *   これにより SpreadsheetApp への呼び出し回数を最小化し処理速度を向上させている
- *   例）行2・3・4が連続 → 1回の setValues() で3行同時書き込み
- *       行2・5・8が非連続 → 3回の setValues() に分割
+ * ### 一括更新の最適化 (updateBatchInventoryData)
+ * 連続した行をグループ化して1回の `setValues()` で複数行を一括書き込みします。
+ * これにより `SpreadsheetApp` への呼び出し回数を最小化し処理速度を向上させています。
  *
- * 【公開関数一覧】
- *  @see updateBatchInventoryData  - 【メイン】在庫データをバッチ単位で一括更新
- *                                   連続行グループ化による最適化済み
- *  @see updateRowWithInventoryData - 単一行の在庫データ更新（個別更新用）
- *  @see logErrorsToSheet          - エラー詳細をエラーログシートに追記
- *  @see logRetryStatsToSheet      - リトライ統計をリトライログシートに追記
- *                                   リトライ0回・発生率0%の場合は記録をスキップ
- *  @see recordExecutionTimestamp  - 実行完了日時をLOG_SHEETのA1セルに記録
- *
- * 【バージョン】v2.1
- * =============================================================================
+ * @version 2.1
+ * @see updateBatchInventoryData
+ * @see updateRowWithInventoryData
+ * @see logErrorsToSheet
+ * @see logRetryStatsToSheet
+ * @see recordExecutionTimestamp
  */
 
 /**

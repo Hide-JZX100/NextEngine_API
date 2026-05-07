@@ -1,40 +1,29 @@
 /**
- * =============================================================================
- * 10_Main.gs - アプリケーションエントリーポイント
- * =============================================================================
- *
- * 【役割】
- * このファイルは処理全体の起点です。
- * 各モジュールを呼び出してオーケストレーション（指揮）を行います。
+ * @file 10_Main.gs
+ * @description アプリケーションエントリーポイント。
+ * 処理全体の起点として、各モジュールを呼び出しオーケストレーション（指揮）を行います。
  * ビジネスロジックやAPI通信の実装は各専用ファイルに委譲しています。
  *
- * 【依存ファイルと役割分担】
- * ┌─────────────────────────────────────────────────────────────┐
- * │ 11_Config.gs              設定値・定数・トークン取得         │
- * │ 12_Logger.gs              ログ出力・リトライ統計管理         │
- * │ 13_NextEngineAPI.gs       NE APIへのHTTPリクエスト           │
- * │ 14_InventoryLogic.gs      在庫データの取得・整形             │
- * │ 15_SpreadsheetRepository.gs スプレッドシートへの書き込み     │
- * └─────────────────────────────────────────────────────────────┘
+ * ### 依存ファイルと役割分担
+ * - 11_Config.gs: 設定値・定数・トークン取得
+ * - 12_Logger.gs: ログ出力・リトライ統計管理
+ * - 13_NextEngineAPI.gs: NE APIへのHTTPリクエスト
+ * - 14_InventoryLogic.gs: 在庫データの取得・整形
+ * - 15_SpreadsheetRepository.gs: スプレッドシートへの書き込み
  *
- * 【処理フロー】(updateInventoryDataBatchWithRetry)
- *   Step 1. リトライ統計リセット          (12_Logger.gs)
- *   Step 2. スプレッドシート・シート取得  (11_Config.gs)
- *   Step 3. 商品コードリスト構築          (本ファイル内ループ)
- *   Step 4. バッチ分割ループ
- *     └─ 4a. 在庫データ一括取得(リトライ付き) (14_InventoryLogic.gs)
- *     └─ 4b. スプレッドシート一括更新        (15_SpreadsheetRepository.gs)
- *     └─ 4c. エラー情報収集
- *   Step 5. エラーログをシートに記録      (15_SpreadsheetRepository.gs)
- *   Step 6. リトライ統計を表示・記録      (12_Logger.gs / 15_SpreadsheetRepository.gs)
- *   Step 7. 実行タイムスタンプを記録      (15_SpreadsheetRepository.gs)
+ * ### 処理フロー (updateInventoryDataBatchWithRetry)
+ * 1. リトライ統計リセット (12_Logger.gs)
+ * 2. スプレッドシート・シート取得 (11_Config.gs)
+ * 3. 商品コードリスト構築 (本ファイル内ループ)
+ * 4. バッチ分割ループ (在庫取得・更新・エラー収集)
+ * 5. エラーログをシートに記録 (15_SpreadsheetRepository.gs)
+ * 6. リトライ統計を表示・記録 (12_Logger.gs / 15_SpreadsheetRepository.gs)
+ * 7. 実行タイムスタンプを記録 (15_SpreadsheetRepository.gs)
  *
- * 【トリガー設定】
+ * ### トリガー設定
  * - トリガー設定スクリプト.gsの setTrigger() で時間ベーストリガーを管理
- * - スクリプトプロパティ TRIGGER_FUNCTION_NAME に
- *   「updateInventoryDataBatchWithRetry」を設定してください
- * - GASの実行時間制限（6分）に注意。バッチ数が増えた場合は
- *   MAX_ITEMS_PER_CALL または API_WAIT_TIME の見直しを検討してください
+ * - プロパティ `TRIGGER_FUNCTION_NAME` に関数名を設定
+ * - GASの6分制限に注意し、必要に応じて `MAX_ITEMS_PER_CALL` を調整
  *
  * 【スクリプトプロパティ（要設定）】
  *   SPREADSHEET_ID   : 対象スプレッドシートのID
@@ -43,12 +32,10 @@
  *   ACCESS_TOKEN     : NE APIアクセストークン（認証.gsで取得）
  *   REFRESH_TOKEN    : NE APIリフレッシュトークン（認証.gsで取得）
  *
- * 【公開関数】
  * @see updateInventoryDataBatchWithRetry - 【メイン】トリガーに設定する関数
  * @see showUsageGuide                   - 使い方ガイドをコンソールに表示
  *
- * 【バージョン】v2.1 (リトライ統計対応)
- * =============================================================================
+ * @version 2.1 (リトライ統計対応)
  */
 /**
  * メイン処理関数の修正版（リトライ統計対応）
