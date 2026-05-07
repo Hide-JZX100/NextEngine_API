@@ -1,57 +1,38 @@
 /**
- * =============================================================================
- * 14_InventoryLogic.gs - 在庫データ取得・整形（ビジネスロジック）
- * =============================================================================
+ * @file 14_InventoryLogic.gs
+ * @description 在庫データ取得・整形（ビジネスロジック）モジュール。
+ * API通信層（13_NextEngineAPI.gs）とデータ永続化層（15_SpreadsheetRepository.gs）の橋渡しを担います。
+ * APIから返却された生データをスプレッドシートへの書き込みに適した構造に変換・整形します。
  *
- * 【役割】
- * API通信層（13_NextEngineAPI.gs）とデータ永続化層（15_SpreadsheetRepository.gs）
- * の橋渡しを担います。
- * APIから返却された生データをスプレッドシートへの書き込みに適した
- * 構造に変換・整形する責務を持ちます。
+ * ### 依存関係
+ * - **参照元**: 10_Main.gs（メイン処理から getBatchInventoryDataWithRetry を呼び出し）
+ * - **参照先**:
+ *   - 11_Config.gs: LOG_LEVEL 定数
+ *   - 12_Logger.gs: logWithLevel, logError, logErrorDetail, logAPIErrorDetail
+ *   - 13_NextEngineAPI.gs: getBatchStockDataWithRetry
  *
- * 【依存関係】
- * ┌─ 参照元（このファイルを呼び出すファイル）──────────────────┐
- * │ 10_Main.gs                メイン処理から getBatchInventoryDataWithRetry を呼び出し│
- * └─────────────────────────────────────────────────────────────┘
- * ┌─ 参照先（このファイルが使う定数・関数）────────────────────┐
- * │ 11_Config.gs              LOG_LEVEL 定数                    │
- * │ 12_Logger.gs              logWithLevel, logError            │
- * │                           logErrorDetail, logAPIErrorDetail │
- * │ 13_NextEngineAPI.gs       getBatchStockDataWithRetry        │
- * └─────────────────────────────────────────────────────────────┘
+ * ### 処理フロー (getBatchInventoryDataWithRetry)
+ * 1. 商品コードの大文字小文字正規化マップを構築 (codeMapping)
+ * 2. API呼び出し（13_NextEngineAPI.gs に委譲）
+ * 3. API返却コードを元の商品コードに逆引き (codeMapping経由)
+ * 4. 生データを `inventoryData` オブジェクトに整形
+ * 5. 整形済みデータを Map で返却
  *
- * 【処理フロー】(getBatchInventoryDataWithRetry)
- *   Step 1. 商品コードの大文字小文字正規化マップを構築（codeMapping）
- *   Step 2. API呼び出し（13_NextEngineAPI.gs に委譲）
- *   Step 3. API返却コードを元の商品コードに逆引き（codeMapping経由）
- *   Step 4. 生データを inventoryData オブジェクトに整形
- *   Step 5. 整形済みデータを Map で返却
+ * ### 大文字小文字の正規化について
+ * NE APIは商品コードを小文字で返却する場合があるため、`toLowerCase()` で統一して照合します。
+ * 元の表記は `codeMapping` で保持し、整形後の Map のキーには元の表記を使用します。
  *
- * 【大文字小文字の正規化について】
- *   NE APIは商品コードを小文字で返却する場合がある
- *   スプレッドシート側の商品コードと大文字小文字が異なると
- *   マッチングに失敗するため、両者を toLowerCase() で統一して照合する
- *   元の表記はcodeMappingで保持し、整形後のMapのキーは元の表記を使用する
+ * ### 返却データ構造 (InventoryData オブジェクト)
+ * - `goods_id`: 商品コード
+ * - `stock_quantity`: 在庫数
+ * - `stock_allocated_quantity`: 引当数
+ * - `stock_free_quantity`: フリー在庫数
+ * - `stock_advance_order_quantity`: 予約在庫数
+ * - ...（詳細は各関数の @return 参照）
  *
- * 【返却データ構造】(inventoryData オブジェクト)
- *   goods_id                             : 商品コード
- *   goods_name                           : 商品名（現在は空文字、拡張用）
- *   stock_quantity                       : 在庫数
- *   stock_allocated_quantity             : 引当数
- *   stock_free_quantity                  : フリー在庫数
- *   stock_advance_order_quantity         : 予約在庫数
- *   stock_advance_order_allocation_quantity : 予約引当数
- *   stock_advance_order_free_quantity    : 予約フリー在庫数
- *   stock_defective_quantity             : 不良在庫数
- *   stock_remaining_order_quantity       : 発注残数
- *   stock_out_quantity                   : 欠品数
- *
- * 【公開関数一覧】
- *  @see getBatchInventoryDataWithRetry - バッチ単位で在庫データを取得・整形して返す
- *                                        10_Main.gs から呼び出される
- *
- * 【バージョン】v2.1
- * =============================================================================
+ * @version 2.1
+ * @see getBatchInventoryDataWithRetry
+ * @see buildInventoryDataRows
  */
 /**
  * バッチ単位で在庫情報を取得・整形

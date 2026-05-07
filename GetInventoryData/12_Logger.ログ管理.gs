@@ -1,54 +1,41 @@
 /**
- * =============================================================================
- * 12_Logger.gs - ログ管理・出力
- * =============================================================================
- *
- * 【役割】
+ * @file 12_Logger.gs
+ * @description ログ管理・出力モジュール。
  * システム全体のログ出力とリトライ統計を一元管理します。
- * すべてのログ出力はこのファイルの関数を経由することで、
- * ログレベルによる出力制御を統一的に行います。
+ * すべてのログ出力はこのファイルの関数を経由することで、ログレベルによる出力制御を統一的に行います。
  *
- * 【依存関係】
- * ┌─ 参照元（このファイルを呼び出すファイル）──────────────────┐
- * │ 10_Main.gs                メイン処理でのログ・統計管理      │
- * │ 13_NextEngineAPI.gs       APIエラー時の詳細ログ出力         │
- * │ 14_InventoryLogic.gs      在庫取得処理内のログ出力          │
- * │ 15_SpreadsheetRepository.gs リトライ統計のシート書き込み    │
- * └─────────────────────────────────────────────────────────────┘
- * ┌─ 参照先（このファイルが使う定数）──────────────────────────┐
- * │ 11_Config.gs              LOG_LEVEL, RETRY_CONFIG 定数      │
- * └─────────────────────────────────────────────────────────────┘
+ * ### 依存関係
+ * #### 参照元（このファイルを呼び出すファイル）
+ * - 10_Main.gs: メイン処理でのログ・統計管理
+ * - 13_NextEngineAPI.gs: APIエラー時の詳細ログ出力
+ * - 14_InventoryLogic.gs: 在庫取得処理内のログ出力
+ * - 15_SpreadsheetRepository.gs: リトライ統計のシート書き込み
  *
- * 【ログレベル（11_Config.gsで定義）】
- *   LOG_LEVEL.MINIMAL  (1) : 開始・終了・サマリーのみ（本番推奨）
- *   LOG_LEVEL.SUMMARY  (2) : バッチ集計＋最初/最後3件（デフォルト）
- *   LOG_LEVEL.DETAILED (3) : 全商品コード出力（デバッグ用）
+ * #### 参照先（このファイルが使う定数）
+ * - 11_Config.gs: LOG_LEVEL, RETRY_CONFIG 定数
  *
- * 【グローバル変数】
- *   retryStats : リトライ統計オブジェクト
- *                実行ごとに resetRetryStats() でリセットが必要
- *                15_SpreadsheetRepository.gs の logRetryStatsToSheet() からも参照される
+ * ### ログレベル設定
+ * 1. LOG_LEVEL.MINIMAL (1): 開始・終了・サマリーのみ（本番推奨）
+ * 2. LOG_LEVEL.SUMMARY (2): バッチ集計＋最初/最後3件（デフォルト）
+ * 3. LOG_LEVEL.DETAILED (3): 全商品コード出力（デバッグ用）
  *
- * 【公開関数一覧】
- *  --- ログレベル管理 ---
- *  @see getCurrentLogLevel    - スクリプトプロパティからログレベルを取得
- *  @see setLogLevel           - ログレベルを変更してプロパティに保存
- *  @see showCurrentLogLevel   - 現在のログレベルと変更方法を表示
+ * ### グローバル変数
+ * - `retryStats`: リトライ統計オブジェクト。
+ *   実行ごとに `resetRetryStats()` でリセットが必要です。
+ *   `15_SpreadsheetRepository.gs` からも参照されます。
  *
- *  --- ログ出力 ---
- *  @see logWithLevel          - レベル指定付きログ出力（全ファイル共通で使用）
- *  @see logError              - エラーログ出力（標準）
- *  @see logErrorDetail        - 商品コード単位のエラー詳細出力
- *  @see logAPIErrorDetail     - APIエラー時のリクエスト・レスポンス詳細出力
- *  @see logBatchErrorSummary  - バッチ単位のエラー集計出力
- *
- *  --- リトライ統計管理 ---
- *  @see resetRetryStats       - 実行開始時に統計をリセット（10_Main.gsから呼び出し）
- *  @see recordRetryAttempt    - リトライ発生時に統計を記録（13_NextEngineAPI.gsから呼び出し）
- *  @see showRetryStats        - 実行完了後に統計をコンソール表示（10_Main.gsから呼び出し）
- *
- * 【バージョン】v2.1
- * =============================================================================
+ * @version 2.1
+ * @see getCurrentLogLevel
+ * @see setLogLevel
+ * @see showCurrentLogLevel
+ * @see logWithLevel
+ * @see logError
+ * @see logErrorDetail
+ * @see logAPIErrorDetail
+ * @see logBatchErrorSummary
+ * @see resetRetryStats
+ * @see recordRetryAttempt
+ * @see showRetryStats
  */
 /**
  * 現在のログレベルを取得

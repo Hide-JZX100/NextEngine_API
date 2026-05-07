@@ -1,6 +1,6 @@
 /**
- * 00_設定ファイル.gs
- * Phase 1：基盤構築
+ * @file 00_設定ファイル.gs
+ * @description Phase 1：基盤構築。NextEngine API連携に必要な定数定義および設定情報の読み込み処理を管理します。
  */
 
 /**

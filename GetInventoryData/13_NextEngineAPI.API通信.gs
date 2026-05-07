@@ -1,49 +1,33 @@
 /**
- * =============================================================================
- * 13_NextEngineAPI.gs - Next Engine API通信・リトライ管理
- * =============================================================================
- *
- * 【役割】
+ * @file 13_NextEngineAPI.gs
+ * @description Next Engine API通信・リトライ管理モジュール。
  * Next Engine APIへのHTTPリクエストを担当します。
- * 在庫マスタAPIの呼び出し、トークン自動更新、
- * およびエクスポネンシャルバックオフによるリトライ制御を行います。
- * ビジネスロジックには関与せず、通信層に特化しています。
+ * 在庫マスタAPIの呼び出し、トークン自動更新、およびエクスポネンシャルバックオフによるリトライ制御を行います。
  *
- * 【依存関係】
- * ┌─ 参照元（このファイルを呼び出すファイル）──────────────────┐
- * │ 14_InventoryLogic.gs      在庫データ取得処理から呼び出し    │
- * └─────────────────────────────────────────────────────────────┘
- * ┌─ 参照先（このファイルが使う定数・関数）────────────────────┐
- * │ 11_Config.gs              NE_API_URL, MAX_ITEMS_PER_CALL    │
- * │                           RETRY_CONFIG                      │
- * │ 12_Logger.gs              logWithLevel, logError            │
- * │                           logAPIErrorDetail                 │
- * │                           recordRetryAttempt                │
- * └─────────────────────────────────────────────────────────────┘
+ * ### 依存関係
+ * - **参照元**: 14_InventoryLogic.gs（在庫データ取得処理）
+ * - **参照先**:
+ *   - 11_Config.gs (NE_API_URL, MAX_ITEMS_PER_CALL, RETRY_CONFIG)
+ *   - 12_Logger.gs (logWithLevel, logError, logAPIErrorDetail, recordRetryAttempt)
  *
- * 【APIエンドポイント】
- *   POST https://api.next-engine.org/api_v1_master_stock/search
- *   取得フィールド: stock_goods_id, stock_quantity,
- *                   stock_allocation_quantity, stock_free_quantity,
- *                   stock_advance_order_quantity,
- *                   stock_advance_order_allocation_quantity,
- *                   stock_advance_order_free_quantity,
- *                   stock_defective_quantity,
- *                   stock_remaining_order_quantity,
- *                   stock_out_quantity
+ * ### APIエンドポイント
+ * - `POST /api_v1_master_stock/search`
+ * - 主な取得フィールド: 在庫数、引当数、フリー在庫数、不良在庫数、発注残数など。
  *
- * 【トークン自動更新の仕組み】
- *   NE APIはレスポンスに新しいトークンを返す場合がある
- *   updateStoredTokens() で差分がある場合のみプロパティを更新し
- *   APIクォータの浪費を防いでいる
+ * ### トークン自動更新の仕組み
+ * NE APIはレスポンスに新しいトークンを返す場合があるため、`updateStoredTokens()` で差分がある場合のみ
+ * スクリプトプロパティを更新し、APIクォータの浪費を防いでいます。
  *
- * 【リトライの仕組み（エクスポネンシャルバックオフ）】
- *   getBatchStockDataWithRetry() が getBatchStockData() をラップする構造
- *   失敗するたびに待機時間を指数的に増やして再試行する
- *   1回目失敗 → 1秒待機 → 2回目試行
- *   2回目失敗 → 2秒待機 → 3回目試行
- *   3回目失敗 → エラーをスロー（呼び出し元に伝播）
- *   ※ 認証・権限系エラーはリトライせず即座にスロー
+ * ### リトライの仕組み（エクスポネンシャルバックオフ）
+ * `getBatchStockDataWithRetry()` が `getBatchStockData()` をラップし、失敗するたびに待機時間を指数的に
+ * 増やして再試行します（1秒 → 2秒 → 4秒）。
+ * ※ 認証・権限系エラーは即座にエラーをスローします。
+ *
+ * @version 2.1
+ * @see getBatchStockDataWithRetry - リトライ付き在庫マスタデータ取得
+ * @see getBatchStockData - 在庫マスタAPI単体呼び出し（リトライなし）
+ * @see updateStoredTokens - トークンをプロパティに保存（差分更新）
+ * @see fetchAllGoodsData - 商品マスタAPIで全件取得
  *
  * 【公開関数一覧】
  *  @see getBatchStockDataWithRetry - 【推奨】リトライ付き在庫マスタデータ取得

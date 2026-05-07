@@ -1,68 +1,46 @@
 /**
- * =============================================================================
- * 99_Tests.gs - テスト・管理・診断ツール
- * =============================================================================
- *
- * 【役割】
- * システムの動作確認、設定検証、健全性チェックのための
- * テスト関数と管理用ユーティリティを提供します。
+ * @file 99_Tests.gs
+ * @description テスト・管理・診断ツール。
+ * システムの動作確認、設定検証、健全性チェックのためのテスト関数と管理用ユーティリティを提供します。
  * 本番処理（10_Main.gs）には影響を与えません。
- * スプレッドシートへの書き込みを伴うテストは
- * 本番データへの影響がないよう注意して実行してください。
  *
- * 【依存関係】
- * ┌─ 参照先（このファイルが使う定数・関数）────────────────────┐
- * │ 11_Config.gs              getSpreadsheetConfig, getStoredTokens│
- * │                           LOG_LEVEL, RETRY_CONFIG           │
- * │ 12_Logger.gs              resetRetryStats, showRetryStats   │
- * │                           recordRetryAttempt, getCurrentLogLevel│
- * │                           retryStats（グローバル変数を直接操作）│
- * │ 14_InventoryLogic.gs      getBatchInventoryDataWithRetry    │
- * │ 15_SpreadsheetRepository.gs getSpreadsheetConfig経由でシート参照│
- * └─────────────────────────────────────────────────────────────┘
+ * ### 依存関係
+ * - **参照先**:
+ *   - 11_Config.gs (getSpreadsheetConfig, getStoredTokens, LOG_LEVEL, RETRY_CONFIG)
+ *   - 12_Logger.gs (resetRetryStats, showRetryStats, recordRetryAttempt, getCurrentLogLevel, retryStats)
+ *   - 14_InventoryLogic.gs (getBatchInventoryDataWithRetry)
+ *   - 15_SpreadsheetRepository.gs (シート参照)
  *
- * 【推奨実行順序】
- *   初回セットアップ時:
- *     Step 1. verifyConfiguration()     設定値・トークンの確認
- *     Step 2. testRetryFunction()       API接続とリトライ動作の確認
- *     Step 3. showSREDashboard()        システム全体の健全性確認
+ * ### 推奨実行順序
+ * #### 初回セットアップ時
+ * 1. `verifyConfiguration()` : 設定値・トークンの確認
+ * 2. `testRetryFunction()` : API接続とリトライ動作の確認
+ * 3. `showSREDashboard()` : システム全体の健全性確認
  *
- *   トラブル発生時:
- *     Step 1. verifyConfiguration()     設定値に問題がないか確認
- *     Step 2. testRetryFunction()       APIが正常に応答しているか確認
- *     Step 3. showSREDashboard()        エラーログ・リトライ統計を確認
+ * #### トラブル発生時
+ * 1. `verifyConfiguration()` : 設定値の再確認
+ * 2. `testRetryFunction()` : API応答の確認
+ * 3. `showSREDashboard()` : エラーログ・リトライ統計の確認
  *
- *   リトライ機能の検証時:
- *     Step 1. testRetryLogging()        リトライログの書き込み動作確認
- *     Step 2. finalRetryTest()          リトライ統計の集計精度確認
+ * ### 主要機能
+ * - **動作確認**: `testRetryFunction`, `verifyConfiguration`
+ * - **システム健全性**: `showSREDashboard`
+ * - **リトライ検証**: `testRetryLogging`, `finalRetryTest`
+ * - **デバッグ・診断**: `checkFileUsage`, `locateFunctions`
  *
- * 【公開関数一覧】
- *  --- 動作確認・接続テスト ---
- *  @see testRetryFunction    - API接続とリトライ機能を小規模データで確認
- *                              スプレッドシートの最初の10件を使用
- *  @see verifyConfiguration  - トークン・スプレッドシート設定の疎通確認
+ * ### 注意事項
+ * - `finalRetryTest()` は `retryStats` グローバル変数を直接操作するため、本番処理と並行して実行しないでください。
+ * - `testRetryFunction()` は実際にAPIを呼び出すため、レート制限に注意してください。
+ * - スプレッドシートへの書き込みを伴うテストは本番データへの影響に注意してください。
  *
- *  --- システム健全性確認 ---
- *  @see showSREDashboard     - リトライ統計・エラーログをダッシュボード形式で表示
- *                              定期的な健全性チェックに使用
- *
- *  --- リトライ機能検証 ---
- *  @see testRetryLogging     - リトライログのシート書き込み動作を3ケースで確認
- *  @see finalRetryTest       - リトライ統計の集計精度を検証
- *                              retryStatsを直接操作してシミュレーションを行う
- *
- *  --- デバッグ・診断 ---
- *  @see checkFileUsage       - トリガー設定と主要関数の存在確認
- *  @see locateFunctions      - 指定関数のソースコード先頭行を表示して所在を特定
- *
- * 【注意事項】
- *  - finalRetryTest() は retryStats グローバル変数を直接操作するため
- *    本番処理と並行して実行しないこと
- *  - testRetryFunction() はAPIを実際に呼び出すため
- *    NE APIのレート制限に注意すること
- *
- * 【バージョン】v2.1
- * =============================================================================
+ * @version 2.1
+ * @see testRetryFunction
+ * @see verifyConfiguration
+ * @see showSREDashboard
+ * @see testRetryLogging
+ * @see finalRetryTest
+ * @see checkFileUsage
+ * @see locateFunctions
  */
 
 /**
