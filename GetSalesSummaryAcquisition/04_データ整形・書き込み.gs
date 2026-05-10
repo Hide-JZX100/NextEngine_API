@@ -64,9 +64,16 @@ const SPREADSHEET_HEADERS = [
 /**
  * 日付を YYYY/MM/DD 形式にフォーマット
  * 
- * ネクストエンジンAPIの日時形式(YYYY-MM-DD HH:MM:SS)を
- * スプレッドシート用の日付形式(YYYY/MM/DD)に変換します。
+ * @details
+ * ネクストエンジンAPIから返される日時文字列（例: "2025-11-24 12:34:56"）を、
+ * スプレッドシートで見やすい日付形式（例: "2025/11/24"）に変換します。
  * 
+ * 内部処理としては、まず空白で分割して「日付部分」のみを取り出し、
+ * 次にハイフン（-）をスラッシュ（/）に置換しています。
+ * これにより、スプレッドシート側で日付シリアル値として認識されやすくなります。
+ * 
+ * @example
+ * formatDateForSpreadsheet("2025-11-24 12:34:56") // -> "2025/11/24"
  * @param {string} dateTimeStr - 日時文字列(YYYY-MM-DD HH:MM:SS)
  * @return {string} 日付文字列(YYYY/MM/DD)
  */
@@ -85,9 +92,27 @@ function formatDateForSpreadsheet(dateTimeStr) {
 /**
  * APIレスポンスデータをスプレッドシート行データに変換
  * 
- * 1件の受注明細データをスプレッドシートの1行分の配列に変換します。
+ * @details
+ * この関数は、本システムの中で最も重要な「構造変換」を担います。
  * 
- * @param {Object} row - 受注明細データ(APIレスポンス)
+ * **【N88-BASICの概念との比較】**
+ * APIから返ってくるデータ（Object）は、いわば「ラベル付きの変数群」です。
+ * 例： `row.receive_order_row_goods_id` という名前を指定してデータを取り出します。
+ * 
+ * 一方、スプレッドシートへの書き込み（Array）は「メモリ上の連続したアドレス」のようなものです。
+ * `[0]`番目がA列、`[1]`番目がB列...というように、「場所（インデックス）」でデータを管理します。
+ * 
+ * この関数では、バラバラの名前が付いたデータを、スプレッドシートの左（A列）から右（J列）へ
+ * 並べたい順番通りに1つの「行（配列）」としてパッキングします。
+ * 
+ * 1. 店舗コードを元に、マスタから「店舗名」を引きく（VLOOKUPのような処理）
+ * 2. APIの日付を整形する
+ * 3. 各項目を `[A, B, C, ...]` の順序で配列に格納する
+ * 
+ * この「名前ベース」から「位置ベース」への変換を行うことで、
+ * Google Sheets API（setValues）が受け入れ可能な形式になります。
+ * 
+ * @param {Object} row - 受注明細データ（APIから返された1レコード分のオブジェクト）
  * @param {Map<string, string>} shopMap - 店舗名マップ
  * @return {Array} スプレッドシート行データ
  */
@@ -119,9 +144,18 @@ function convertToSpreadsheetRow(row, shopMap) {
 /**
  * APIレスポンスデータ配列をスプレッドシート用2次元配列に変換
  * 
- * 全受注明細データをスプレッドシート形式に一括変換します。
+ * @details
+ * APIから取得した「レコードの集合（配列）」全体に対して、
+ * `convertToSpreadsheetRow` を繰り返し適用し、スプレッドシート用の「表」を作成します。
  * 
- * @param {Array} data - 受注明細データ配列
+ * JavaScriptの `.map()` メソッドを使用しています。これはBASICで言うところの
+ * `FOR I=1 TO N ... NEXT` ループに相当し、各レコードを1行ずつスプレッドシート形式へ
+ * 変換して新しいリストを作成する処理を高速に行います。
+ * 
+ * 結果として `[[A1, B1, C1...], [A2, B2, C2...], ...]` という
+ * 「行の配列の配列（2次元配列）」が返されます。
+ * 
+ * @param {Array<Object>} data - APIから取得した受注明細データの配列
  * @param {Map<string, string>} shopMap - 店舗名マップ
  * @return {Array<Array>} スプレッドシート用2次元配列
  */
@@ -150,10 +184,14 @@ function convertAllToSpreadsheetData(data, shopMap) {
 /**
  * 対象スプレッドシートを開く
  * 
- * スクリプトプロパティから対象スプレッドシートIDとシート名を取得し、
- * 対象のシートオブジェクトを返します。
+ * @details
+ * `getScriptConfig` で読み込んだ設定情報（TARGET_SPREADSHEET_ID など）を使用し、
+ * 書き込み先となるスプレッドシートと、その中の特定のシートを取得します。
  * 
- * @return {GoogleAppsScript.Spreadsheet.Sheet} 対象シート
+ * 実行ユーザーがそのスプレッドシートに対して編集権限を持っていない場合や、
+ * IDが間違っている場合は、ここでエラー（例外）が発生します。
+ * 
+ * @return {GoogleAppsScript.Spreadsheet.Sheet} 書き込み対象のシートオブジェクト
  * @throws {Error} スプレッドシートまたはシートが見つからない場合
  */
 function openTargetSheet() {
@@ -188,10 +226,13 @@ function openTargetSheet() {
 /**
  * スプレッドシートのデータ範囲をクリア(ヘッダー行は保持)
  * 
- * 2行目以降のデータをクリアします。
- * 1行目のヘッダー行は保持されます。
+ * @details
+ * シート内の既存データを削除します。
+ * 重要なのは `1行目（ヘッダー）を残す` ことです。
+ * `getRange(2, 1, lastRow - 1, ...)` という指定により、
+ * 「2行目の1列目から、データが存在する最後の行まで」の範囲を選択してクリアします。
  * 
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - 対象シート
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - クリア操作を行うシートオブジェクト
  */
 function clearSheetData(sheet) {
   const lastRow = sheet.getLastRow();
@@ -211,10 +252,15 @@ function clearSheetData(sheet) {
 /**
  * スプレッドシートにヘッダーを書き込む
  * 
- * 1行目にヘッダー行を書き込みます。
- * 既にヘッダーが存在する場合は上書きされます。
+ * @details
+ * 定数 `SPREADSHEET_HEADERS` で定義された列名をシートの1行目に書き込みます。
+ * `setValues` は2次元配列を要求するため、`[SPREADSHEET_HEADERS]` のように
+ * 配列をさらにもう一つの配列で包んで（1行分の表として）渡しています。
  * 
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - 対象シート
+ * 書き込み後、視認性を高めるためにフォントを太字にし、背景色（薄いグレー）を設定します。
+ * 
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - 書き込み先のシートオブジェクト
+ * @see SPREADSHEET_HEADERS
  */
 function writeHeaders(sheet) {
   const headerRange = sheet.getRange(1, 1, 1, SPREADSHEET_HEADERS.length);
@@ -230,10 +276,17 @@ function writeHeaders(sheet) {
 /**
  * スプレッドシートにデータを書き込む
  * 
- * 2行目からデータを書き込みます。
- * 既存データは事前にクリアされます(ヘッダー行は保持)。
+ * @details
+ * 整形済みの2次元配列を、スプレッドシートの2行目以降に一括で書き込みます。
  * 
- * @param {Array<Array>} data - スプレッドシート用2次元配列
+ * 1. シートを開く
+ * 2. 既存データをクリアする
+ * 3. ヘッダーを再作成する
+ * 4. データを流し込む
+ * 
+ * 1セルずつ書き込むのではなく、`setValues()` を使って一括で流し込むのがGASの高速化の定石です。
+ * 
+ * @param {Array<Array<string|number>>} data - スプレッドシート形式に変換済みの2次元配列
  */
 function writeToSpreadsheet(data) {
   logMessage('=== スプレッドシート書き込み処理開始 ===');
@@ -274,7 +327,11 @@ function writeToSpreadsheet(data) {
 /**
  * 日付フォーマットテスト
  * 
- * 日付変換が正しく動作するかテストします。
+ * @details
+ * `formatDateForSpreadsheet` 関数の単体テストです。
+ * 正常な日時文字列、月の変わり目、空データなどのパターンを渡し、
+ * すべて "YYYY/MM/DD" 形式、または空文字で返ってくるかをログで確認します。
+ * スプレッドシート側で日付フィルターが正しく機能するかどうかの生命線となるテストです。
  */
 function testDateFormat() {
   console.log('=== 日付フォーマットテスト ===');
@@ -299,7 +356,12 @@ function testDateFormat() {
 /**
  * データ変換テスト
  * 
- * APIレスポンスからスプレッドシート形式への変換をテストします。
+ * @details
+ * APIから返ってきたと想定される「擬似データ」を使い、
+ * スプレッドシート用の2次元配列に正しく変換されるかを検証します。
+ * 特に「店舗コード」がマスタを参照して「店舗名」に置き換わっているか、
+ * 列の順番が定義通り（A列=店舗名, B列=伝票番号...）になっているかを重点的に確認します。
+ * @return {Array<Array>} 変換後の2次元配列
  */
 function testDataConversion() {
   console.log('=== データ変換テスト ===');
@@ -368,7 +430,10 @@ function testDataConversion() {
 /**
  * スプレッドシート接続テスト
  * 
- * 対象スプレッドシートとシートが正しく開けるかテストします。
+ * @details
+ * 書き込み先の `TARGET_SPREADSHEET_ID` が正しいかを確認します。
+ * 実際にシートを開き、現在の最終行数や既存のヘッダー内容を表示します。
+ * これにより、意図しないシートを上書きしてしまうリスクを防ぎます。
  */
 function testTargetSheetConnection() {
   console.log('=== 対象シート接続テスト ===');
@@ -407,8 +472,11 @@ function testTargetSheetConnection() {
 /**
  * スプレッドシート書き込みテスト
  * 
- * テストデータをスプレッドシートに書き込みます。
- * ⚠️ 実際にスプレッドシートが更新されます!
+ * @details
+ * 少量のテスト用ダミーデータを生成し、実際にスプレッドシートへ書き込みを行います。
+ * **※この関数を実行すると、対象シートの内容が書き換わります。**
+ * 
+ * 実行後、スプレッドシートを開いて「2行目から正しく並んでいるか」を目視確認するためのものです。
  */
 function testWriteToSpreadsheet() {
   console.log('=== スプレッドシート書き込みテスト ===');
@@ -474,8 +542,12 @@ function testWriteToSpreadsheet() {
 /**
  * Phase 4 統合テスト
  * 
- * Phase 4で実装した全機能をテストします。
- * ⚠️ testWriteToSpreadsheet() は実際にスプレッドシートを更新します。
+ * @details
+ * 「データ整形・書き込み」フェーズの全機能をシーケンシャルに検証します。
+ * データの変換ロジックからシートへの接続確認までを行います。
+ * ※事故防止のため、実際の書き込みテスト（testWriteToSpreadsheet）は、
+ * ログで案内を出した上でユーザーが手動で実行する流れにしています。
+ * @throws {Error} 変換ロジックや接続に不備がある場合
  */
 function testPhase4() {
   console.log('╔════════════════════════════════════════════════════════════╗');

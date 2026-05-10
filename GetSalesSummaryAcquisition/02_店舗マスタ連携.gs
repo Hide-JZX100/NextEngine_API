@@ -39,11 +39,16 @@
 /**
  * 店舗マスタスプレッドシートを開く
  * 
- * スクリプトプロパティから店舗マスタのスプレッドシートIDとシート名を取得し、
- * 対象のシートオブジェクトを返します。
+ * @details
+ * `getScriptConfig`経由で取得した `shopMasterSpreadsheetId` および `shopMasterSheetName` を使用して、
+ * 指定されたスプレッドシートの特定のシートオブジェクトを取得します。
  * 
- * @return {GoogleAppsScript.Spreadsheet.Sheet} 店舗マスタシート
- * @throws {Error} スプレッドシートまたはシートが見つからない場合
+ * 外部スプレッドシート（店舗マスタ）との接続の起点となる関数です。
+ * 権限不足やIDの間違いがある場合は、詳細なエラーメッセージとともに例外をスローします。
+ * 
+ * @return {GoogleAppsScript.Spreadsheet.Sheet} 対象の店舗マスタシートオブジェクト
+ * @throws {Error} スプレッドシートIDが見つからない、またはシート名が存在しない場合
+ * @see getScriptConfig
  */
 function openShopMasterSheet() {
   const config = getScriptConfig();
@@ -77,10 +82,13 @@ function openShopMasterSheet() {
 /**
  * 店舗マスタデータを読み込む
  * 
- * 店舗マスタシートからデータを全件読み込み、配列で返します。
- * 1行目(ヘッダー)は除外されます。
+ * @details
+ * `openShopMasterSheet` を呼び出してシートを取得し、全データ範囲を2次元配列として取得します。
+ * 実データのみを抽出するため、1行目のヘッダー行は読み込み範囲から除外します。
+ * データが1行（ヘッダーのみ）以下の場合、警告ログを出力し空の配列を返却します。
  * 
- * @return {Array<Array>} 店舗マスタデータ(2次元配列)
+ * @return {Array<Array<string|number>>} 店舗マスタのデータ行（2次元配列）。ヘッダー行は含みません。
+ * @see openShopMasterSheet
  */
 function loadShopMasterData() {
   const sheet = openShopMasterSheet();
@@ -110,10 +118,16 @@ function loadShopMasterData() {
 /**
  * 店舗マスタから店舗コード→店舗名の変換マップを作成
  * 
- * A列(店舗ID)をキー、B列(店舗名)を値とするMapオブジェクトを作成します。
- * 空白行やA列が空のデータはスキップされます。
+ * @details
+ * `loadShopMasterData` で取得した2次元配列を走査し、JavaScriptの Map オブジェクトを生成します。
+ * - キー: A列（店舗ID/店舗コード）を文字列化・トリムしたもの
+ * - 値: B列（店舗名）を文字列化・トリムしたもの
  * 
- * @return {Map<string, string>} 店舗コード→店舗名のマップ
+ * 店舗コードが空の行は、データ不備としてスキップし、ログに警告を表示します。
+ * このマップを使用することで、大量の受注データに対して高速に店舗名変換を行うことが可能になります。
+ * 
+ * @return {Map<string, string>} 店舗コードをキー、店舗名を値とする Map オブジェクト
+ * @see loadShopMasterData
  */
 function createShopNameMap() {
   const data = loadShopMasterData();
@@ -148,12 +162,15 @@ function createShopNameMap() {
 /**
  * 店舗コードから店舗名を取得
  * 
- * 店舗マスタマップから店舗コードに対応する店舗名を取得します。
- * マップに存在しない場合は「不明な店舗(コード: X)」を返します。
+ * @details
+ * 引数で渡された `shopMap`（変換テーブル）を用いて、特定の店舗コードに対応する店舗名を検索します。
  * 
- * @param {Map<string, string>} shopMap - 店舗名マップ
+ * マップに該当するコードが存在しない場合、後続の集計処理でエラーにならないよう、
+ * 「不明な店舗(コード: X)」という代替文字列を返却し、ログに記録します。
+ * 
+ * @param {Map<string, string>} shopMap - `createShopNameMap` で作成された変換マップ
  * @param {string|number} shopCode - 店舗コード
- * @return {string} 店舗名
+ * @return {string} 取得した店舗名、または不明時の代替文字列
  */
 function getShopName(shopMap, shopCode) {
   const code = String(shopCode).trim();
@@ -174,11 +191,16 @@ function getShopName(shopMap, shopCode) {
 /**
  * 店舗マスタマップをキャッシュから取得、またはキャッシュに保存
  * 
- * 同一実行内で複数回店舗マスタを参照する場合、
- * 毎回スプレッドシートを読み込むのは非効率なため、
- * グローバル変数にキャッシュします。
+ * @details
+ * GASの実行性能を最適化するためのユーティリティです。
+ * 同一のスクリプト実行内で複数回店舗マスタへのアクセスが発生する場合、
+ * 2回目以降はスプレッドシートの再読み込みを行わず、メモリ上の `SHOP_MAP_CACHE` を再利用します。
  * 
- * @return {Map<string, string>} 店舗名マップ
+ * 1万件以上の受注データを処理する場合など、頻繁なマスタ参照が発生するシーンで効果的です。
+ * 
+ * @return {Map<string, string>} 店舗名マップ（キャッシュ済み、または新規作成）
+ * @note グローバル変数 `SHOP_MAP_CACHE` を使用します。
+ * @see createShopNameMap
  */
 let SHOP_MAP_CACHE = null;
 
@@ -197,6 +219,10 @@ function getShopMapWithCache() {
  * キャッシュをクリア
  * 
  * テスト時や店舗マスタが更新された場合に使用します。
+ * 
+ * @details
+ * グローバル変数 `SHOP_MAP_CACHE` を null にリセットします。
+ * これにより、次に `getShopMapWithCache` が呼ばれた際に必ず最新のスプレッドシートから再読み込みが行われます。
  */
 function clearShopMapCache() {
   SHOP_MAP_CACHE = null;
@@ -210,7 +236,12 @@ function clearShopMapCache() {
 /**
  * 店舗マスタシート接続テスト
  * 
- * スプレッドシートとシートが正しく開けるかテストします。
+ * @details
+ * スプレッドシートIDとシート名が正しいか、および実行ユーザーに適切なアクセス権があるかを検証します。
+ * 成功時には、シートのメタ情報（名前、最終行数、最終列数）と、
+ * A列・B列が意図した項目（店舗ID/店舗名など）であるかを確認するためのヘッダー情報を出力します。
+ * 
+ * @throws {Error} 接続に失敗した場合
  */
 function testShopMasterConnection() {
   console.log('=== 店舗マスタシート接続テスト ===');
@@ -247,7 +278,12 @@ function testShopMasterConnection() {
 /**
  * 店舗マスタデータ読み込みテスト
  * 
- * 店舗マスタデータを読み込み、内容を確認します。
+ * @details
+ * `loadShopMasterData` を実行し、戻り値が正しい2次元配列であるかを確認します。
+ * 最初の5件のデータを抽出し、店舗コードと店舗名が正しく取得できているか（列のズレがないか）を
+ * 目視確認するためにログ出力します。
+ * 
+ * @return {Array<Array>} 取得された店舗マスタデータ
  */
 function testShopMasterDataLoad() {
   console.log('=== 店舗マスタデータ読み込みテスト ===');
@@ -285,7 +321,12 @@ function testShopMasterDataLoad() {
 /**
  * 店舗名マップ作成テスト
  * 
- * 店舗コード→店舗名の変換マップを作成し、内容を確認します。
+ * @details
+ * `createShopNameMap` を実行し、Map オブジェクトが正しく構築されるかを検証します。
+ * キーの重複や空データのスキップ状況、およびMapの要素数を確認します。
+ * サンプルとして先頭10件の対応関係を出力します。
+ * 
+ * @return {Map<string, string>} 作成された店舗名マップ
  */
 function testShopNameMap() {
   console.log('=== 店舗名マップ作成テスト ===');
@@ -322,7 +363,12 @@ function testShopNameMap() {
 /**
  * 店舗名取得テスト
  * 
- * 実際のデータで店舗名取得機能をテストします。
+ * @details
+ * `getShopName` 関数の挙動を2つのパターンで検証します。
+ * 1. 正常系: 実際にマスタに存在するコードを渡し、正しい名前が返るか
+ * 2. 異常系: 存在しない（または空の）コードを渡し、定義済みの「不明な店舗」文字列が返るか
+ * 
+ * このテストにより、マスタにない店舗コードが含まれる受注データのハンドリングを保証します。
  */
 function testGetShopName() {
   console.log('=== 店舗名取得テスト ===');
@@ -360,7 +406,11 @@ function testGetShopName() {
 /**
  * キャッシュ機能テスト
  * 
- * キャッシュが正しく動作するかテストします。
+ * @details
+ * `getShopMapWithCache` を連続して呼び出し、2回目以降の実行時間が短縮されるかを確認します。
+ * 1回目：スプレッドシートへのIOが発生
+ * 2回目：メモリ(キャッシュ)からの取得
+ * ミリ秒単位での処理時間を比較することで、最適化の効果を可視化します。
  */
 function testShopMapCache() {
   console.log('=== キャッシュ機能テスト ===');
@@ -405,7 +455,13 @@ function testShopMapCache() {
 /**
  * Phase 2 統合テスト
  * 
- * Phase 2で実装した全機能をテストします。
+ * @details
+ * 「店舗マスタ連携」フェーズで実装した全機能の結合テストを一括実行します。
+ * シート接続からデータ読み込み、マスタマップの構築、キャッシュの動作までをシーケンシャルに検証します。
+ * 
+ * Phase 3以降のAPI連携処理で店舗名変換を行うために、このテストがパスしていることが必須要件となります。
+ * 
+ * @throws {Error} いずれかのサブテストで失敗した場合
  */
 function testPhase2() {
   console.log('╔════════════════════════════════════════════════════════════╗');
