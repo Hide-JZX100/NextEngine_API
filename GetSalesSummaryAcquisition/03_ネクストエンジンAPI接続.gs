@@ -41,12 +41,21 @@
 /**
  * ネクストエンジンAPIを呼び出す
  * 
- * 共通的なAPI呼び出し処理を行います。
- * トークンの自動更新にも対応しています。
+ * @details
+ * ネクストエンジンAPIへのHTTP POSTリクエストをカプセル化した共通関数です。
+ * 内部で以下の処理を自動的に行います：
+ * 1. スクリプトプロパティからの最新トークンの取得とリクエストへの付与。
+ * 2. オブジェクト形式のパラメータを `application/x-www-form-urlencoded` 形式に変換。
+ * 3. `UrlFetchApp` を使用した同期通信（HTTPエラーを例外として投げず、レスポンス内容で判定）。
+ * 4. APIレスポンスに含まれる新しい `access_token` / `refresh_token` の自動検知とスクリプトプロパティへの保存。
  * 
- * @param {string} endpoint - APIエンドポイント(例: '/api_v1_receiveorder_row/search')
- * @param {Object} params - リクエストパラメータ
- * @return {Object} APIレスポンス
+ * トークンの更新が発生した場合、以降のAPI呼び出しでは自動的に新しいトークンが使用されるため、
+ * 呼び出し側はトークンの有効期限を意識する必要がありません。
+ * 
+ * @param {string} endpoint - APIエンドポイント（例: `/api_v1_receiveorder_row/search`）
+ * @param {Object} [params={}] - APIに渡すリクエストパラメータ。トークン類は自動でマージされます。
+ * @return {Object} パース済みのJSONレスポンスオブジェクト
+ * @note API側でエラー（result != "success"）が返った場合は、メッセージを抽出して例外をスローします。
  * @throws {Error} API呼び出し失敗時
  */
 function callNextEngineApi(endpoint, params = {}) {
@@ -144,14 +153,23 @@ const RECEIVEORDER_ROW_FIELDS = [
 /**
  * 受注明細を検索(1ページ分)
  * 
- * 指定された条件で受注明細を検索し、1ページ分(最大1000件)を取得します。
- * キャンセルされた明細行は除外されます。
+ * @details
+ * 指定された日時範囲内の受注明細（receiveorder_row）を検索し、1ページ（最大1000件）を取得します。
  * 
- * @param {string} startDate - 検索開始日時(YYYY-MM-DD HH:MM:SS)
- * @param {string} endDate - 検索終了日時(YYYY-MM-DD HH:MM:SS)
- * @param {number} offset - オフセット(開始位置)
- * @param {number} limit - 取得件数(最大1000)
- * @return {Object} {data: Array, count: number, hasMore: boolean}
+ * 【検索条件の仕様】
+ * - `receive_order_date`: 受注日時で絞り込みます。
+ * - `receive_order_row_cancel_flag-eq: "0"`: APIレベルで有効なデータのみに絞り込みます。
+ * - ページネーション用パラメータ（offset, limit）により取得範囲を制御します。
+ * 
+ * @param {string} startDate - 検索開始日時（`YYYY-MM-DD HH:mm:ss` 形式）
+ * @param {string} endDate - 検索終了日時（`YYYY-MM-DD HH:mm:ss` 形式）
+ * @param {number} [offset=0] - 取得開始位置（件数ベース）
+ * @param {number} [limit=NE_API_LIMIT] - 取得件数。APIの仕様上、最大1000まで。
+ * @return {Object} 検索結果オブジェクト：
+ *   - data {Array<Object>}: 明細データの配列
+ *   - count {number}: 検索条件に合致する全データの総件数
+ *   - hasMore {boolean}: 次のページ（未取得分）が存在するかどうかのフラグ
+ * @see RECEIVEORDER_ROW_FIELDS, callNextEngineApi
  */
 function searchReceiveOrderRowPage(startDate, endDate, offset = 0, limit = NE_API_LIMIT) {
   logMessage(`受注明細検索: offset=${offset}, limit=${limit}`, LOG_LEVEL.SAMPLE);
@@ -195,12 +213,19 @@ function searchReceiveOrderRowPage(startDate, endDate, offset = 0, limit = NE_AP
 /**
  * 受注明細を全件取得(ページネーション対応)
  * 
- * 指定された期間の受注明細を全件取得します。
- * 1000件を超える場合は自動的にページネーション処理を行います。
+ * @details
+ * 1回のAPI呼び出し制限（1000件）を超える大量のデータを取得するためのラッパー関数です。
+ * `searchReceiveOrderRowPage` をループ実行し、全件を一つの配列に統合して返します。
  * 
- * @param {string} startDate - 検索開始日時(YYYY-MM-DD HH:MM:SS)
- * @param {string} endDate - 検索終了日時(YYYY-MM-DD HH:MM:SS)
- * @return {Array} 受注明細データの配列
+ * 終了判定は「返却されたデータ件数 < limit」に基づいて行われます。
+ * ネクストエンジンAPIの負荷軽減およびAPI制限を考慮し、各リクエストの間に `Utilities.sleep` 
+ * による短い待機時間を設けています。
+ * 
+ * 処理の開始から終了までの経過時間や平均処理速度を計算し、ログに出力します。
+ * 
+ * @param {string} startDate - 検索開始日時（`YYYY-MM-DD HH:mm:ss` 形式）
+ * @param {string} endDate - 検索終了日時（`YYYY-MM-DD HH:mm:ss` 形式）
+ * @return {Array<Object>} 全ての受注明細データのフラットな配列
  */
 function searchReceiveOrderRowAll(startDate, endDate) {
   logMessage('=== 受注明細全件取得開始 ===');
@@ -271,10 +296,15 @@ function searchReceiveOrderRowAll(startDate, endDate) {
 /**
  * キャンセル明細を除外
  * 
- * receive_order_row_cancel_flag = "1" の明細行を除外します。
+ * @details
+ * APIレスポンス内の各明細行の `receive_order_row_cancel_flag` を確認し、
+ * 値が "1" （キャンセル済み）のものを配列から取り除きます。
  * 
- * @param {Array} data - 受注明細データ配列
- * @return {Array} キャンセル除外後のデータ配列
+ * 通常、APIリクエスト時にフィルタリングを行いますが、データ整合性を担保するための
+ * 二重チェック（セーフガード）として機能します。
+ * 
+ * @param {Array<Object>} data - フィルタリング前の受注明細データ配列
+ * @return {Array<Object>} キャンセル行が除外された、有効な明細データのみの配列
  */
 function filterCancelledRows(data) {
   logMessage('=== キャンセル明細除外処理 ===');
@@ -300,10 +330,11 @@ function filterCancelledRows(data) {
 /**
  * ネクストエンジンAPI接続テスト
  * 
- * ネクストエンジンAPIに接続できるかテストします。
- * 認証ライブラリのtestApiConnection()を利用します。
+ * @details
+ * 認証用スクリプトプロパティ（トークン）が有効であるか、およびAPIサーバーと通信可能かを検証します。
+ * 内部的に `NEAuth` ライブラリを使用し、ログインユーザー情報を取得します。
  * 
- * ※関数名を testNEApiConnection() に変更(認証ライブラリとの重複回避)
+ * @return {Object} 接続成功時のユーザー情報（ライブラリからの戻り値）
  */
 function testNEApiConnection() {
   console.log('=== ネクストエンジンAPI接続テスト ===');
@@ -332,7 +363,11 @@ function testNEApiConnection() {
 /**
  * 受注明細検索テスト(1ページのみ)
  * 
- * 受注明細検索APIを呼び出し、1ページ分のデータを取得します。
+ * @details
+ * 基盤構築(01)の日付計算ロジックと、本ファイルの検索ロジックを統合してテストします。
+ * テスト実行時間を短縮するため、`limit=10` に制限してリクエストを行い、
+ * 戻り値の構造やフィールドの欠落がないかを確認します。
+ * @return {Object} APIレスポンスの抜粋（data, count, hasMore）
  */
 function testSearchReceiveOrderRowPage() {
   console.log('=== 受注明細検索テスト(1ページ) ===');
@@ -374,8 +409,12 @@ function testSearchReceiveOrderRowPage() {
 /**
  * 受注明細全件取得テスト
  * 
- * ページネーション処理を含めた全件取得をテストします。
- * ※実際のデータ量によっては時間がかかります
+ * @details
+ * ページネーション（ループ処理）が正しく機能するかを検証します。
+ * 7日間の全受注明細を取得するため、データ量によっては数秒〜数十秒の時間を要します。
+ * 取得後のサンプルとして、配列の「先頭」と「末尾」を表示し、データの連続性を確認します。
+ * 
+ * @return {Array<Object>} 取得された全データ
  */
 function testSearchReceiveOrderRowAll() {
   console.log('=== 受注明細全件取得テスト ===');
@@ -418,7 +457,8 @@ function testSearchReceiveOrderRowAll() {
 /**
  * デバッグ用: 日付範囲確認
  * 
- * 日付計算が正しく行われているか確認します。
+ * @details
+ * APIに渡す直前の日付パラメータの「型」と「フォーマット」をコンソールに出力します。
  */
 function debugDateRange() {
   console.log('=== 日付範囲デバッグ ===');
@@ -441,7 +481,11 @@ function debugDateRange() {
 /**
  * キャンセル除外テスト
  * 
- * キャンセルフラグによるフィルタリングをテストします。
+ * @details
+ * 実際にAPIから取得したデータに対して `filterCancelledRows` を適用し、
+ * 除外前後の件数の差分を表示します。
+ * また、キャンセルフラグごとの内訳（有効 vs キャンセル）を集計して出力します。
+ * @return {Array<Object>} フィルタリング後のデータ
  */
 function testFilterCancelledRows() {
   console.log('=== キャンセル除外テスト ===');
@@ -493,8 +537,12 @@ function testFilterCancelledRows() {
 /**
  * Phase 3 統合テスト
  * 
- * Phase 3で実装した全機能をテストします。
- * ⚠️ 実際のAPIを呼び出すため、実行には注意してください。
+ * @details
+ * 「API接続」フェーズで実装した全ての通信・処理工程をシーケンシャルに検証します。
+ * 通信確認、単発検索、フィルタリングロジックの3段階をチェックします。
+ * この統合テストが成功すれば、ネクストエンジンからのデータ抽出基盤は完成となります。
+ * 
+ * @throws {Error} いずれかのAPIリクエストまたはフィルタ処理で失敗した場合
  */
 function testPhase3() {
   console.log('╔════════════════════════════════════════════════════════════╗');
