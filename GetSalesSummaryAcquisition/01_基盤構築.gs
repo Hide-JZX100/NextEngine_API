@@ -64,10 +64,18 @@ const LOG_LEVEL = {
 /**
  * スクリプトプロパティから設定値を取得
  * 
- * 必須プロパティが未設定の場合はエラーをスローします。
- * オプションプロパティは未設定の場合デフォルト値を返します。
+ * @details 
+ * アプリケーションの動作に必要な認証情報やスプレッドシートIDを、Google Apps Scriptの
+ * スクリプトプロパティ(PropertiesService)から一括で読み込みます。
  * 
- * @return {Object} 設定オブジェクト
+ * 必須項目（ACCESS_TOKEN等）が欠落している場合、実行を中断しエラーをスローすることで、
+ * 設定漏れによる予期せぬ動作を未然に防ぎます。
+ * 数値項目（LOG_LEVEL等）は、計算に使用できるよう適切な型変換（parseInt）を行ってから返却します。
+ * 
+ * @return {Object} 設定オブジェクト。以下のプロパティを含みます：
+ *   - accessToken, refreshToken, targetSpreadsheetId, targetSheetName, 
+ *     shopMasterSpreadsheetId, shopMasterSheetName, logLevel, retryCount, 
+ *     notificationEmail, notifyOnSuccess
  * @throws {Error} 必須プロパティが未設定の場合
  */
 function getScriptConfig() {
@@ -116,8 +124,11 @@ function getScriptConfig() {
 /**
  * スクリプトプロパティ設定テスト
  * 
- * 設定されているプロパティを確認し、問題がないかチェックします。
- * Phase 1のテスト用関数です。
+ * @details 
+ * `getScriptConfig`を呼び出し、取得した設定値をコンソールにダンプします。
+ * セキュリティの観点から、トークン類は先頭数文字のみを表示するように制御しています。
+ * 新しい環境でのセットアップ時や、プロパティを変更した直後の疎通確認に使用します。
+ * @return {Object} 取得に成功した設定オブジェクト
  */
 function testScriptConfig() {
   console.log('=== スクリプトプロパティ設定テスト ===');
@@ -154,8 +165,11 @@ function testScriptConfig() {
 /**
  * ログレベル名を取得
  * 
- * @param {number} level - ログレベル
- * @return {string} ログレベル名
+ * @details 
+ * 数値で管理されているログレベル（1, 2, 3）を、人間に分かりやすい文字列に変換します。
+ * 主にテスト関数内での表示用に使用されます。
+ * @param {number} level - LOG_LEVEL 定数で定義された数値
+ * @return {string} ログレベルの名称（例: "(全件出力)"）。該当がない場合は "(不明)"
  */
 function getLogLevelName(level) {
   switch (level) {
@@ -177,10 +191,14 @@ function getLogLevelName(level) {
 /**
  * 7日前(1週間前)の日付を取得
  * 
- * 例: 今日が2025/11/24(月)の場合 → 2025/11/17(月) 00:00:00を返す
- * 例: 今日が2025/11/25(火)の場合 → 2025/11/18(火) 00:00:00を返す
+ * @details 
+ * 実行時点から起算して7日前の日付を生成し、時刻を 00:00:00.000 にリセットします。
+ * ネクストエンジンAPIから「過去1週間分」のデータを取得する際の開始日として使用されます。
  * 
- * @return {Date} 7日前 00:00:00
+ * 例: 今日が 2025/11/24 の場合、2025/11/17 00:00:00 を返します。
+ * 
+ * @return {Date} 7日前の 00:00:00 に設定された Date オブジェクト
+ * @note タイムゾーンはGASプロジェクトの設定（通常は Asia/Tokyo）に依存します。
  */
 function getSevenDaysAgo() {
   const today = new Date();
@@ -194,7 +212,11 @@ function getSevenDaysAgo() {
 /**
  * 本日の終了時刻を取得
  * 
- * @return {Date} 本日 23:59:59
+ * @details 
+ * 実行時点の当日の日付に対して、時刻を 23:59:59.999 に設定した Date オブジェクトを返します。
+ * 検索期間の終点として使用されます。
+ * 
+ * @return {Date} 本日の 23:59:59 に設定された Date オブジェクト
  */
 function getTodayEnd() {
   const today = new Date();
@@ -206,10 +228,14 @@ function getTodayEnd() {
 /**
  * 日付を YYYY-MM-DD HH:MM:SS 形式にフォーマット
  * 
- * ネクストエンジンAPIの日時パラメータ形式に合わせます。
+ * @details 
+ * ネクストエンジンAPI（receiveorder_row/search等）が要求する日時の文字列形式に変換します。
+ * 月・日・時・分・秒は常に2桁（ゼロパディング）で出力されます。
  * 
  * @param {Date} date - フォーマットする日付
- * @return {string} フォーマット済み日付文字列
+ * @return {string} `YYYY-MM-DD HH:mm:ss` 形式の文字列
+ * @example
+ * formatDateTimeForNE(new Date(2025, 0, 1, 9, 0, 0)) // "2025-01-01 09:00:00"
  */
 function formatDateTimeForNE(date) {
   const year = date.getFullYear();
@@ -225,9 +251,16 @@ function formatDateTimeForNE(date) {
 /**
  * 検索期間の日付範囲を取得
  * 
- * 7日前(1週間前) 00:00:00 から 本日 23:59:59 までの範囲を返します。
+ * @details 
+ * `getSevenDaysAgo` と `getTodayEnd` を組み合わせ、APIリクエストに必要な
+ * 日付オブジェクトとフォーマット済み文字列をセットで生成します。
  * 
- * @return {Object} {startDate: Date, endDate: Date, startDateStr: string, endDateStr: string}
+ * @return {Object} 期間情報オブジェクト：
+ *   - startDate {Date}: 7日前 00:00
+ *   - endDate {Date}: 本日 23:59
+ *   - startDateStr {string}: API用開始日時文字列
+ *   - endDateStr {string}: API用終了日時文字列
+ * @see getSevenDaysAgo, getTodayEnd, formatDateTimeForNE
  */
 function getSearchDateRange() {
   const startDate = getSevenDaysAgo();
@@ -244,7 +277,9 @@ function getSearchDateRange() {
 /**
  * 日付計算テスト
  * 
- * Phase 1のテスト用関数です。
+ * @details 
+ * 生成された日付範囲が意図通り（7日間）であるか、フォーマットが正しいかを検証します。
+ * コンソールに出力される開始/終了日時を手動で確認するために使用します。
  */
 function testDateCalculation1() {
   console.log('=== 日付計算テスト ===');
@@ -283,10 +318,13 @@ function testDateCalculation1() {
 /**
  * ログ出力関数
  * 
- * LOG_LEVELの設定に応じてログ出力を制御します。
- * 
+ * @details 
+ * スクリプトプロパティの `LOG_LEVEL` 設定に基づき、メッセージを出力するか否かを判定します。
+ * 設定値（1:ALL, 2:SAMPLE, 3:NONE）と比較し、引数の `level` が設定値以上の重要度
+ * であれば `console.log` を実行します。
+ *  
  * @param {string} message - ログメッセージ
- * @param {number} level - 出力レベル(省略時は LOG_LEVEL.ALL)
+ * @param {number} [level=LOG_LEVEL.ALL] - 出力レベル。省略時は常に全件出力対象
  */
 function logMessage(message, level = LOG_LEVEL.ALL) {
   const config = getScriptConfig();
@@ -300,13 +338,16 @@ function logMessage(message, level = LOG_LEVEL.ALL) {
 /**
  * データログ出力関数
  * 
- * LOG_LEVELの設定に応じてデータの出力を制御します。
- * - LOG_LEVEL.ALL (1): 全件出力
- * - LOG_LEVEL.SAMPLE (2): 先頭3行のみ出力
- * - LOG_LEVEL.NONE (3): 出力なし
+ * @details 
+ * 配列形式のデータを、設定されたログレベルに応じて整形して出力します。
+ * - ALL (1): 配列内のすべての要素を JSON.stringify 形式で出力します。
+ * - SAMPLE (2): 最初の3要素のみ出力し、残りの件数を表示します。
+ * - NONE (3): 何も出力しません。
+ * 
+ * 大量のAPIレスポンスをコンソールに表示すると、GASのログ制限に抵触したり
+ * ブラウザが重くなるのを防ぐためのユーティリティです。
  * 
  * @param {Array} dataArray - 出力するデータ配列
- * @param {string} title - データのタイトル
  */
 function logData(dataArray, title = 'データ') {
   const config = getScriptConfig();
@@ -340,7 +381,9 @@ function logData(dataArray, title = 'データ') {
 /**
  * ログ出力テスト
  * 
- * Phase 1のテスト用関数です。
+ * @details 
+ * ダミーデータを用いて、`logMessage` および `logData` が現在のログレベル設定に従って
+ * 正しくフィルタリングされて表示されるかを確認します。
  */
 function testLogOutput() {
   console.log('=== ログ出力テスト ===');
@@ -381,7 +424,12 @@ function testLogOutput() {
 /**
  * Phase 1 統合テスト
  * 
- * Phase 1で実装した全機能をテストします。
+ * @details 
+ * 基盤構築フェーズで実装した「設定取得」「日付計算」「ログ出力」の全機能を一括で実行します。
+ * 各関数の戻り値に不整合がないか、例外が発生しないかを検証します。
+ * 本番処理（Phase 5等）を実行する前に、このテストがパスすることを確認してください。
+ * 
+ * @throws {Error} いずれかのテストで問題が検出された場合
  */
 function testPhase1() {
   console.log('╔════════════════════════════════════════════════════════════╗');
