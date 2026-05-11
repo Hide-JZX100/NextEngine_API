@@ -1,26 +1,29 @@
 /**
- * =============================================================================
- * API呼び出し
- * =============================================================================
- * ネクストエンジンAPIを呼び出す基本関数群
+ * @fileoverview API呼び出しモジュール
  * 
- * 【主な機能】
- * - セット商品マスタAPIの呼び出し
- * - ページネーション対応(offset/limit方式)
- * - トークン自動更新
- * - エラーハンドリング
- * =============================================================================
+ * ネクストエンジン API との通信を担当します。
+ * セット商品マスタの取得、ページネーション処理、およびアクセストークンの自動更新ロジックを提供します。
+ * 
+ * 主な機能:
+ * - セット商品マスタ API (search) の呼び出し
+ * - 大量データのページネーション取得 (offset/limit 方式)
+ * - レスポンスに含まれる新しいトークンの自動保存
+ * - ネットワークエラーや API エラーのハンドリング
  */
 
-// ネクストエンジンAPIのベースURL
+/** @constant {string} ネクストエンジンAPIのベースURL */
 const NE_API_URL = 'https://api.next-engine.org';
 
 /**
- * セット商品マスタを取得(1ページ分)
+ * セット商品マスタを取得（1ページ分）
  * 
- * @param {number} offset - 取得開始位置(0始まり)
- * @param {number} limit - 取得件数(最大1000)
- * @return {Object} APIレスポンス {result, count, data, access_token, refresh_token}
+ * 指定された条件で API を呼び出し、セット商品マスタのデータを取得します。
+ * レスポンスに新しいアクセストークンが含まれている場合、自動的にスクリプトプロパティを更新します。
+ * 
+ * @param {number} [offset=0] - 取得開始位置 (0始まり)
+ * @param {number} [limit=1000] - 1ページあたりの取得件数 (最大1000)
+ * @return {Object} APIレスポンスオブジェクト ({result: string, count: string, data: Object[]})
+ * @throws {Error} 認証情報不足、HTTPエラー、またはAPIがエラーを返した場合
  */
 function fetchSetGoodsMaster(offset = 0, limit = 1000) {
   try {
@@ -106,9 +109,14 @@ function fetchSetGoodsMaster(offset = 0, limit = 1000) {
 }
 
 /**
- * セット商品マスタを全件取得(ページネーション対応 + リトライ機能)
+ * セット商品マスタを全件取得（ページネーション対応 + リトライ機能）
  * 
- * @return {Array} 全データの配列
+ * データの最終ページに到達するまで、繰り返し API を呼び出して全レコードを結合します。
+ * 処理完了後、実行統計（件数、時間、呼び出し回数）をサマリーとして出力します。
+ * ※内部で `fetchSetGoodsMasterWithRetry` を呼び出します。
+ * 
+ * @return {Object[]} 取得した全レコードの配列
+ * @throws {Error} API取得プロセスで回復不能なエラーが発生した場合
  */
 function fetchAllSetGoodsMasterWithRetry() {
   console.log('=== セット商品マスタ 全件取得開始 (リトライ機能付き) ===');
@@ -186,10 +194,14 @@ function fetchAllSetGoodsMasterWithRetry() {
 }
 
 /**
- * セット商品マスタを全件取得(ページネーション対応)
+ * セット商品マスタを全件取得（ページネーション対応）
+ * 
+ * 繰り返し API を呼び出して全レコードを取得します。
+ * 現在はリトライ機能を持つ `fetchAllSetGoodsMasterWithRetry()` の使用を推奨します。
  * 
  * @deprecated リトライ機能付きの fetchAllSetGoodsMasterWithRetry() を推奨
- * @return {Array} 全データの配列
+ * @return {Object[]} 取得した全レコードの配列
+ * @throws {Error} API取得中にエラーが発生した場合
  */
 function fetchAllSetGoodsMaster() {
   console.log('=== セット商品マスタ 全件取得開始 ===');
@@ -260,8 +272,12 @@ function fetchAllSetGoodsMaster() {
 }
 
 /**
- * API呼び出しテスト(1ページのみ)
- * 最初の1000件(または全件)を取得してログ出力
+ * API呼び出しテスト（1ページ分）
+ * 
+ * 最初の1ページ（最大1000件）を取得し、ログ出力制御モジュールを使用して
+ * コンソールに内容を表示します。
+ * 認証が通っているか、およびデータの構造が正しいかを確認するために使用します。
+ * @throws {Error} 取得に失敗した場合
  */
 function testFetchSetGoodsMaster() {
   console.log('=== セット商品マスタ取得テスト(1ページ) ===');
@@ -298,8 +314,11 @@ function testFetchSetGoodsMaster() {
 }
 
 /**
- * API呼び出しテスト(全件取得)
- * 全データを取得してログ出力(実際の書き込みは行わない)
+ * API呼び出しテスト（全件取得）
+ * 
+ * 全ページ分（全件）のデータを取得し、総件数をログに出力します。
+ * スプレッドシートへの書き込みは行わずに、APIの負荷や取得時間の目安を確認するために使用します。
+ * @throws {Error} 全件取得プロセスでエラーが発生した場合
  */
 function testFetchAllSetGoodsMaster() {
   console.log('=== セット商品マスタ全件取得テスト ===');
