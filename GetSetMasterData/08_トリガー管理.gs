@@ -1,25 +1,27 @@
 /**
- * =============================================================================
- * トリガー管理
- * =============================================================================
- * 定期実行トリガーの作成・管理・削除を行う機能
+ * @fileoverview トリガー管理モジュール
  * 
- * 【主な機能】
- * - 定期実行トリガーの自動作成
- * - 既存トリガーの確認
- * - トリガーの削除
+ * スクリプトの自動実行を制御するための「時間主導型（Time-driven）トリガー」の
+ * 作成、一覧表示、削除などの管理機能を提供します。
  * 
- * 【推奨設定】
+ * 主な機能:
+ * - メイン処理（データ更新）の定期実行予約
+ * - トークン更新処理の定期実行予約（認証維持用）
+ * - 既存トリガーの重複チェックと一覧表示
+ * - 不要なトリガーの一括・個別削除
+ * 
+ * 推奨設定:
  * - メイン処理: 毎日午前3時実行(データ更新用)
  * - トークン更新: 毎日午前2時実行(認証維持用)
- * =============================================================================
  */
 
 /**
- * 定期実行トリガーを作成
- * メイン処理を毎日指定時刻に実行するトリガーを設定
+ * 毎日指定された時刻にメイン処理（updateSetGoodsMaster）を実行するトリガーを作成します。
  * 
- * @param {number} hour - 実行時刻(0-23)
+ * 既に同じ関数のトリガーが存在する場合は、二重登録を防ぐため新規作成を行いません。
+ * 
+ * @param {number} [hour=3] - 実行時刻（0-23時）
+ * @throws {Error} トリガー作成権限がない場合など
  */
 function createDailyTrigger(hour = 3) {
   try {
@@ -60,10 +62,13 @@ function createDailyTrigger(hour = 3) {
 }
 
 /**
- * トークン更新用トリガーを作成
- * 認証トークンを毎日更新して有効期限を延長
+ * 毎日指定された時刻にトークン更新処理（dailyTokenRefresh）を実行するトリガーを作成します。
  * 
- * @param {number} hour - 実行時刻(0-23)
+ * ネクストエンジンのアクセストークン有効期限を維持するために重要です。
+ * メイン処理の実行頻度に関わらず、このトリガーは毎日実行することを推奨します。
+ * 
+ * @param {number} [hour=2] - 実行時刻（0-23時）
+ * @throws {Error} トリガー作成エラーが発生した場合
  */
 function createTokenRefreshTrigger(hour = 2) {
   try {
@@ -101,11 +106,13 @@ function createTokenRefreshTrigger(hour = 2) {
 }
 
 /**
- * 週次実行トリガーを作成
- * メイン処理を毎週指定曜日・時刻に実行
+ * 毎週指定された曜日・時刻にメイン処理を実行するトリガーを作成します。
  * 
- * @param {ScriptApp.WeekDay} weekday - 曜日(ScriptApp.WeekDay.MONDAY等)
- * @param {number} hour - 実行時刻(0-23)
+ * データの更新頻度が低い場合に適していますが、認証維持のための
+ * `createTokenRefreshTrigger` は別途毎日実行するようにしてください。
+ * 
+ * @param {GoogleAppsScript.Script.WeekDay} [weekday=ScriptApp.WeekDay.MONDAY] - 実行する曜日
+ * @param {number} [hour=3] - 実行時刻（0-23時）
  */
 function createWeeklyTrigger(weekday = ScriptApp.WeekDay.MONDAY, hour = 3) {
   try {
@@ -152,7 +159,10 @@ function createWeeklyTrigger(weekday = ScriptApp.WeekDay.MONDAY, hour = 3) {
 }
 
 /**
- * 全てのトリガーを一覧表示
+ * 現在のプロジェクトに設定されている全てのトリガーをコンソールに表示します。
+ * 
+ * 各トリガーの ID、実行関数名、イベント種別などを確認できます。
+ * 設定漏れや不要なトリガーの有無を確認するために使用します。
  */
 function listAllTriggers() {
   console.log('=== プロジェクトのトリガー一覧 ===');
@@ -190,10 +200,11 @@ function listAllTriggers() {
 }
 
 /**
- * トリガーの実行頻度を取得(表示用)
+ * トリガーの実行頻度を人間が読みやすい形式の文字列で取得します（表示用ユーティリティ）。
  * 
- * @param {Trigger} trigger - トリガーオブジェクト
- * @return {string} 実行頻度の説明
+ * @param {GoogleAppsScript.Script.Trigger} trigger - 頻度を調べたいトリガーオブジェクト
+ * @return {string} 実行頻度の説明文字列
+ * @private
  */
 function getTriggerFrequency(trigger) {
   try {
@@ -212,7 +223,10 @@ function getTriggerFrequency(trigger) {
 }
 
 /**
- * 全てのトリガーを削除
+ * プロジェクトに設定されている全てのトリガーを一括で削除します。
+ * 
+ * 開発環境の再構築時や、自動実行を完全に停止したい場合に使用します。
+ * 削除後は復旧できないため、慎重に実行してください。
  */
 function deleteAllTriggers() {
   console.log('=== 全トリガー削除 ===');
@@ -237,9 +251,11 @@ function deleteAllTriggers() {
 }
 
 /**
- * 特定のトリガーをIDで削除
+ * 指定された ID を持つトリガーを個別に削除します。
  * 
- * @param {string} triggerId - トリガーID
+ * 特定のスケジュール設定のみを解除したい場合に使用します。
+ * 
+ * @param {string} triggerId - 削除対象のトリガー固有 ID
  */
 function deleteTriggerById(triggerId) {
   const triggers = ScriptApp.getProjectTriggers();
@@ -258,8 +274,10 @@ function deleteTriggerById(triggerId) {
 }
 
 /**
- * 推奨トリガー設定を一括作成
- * メイン処理(毎日3時) + トークン更新(毎日2時)
+ * 推奨されるトリガー設定（トークン更新 2時 / メイン処理 3時）を一括で作成します。
+ * 
+ * 環境構築後のセットアップを簡略化するために使用します。
+ * @throws {Error} トリガー作成に失敗した場合
  */
 function setupRecommendedTriggers() {
   console.log('=== 推奨トリガー設定 ===');
