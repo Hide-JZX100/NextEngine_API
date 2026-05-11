@@ -1,25 +1,25 @@
 /**
- * =============================================================================
- * リトライ処理
- * =============================================================================
- * API呼び出しなどの処理が失敗した場合に自動的に再試行する機能
+ * @fileoverview リトライ処理モジュール
  * 
- * 【主な機能】
- * - 指数バックオフによる再試行
- * - リトライ回数の制御
- * - エラー種別による再試行判定
+ * API 呼び出しなどの不安定なネットワーク通信を伴う処理において、
+ * 失敗時に自動的に再試行（リトライ）を行うためのユーティリティを提供します。
  * 
- * 【設定方法】
- * スクリプトプロパティに以下を追加(オプション):
- * - MAX_RETRY_COUNT: 最大リトライ回数(デフォルト: 3)
- * - RETRY_WAIT_TIME: 初回リトライ待機時間(秒)(デフォルト: 2)
- * =============================================================================
+ * 主な機能:
+ * - 指数バックオフ（Exponential Backoff）による待機時間の調整
+ * - リトライ回数の制限とエラー種別に基づいた継続判定
+ * - 高階関数を用いた既存処理へのリトライ機能の付与
+ * 
+ * 管理する設定項目（スクリプトプロパティ）:
+ * - MAX_RETRY_COUNT: 最大リトライ回数（デフォルト: 3）
+ * - RETRY_WAIT_TIME: 初回リトライまでの基本待機時間（秒）（デフォルト: 2）
  */
 
 /**
- * リトライ設定を取得
+ * リトライ設定を取得します。
  * 
- * @return {Object} リトライ設定 {maxRetryCount, retryWaitTime}
+ * スクリプトプロパティから設定値を読み取り、未設定の場合はデフォルト値を使用します。
+ * 
+ * @return {{maxRetryCount: number, retryWaitTime: number}} リトライ設定オブジェクト
  */
 function getRetryConfig() {
   const props = PropertiesService.getScriptProperties();
@@ -34,10 +34,13 @@ function getRetryConfig() {
 }
 
 /**
- * エラーがリトライ可能かどうかを判定
+ * 発生したエラーが再試行（リトライ）可能かどうかを判定します。
  * 
- * @param {Error} error - エラーオブジェクト
- * @return {boolean} リトライ可能な場合true
+ * タイムアウトやサーバー一時不在などの一時的なエラーは true を返し、
+ * 認証エラーや権限不足などの恒久的なエラーは false を返します。
+ * 
+ * @param {Error} error - 判定対象のエラーオブジェクト
+ * @return {boolean} リトライ可能な場合は true、不可能な場合は false
  */
 function isRetryableError(error) {
   const errorMessage = error.message.toLowerCase();
@@ -89,11 +92,13 @@ function isRetryableError(error) {
 }
 
 /**
- * 指数バックオフで待機
- * リトライ回数に応じて待機時間を増やす
+ * 指数バックオフに基づき、現在のスレッドを一時停止（スリープ）させます。
  * 
- * @param {number} retryCount - 現在のリトライ回数
- * @param {number} baseWaitTime - 基本待機時間(秒)
+ * 待機時間は `baseWaitTime * 2^retryCount` で計算されます。
+ * これにより、短時間の連続リトライによるサーバー負荷を軽減します。
+ * 
+ * @param {number} retryCount - 現在のリトライ試行回数（0始まり）
+ * @param {number} baseWaitTime - 基本となる待機時間（秒）
  */
 function exponentialBackoff(retryCount, baseWaitTime) {
   // 待機時間 = 基本待機時間 * 2^リトライ回数
@@ -104,13 +109,16 @@ function exponentialBackoff(retryCount, baseWaitTime) {
 }
 
 /**
- * 関数をリトライ機能付きで実行
+ * 指定された関数をリトライ機能付きで実行します。
  * 
- * @param {Function} func - 実行する関数
- * @param {Array} args - 関数の引数
- * @param {string} functionName - 関数名(ログ用)
+ * 関数が例外をスローした場合、`isRetryableError` で判定を行い、
+ * リトライ可能な場合は指数バックオフを挟んで再実行します。
+ * 
+ * @param {Function} func - 実行対象の関数
+ * @param {any[]} [args=[]] - 関数に渡す引数の配列
+ * @param {string} [functionName='関数'] - ログ出力用の識別名
  * @return {any} 関数の実行結果
- * @throws {Error} 最大リトライ回数を超えた場合
+ * @throws {Error} 最大リトライ回数を超過した、またはリトライ不可のエラーが発生した場合
  */
 function executeWithRetry(func, args = [], functionName = '関数') {
   const config = getRetryConfig();
@@ -158,11 +166,15 @@ function executeWithRetry(func, args = [], functionName = '関数') {
 }
 
 /**
- * セット商品マスタ取得(リトライ機能付き)
+ * セット商品マスタ取得 API をリトライ機能付きで呼び出します。
  * 
- * @param {number} offset - 取得開始位置
- * @param {number} limit - 取得件数
- * @return {Object} APIレスポンス
+ * `fetchSetGoodsMaster` をラップし、ネットワークエラー等の際、
+ * 自動的に再試行を行います。
+ * 
+ * @param {number} [offset=0] - 取得開始位置
+ * @param {number} [limit=1000] - 取得件数
+ * @return {Object} API レスポンスオブジェクト
+ * @throws {Error} リトライ上限に達しても成功しなかった場合
  */
 function fetchSetGoodsMasterWithRetry(offset = 0, limit = 1000) {
   return executeWithRetry(
@@ -173,8 +185,10 @@ function fetchSetGoodsMasterWithRetry(offset = 0, limit = 1000) {
 }
 
 /**
- * リトライ処理のテスト
- * 意図的にエラーを発生させてリトライ動作を確認
+ * リトライ機構の単体テストを実施します。
+ * 
+ * 意図的にエラーを発生させるスタブ関数を用い、
+ * 期待通りに再試行が行われるか、およびリトライ不可設定で即時中断するかを検証します。
  */
 function testRetryMechanism() {
   console.log('=== リトライ処理テスト ===');
@@ -226,7 +240,9 @@ function testRetryMechanism() {
 }
 
 /**
- * 実際のAPI呼び出しでリトライをテスト
+ * 実際の API 呼び出しを伴うリトライテストを実施します。
+ * 
+ * ネットワーク環境等に起因する一時的なエラーに対する挙動を確認するために使用します。
  */
 function testApiRetry() {
   console.log('=== API呼び出しリトライテスト ===');
@@ -246,7 +262,9 @@ function testApiRetry() {
 }
 
 /**
- * リトライ設定の確認
+ * 現在のリトライ設定（回数、待機時間）をコンソールに出力します。
+ * 
+ * 設定値が正しく反映されているか、および待機時間の増加推移を確認するために使用します。
  */
 function checkRetrySettings() {
   console.log('=== リトライ設定確認 ===');
