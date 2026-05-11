@@ -1,24 +1,25 @@
 /**
- * =============================================================================
- * エラー通知
- * =============================================================================
- * 処理エラー発生時にメール通知を送信する機能
+ * @fileoverview エラー通知モジュール
  * 
- * 【主な機能】
- * - エラー内容の整形
- * - メール通知の送信
- * - 通知先の管理
+ * システムの実行中に発生したエラーや、処理の完了を管理者に通知する機能を提供します。
  * 
- * 【設定方法】
- * スクリプトプロパティに以下を追加:
+ * 主な機能:
+ * - エラー内容の整形（発生日時、対処法、デバッグ情報等の付与）
+ * - Google Mail サービスを使用したメール通知の送信
+ * - スクリプトプロパティによる通知先および通知条件の管理
+ * 
+ * 管理する設定項目:
  * - NOTIFICATION_EMAIL: 通知先メールアドレス(未設定時は実行者のメール)
- * =============================================================================
+ * - SEND_SUCCESS_NOTIFICATION: 成功時にも通知を送る場合は 'true'
  */
 
 /**
- * 通知先メールアドレスを取得
+ * 通知先メールアドレスを取得します。
  * 
- * @return {string} メールアドレス
+ * スクリプトプロパティ `NOTIFICATION_EMAIL` が設定されていない場合は、
+ * スクリプトの実行ユーザーのアドレスをデフォルトとして返します。
+ * 
+ * @return {string} 通知対象のメールアドレス
  */
 function getNotificationEmail() {
   const props = PropertiesService.getScriptProperties();
@@ -33,11 +34,14 @@ function getNotificationEmail() {
 }
 
 /**
- * エラー通知メールを送信
+ * エラー通知メールを送信します。
+ * 
+ * 発生したエラーオブジェクトからメッセージを抽出し、スクリプトへのリンクや
+ * 一般的なトラブルシューティング手順を本文に含めて送信します。
  * 
  * @param {Error} error - エラーオブジェクト
- * @param {string} processName - 処理名
- * @param {Object} additionalInfo - 追加情報(オプション)
+ * @param {string} [processName='セット商品マスタ更新処理'] - エラーが発生した処理の名称
+ * @param {Object} [additionalInfo={}] - 本文に追加で記載するデバッグ情報（キー・値のペア）
  */
 function sendErrorNotification(error, processName = 'セット商品マスタ更新処理', additionalInfo = {}) {
   try {
@@ -132,10 +136,13 @@ ${key}: ${value}`;
 }
 
 /**
- * 成功通知メールを送信(オプション)
+ * 成功通知メールを送信します（オプション）。
  * 
- * @param {Object} summary - 処理サマリー
- * @param {string} processName - 処理名
+ * 処理が正常に完了した際に、取得件数や処理時間を記載したメールを送信します。
+ * スクリプトプロパティ `SEND_SUCCESS_NOTIFICATION` が 'true' の場合のみ実行されます。
+ * 
+ * @param {{completedAt?: string, dataCount: number, writeCount: number, duration: number}} summary - 処理結果のサマリー情報
+ * @param {string} [processName='セット商品マスタ更新処理'] - 完了した処理の名称
  */
 function sendSuccessNotification(summary, processName = 'セット商品マスタ更新処理') {
   try {
@@ -187,9 +194,11 @@ ${getSpreadsheetUrl()}
 }
 
 /**
- * スプレッドシートのURLを取得
+ * 操作対象スプレッドシートの閲覧用URLを生成します。
  * 
- * @return {string} スプレッドシートURL
+ * `SPREADSHEET_ID` 設定値を元に、管理者が直接データを確認できるURLを構築します。
+ * 
+ * @return {string} スプレッドシートのURL。取得できない場合はエラーメッセージ。
  */
 function getSpreadsheetUrl() {
   try {
@@ -202,6 +211,8 @@ function getSpreadsheetUrl() {
 
 /**
  * エラー通知のテスト
+ * 
+ * 擬似的なエラーを生成し、実際にメールが正しくフォーマットされて届くかを検証します。
  */
 function testErrorNotification() {
   console.log('=== エラー通知テスト ===');
@@ -229,6 +240,8 @@ function testErrorNotification() {
 
 /**
  * 成功通知のテスト
+ * 
+ * 擬似的な成功サマリーを生成し、成功通知の設定（有効化）と送信を検証します。
  */
 function testSuccessNotification() {
   console.log('=== 成功通知テスト ===');
@@ -262,6 +275,9 @@ function testSuccessNotification() {
 
 /**
  * 通知設定の確認
+ * 
+ * 現在の通知先メールアドレスや、成功通知のオン・オフ設定をコンソールに表示します。
+ * 設定不足による「メールが届かない」問題を解決するために使用します。
  */
 function checkNotificationSettings() {
   console.log('=== 通知設定確認 ===');

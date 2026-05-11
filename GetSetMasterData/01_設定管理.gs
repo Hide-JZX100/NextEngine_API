@@ -1,22 +1,25 @@
 /**
- * =============================================================================
- * 設定管理
- * =============================================================================
- * スクリプトプロパティから各種設定値を取得する関数群
+ * @fileoverview 設定管理モジュール
  * 
- * 【管理する設定項目】
- * - SPREADSHEET_ID: 出力先スプレッドシートID
- * - SHEET_NAME: 出力先シート名
- * - LOG_LEVEL: ログ出力レベル(1:全件, 2:先頭3行, 3:なし)
- * - CLIENT_ID, CLIENT_SECRET, REDIRECT_URI: 認証情報(認証ライブラリで使用)
- * =============================================================================
+ * このスクリプトは、Google Apps Script の「スクリプトプロパティ」に保存された
+ * 設定情報を安全に取得・管理するためのユーティリティ関数を提供します。
+ * 
+ * 管理する設定項目:
+ * - SPREADSHEET_ID: データの読み書き対象となるスプレッドシートのID
+ * - SHEET_NAME: データの読み書き対象となるシート名
+ * - LOG_LEVEL: 実行時のログ出力レベル（1:詳細, 2:概要のみ, 3:出力なし）
+ * - CLIENT_ID, CLIENT_SECRET, REDIRECT_URI: Next Engine API 連携用の認証情報
+ * - ACCESS_TOKEN, REFRESH_TOKEN: APIアクセス用トークン（動的に更新されます）
  */
 
 /**
  * スプレッドシート設定を取得
  * 
- * @return {Object} スプレッドシート設定 {spreadsheetId, sheetName}
- * @throws {Error} 設定が未設定の場合
+ * スクリプトプロパティからスプレッドシートIDとシート名を取得します。
+ * 設定が欠落している場合は、処理を続行できないため例外をスローします。
+ * 
+ * @return {{spreadsheetId: string, sheetName: string}} スプレッドシート設定オブジェクト
+ * @throws {Error} SPREADSHEET_ID または SHEET_NAME がスクリプトプロパティに設定されていない場合
  */
 function getSpreadsheetConfig() {
   const props = PropertiesService.getScriptProperties();
@@ -40,7 +43,12 @@ function getSpreadsheetConfig() {
 /**
  * ログレベルを取得
  * 
- * @return {number} ログレベル(1:全件, 2:先頭3行のみ, 3:なし)
+ * スクリプトの動作ログの出力密度を制御するためのレベルを取得します。
+ * 1: 全件出力 (デバッグ用)
+ * 2: 先頭3行のみ (デフォルト / 正常確認用)
+ * 3: 出力なし (パフォーマンス優先)
+ * 
+ * @return {number} ログレベル (1|2|3)
  */
 function getLogLevel() {
   const props = PropertiesService.getScriptProperties();
@@ -64,7 +72,11 @@ function getLogLevel() {
 }
 
 /**
- * 現在の設定を全て表示(デバッグ用)
+ * 現在の設定情報をログに出力（デバッグ用）
+ * 
+ * スクリプトプロパティに格納されている現在の設定値を一覧表示します。
+ * 認証情報（Secret等）はセキュリティのため、値そのものではなく「設定済み」か否かのみを表示します。
+ * 開発環境のセットアップ確認に使用してください。
  */
 function showAllConfig() {
   console.log('=== 現在の設定 ===');
@@ -94,6 +106,10 @@ function showAllConfig() {
 /**
  * スプレッドシートプロパティの設定テスト
  * 実際にスプレッドシートとシートが存在するか確認
+ * 
+ * 設定されたIDとシート名を使って、実際にGoogle Sheets API経由でアクセスできるかを検証します。
+ * 権限エラーやシート名の間違いを早期に発見するために使用します。
+ * @throws {Error} スプレッドシートが開けない、またはシートが見つからない場合
  */
 function testSpreadsheetConfig() {
   console.log('=== スプレッドシート設定テスト ===');

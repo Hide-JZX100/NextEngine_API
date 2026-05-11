@@ -1,27 +1,24 @@
 /**
- * =============================================================================
- * ログ出力制御
- * =============================================================================
- * ログレベルに応じてデータの出力を制御する関数群
+ * @fileoverview ログ出力制御モジュール
  * 
- * 【ログレベル】
+ * 実行時のログレベル設定に基づき、コンソールへの出力密度を動的に制御します。
+ * 大量データを扱う際のパフォーマンス低下を防ぎつつ、デバッグに必要な情報を適切に表示します。
+ * 
+ * ログレベルの定義:
  * 1: 全件ログ出力 - 全てのデータをログに出力(デバッグ用)
  * 2: 先頭3行のみ - 先頭3件のデータのみ出力(通常運用)
  * 3: ログ出力なし - データは出力せず、件数のみ表示(本番運用)
- * 
- * 【使用例】
- * const logLevel = getLogLevel();
- * logApiData(apiData, logLevel);
- * =============================================================================
  */
 
 /**
  * APIデータをログ出力
- * ログレベルに応じて出力内容を制御
  * 
- * @param {Array} data - 出力するデータ配列
+ * 指定されたログレベルに応じて、配列データの内容をコンソールに出力します。
+ * JSON.stringify を用いてオブジェクトを整形出力するため、構造の確認が容易です。
+ * 
+ * @param {Object[]} data - 出力対象のオブジェクト配列
  * @param {number} logLevel - ログレベル(1:全件, 2:先頭3行, 3:なし)
- * @param {string} dataLabel - データのラベル(例: "セット商品マスタ")
+ * @param {string} [dataLabel='データ'] - 出力時に表示するデータの識別ラベル
  */
 function logApiData(data, logLevel, dataLabel = 'データ') {
   if (!data || data.length === 0) {
@@ -65,7 +62,10 @@ function logApiData(data, logLevel, dataLabel = 'データ') {
 /**
  * 処理結果のサマリーをログ出力
  * 
- * @param {Object} summary - サマリー情報
+ * 実行完了後に、API呼び出し回数や処理時間などの統計情報を整形して表示します。
+ * エラーが含まれている場合は、エラーリストも併せて出力します。
+ * 
+ * @param {{totalCount: number, writeCount: number, duration: number, apiCallCount: number, errors?: string[]}} summary - サマリー情報オブジェクト
  * @param {number} summary.totalCount - 取得件数
  * @param {number} summary.writeCount - 書き込み件数
  * @param {number} summary.duration - 処理時間(ミリ秒)
@@ -91,6 +91,8 @@ function logProcessSummary(summary) {
 /**
  * ページネーション情報をログ出力
  * 
+ * APIの複数ページ取得における現在の進捗状況（ページ番号や累計件数）を表示します。
+ * 
  * @param {number} currentPage - 現在のページ番号
  * @param {number} totalPages - 総ページ数
  * @param {number} currentCount - 現在ページの件数
@@ -105,7 +107,10 @@ function logPaginationInfo(currentPage, totalPages, currentCount, accumulatedCou
 
 /**
  * ログ出力テスト
- * 各ログレベルでの出力を確認
+ * 
+ * 擬似的なデータとサマリー情報を用いて、全てのログレベル（全件、一部、なし）および
+ * サマリー出力、ページネーション表示が意図した通りに動作するかを検証します。
+ * 開発時のデバッグ表示の確認や、ログレベル変更後の挙動確認に使用します。
  */
 function testLogOutput() {
   console.log('=== ログ出力テスト ===');
@@ -152,6 +157,9 @@ function testLogOutput() {
 
 /**
  * 現在の設定でのログレベルを確認
+ * 
+ * PropertiesService から取得された現在の LOG_LEVEL 設定値を読み取り、
+ * その設定がどのような挙動を意味するかをユーザーに提示します。
  */
 function checkCurrentLogLevel() {
   console.log('=== 現在のログレベル確認 ===');

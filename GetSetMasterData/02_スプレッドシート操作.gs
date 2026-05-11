@@ -1,21 +1,23 @@
 /**
- * =============================================================================
- * スプレッドシート操作
- * =============================================================================
- * セット商品マスタデータをスプレッドシートに書き込む関数群
+ * @fileoverview スプレッドシート操作モジュール
  * 
- * 【主な機能】
- * - ヘッダー行の作成・確認
- * - データの全件上書き(ヘッダーは保持)
- * - バッチ書き込みによる高速化
- * =============================================================================
+ * ネクストエンジンから取得したセット商品マスタデータを、Google スプレッドシートへ
+ * 出力するための操作を担当します。
+ * 
+ * 主な機能:
+ * - ヘッダー行（列名）の動的生成と整合性チェック
+ * - シートの初期化および書式設定
+ * - APIレスポンスからスプレッドシート用2次元配列へのデータ変換
+ * - 大量データの高速バッチ書き込み（全件上書き）
  */
 
 /**
  * ヘッダー定義
- * スプレッドシートの列順序とAPIフィールドの対応を定義
  * 
- * @return {Array} ヘッダー情報の配列
+ * スプレッドシートの列名（ラベル）と、APIレスポンスのフィールド名のマッピングを定義します。
+ * 列の並び順はこの配列の順序に従います。
+ * 
+ * @return {Array<{header: string, field: string}>} ヘッダー情報の配列
  */
 function getHeaderDefinition() {
   return [
@@ -30,7 +32,9 @@ function getHeaderDefinition() {
 /**
  * ヘッダー行を取得
  * 
- * @return {Array} ヘッダー行の配列
+ * ヘッダー定義から、スプレッドシートの1行目に書き込むためのラベル配列を生成します。
+ * 
+ * @return {string[]} ヘッダーラベルの配列
  */
 function getHeaderRow() {
   const headers = getHeaderDefinition();
@@ -39,9 +43,11 @@ function getHeaderRow() {
 
 /**
  * シートを初期化
- * ヘッダー行のみの状態にする
  * 
- * @param {Sheet} sheet - 対象シート
+ * 指定されたシートの全セルをクリアし、ヘッダー行を再作成します。
+ * ヘッダーには背景色、太字、中央揃えの書式を適用します。
+ * 
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - 操作対象のシートオブジェクト
  */
 function initializeSheet(sheet) {
   // 全データをクリア
@@ -63,8 +69,11 @@ function initializeSheet(sheet) {
 /**
  * ヘッダーが正しく設定されているか確認
  * 
- * @param {Sheet} sheet - 対象シート
- * @return {boolean} ヘッダーが正しければtrue
+ * シートの1行目を読み込み、定義されたヘッダーと一致するか検証します。
+ * シートが空、またはヘッダーが異なる場合は必要に応じて初期化を促します。
+ * 
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - 検証対象のシートオブジェクト
+ * @return {boolean} ヘッダーが定義通りであれば true、不一致であれば false
  */
 function validateHeader(sheet) {
   const lastRow = sheet.getLastRow();
@@ -97,8 +106,11 @@ function validateHeader(sheet) {
 /**
  * APIデータをスプレッドシート行形式に変換
  * 
- * @param {Array} apiData - APIから取得したデータ配列
- * @return {Array} スプレッドシート行データの2次元配列
+ * ネクストエンジン API から取得したオブジェクトの配列を、
+ * `setValues()` で使用可能な 2次元配列（行・列）に変換します。
+ * 
+ * @param {Object[]} apiData - APIから取得したレコードの配列
+ * @return {any[][]} スプレッドシート書き込み用の2次元配列
  */
 function convertApiDataToRows(apiData) {
   const headers = getHeaderDefinition();
@@ -118,10 +130,13 @@ function convertApiDataToRows(apiData) {
 
 /**
  * データをスプレッドシートに書き込み
- * 既存データをクリアして全件上書き(ヘッダーは保持)
  * 
- * @param {Array} apiData - APIから取得したデータ配列
- * @return {Object} 書き込み結果 {success: boolean, rowCount: number, message: string}
+ * 既存のデータ行（2行目以降）を一度削除し、新しいデータを一括で書き込みます。
+ * シートが見つからない場合や書き込みに失敗した場合は、エラー情報を返します。
+ * 
+ * @param {Object[]} apiData - APIから取得したデータ配列
+ * @return {{success: boolean, rowCount: number, message: string}} 処理結果オブジェクト
+ * @throws {Error} スプレッドシートIDやシート名が不正な場合
  */
 function writeDataToSheet(apiData) {
   try {
@@ -196,7 +211,10 @@ function writeDataToSheet(apiData) {
 
 /**
  * スプレッドシート書き込みのテスト
- * サンプルデータで動作確認
+ * 
+ * 固定のサンプルデータ（セット商品3明細分）を使用して、
+ * シートへの書き込み、ヘッダーの生成、書式設定が正常に動作するかを検証します。
+ * @throws {Error} 書き込み処理が失敗した場合
  */
 function testWriteDataToSheet() {
   console.log('=== スプレッドシート書き込みテスト ===');
