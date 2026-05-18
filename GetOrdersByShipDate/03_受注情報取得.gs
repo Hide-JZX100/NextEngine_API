@@ -131,7 +131,7 @@ function warmUp() {
 
     console.log(`ウォームアップ完了 (${elapsed}秒)`);
 
-    // 3分後に scheduledRun を動的トリガーで予約
+    // 10分後ではコールドスタート対策にならなかったため、3分後に scheduledRun を動的トリガーで予約
     const newTrigger = ScriptApp.newTrigger('scheduledRun')
       .timeBased()
       .after(3 * 60 * 1000)
