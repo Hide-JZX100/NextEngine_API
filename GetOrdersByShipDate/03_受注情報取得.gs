@@ -105,7 +105,7 @@ function warmUp() {
     access_token: token.accessToken,
     refresh_token: token.refreshToken,
     wait_flag: '1',
-    fields: 'receive_order_row_receive_order_id',
+    fields: ORDER_FIELDS,
     offset: '0',
     limit: '1'
   };
