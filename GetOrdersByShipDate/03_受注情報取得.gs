@@ -100,12 +100,17 @@ function warmUp() {
     refreshToken: props.getProperty('REFRESH_TOKEN')
   };
 
+  const warmUpDate = new Date();
+  warmUpDate.setDate(warmUpDate.getDate() - 10); // 10日前（データが存在する日付）
+
   const url = NE_API_BASE_URL + NE_ENDPOINT_ORDER_ROW;
   const payload = {
     access_token: token.accessToken,
     refresh_token: token.refreshToken,
     wait_flag: '1',
     fields: ORDER_FIELDS,
+    'receive_order_send_plan_date-gte': formatDateForApi(warmUpDate),
+    'receive_order_send_plan_date-lte': formatDateForApi(warmUpDate),
     offset: '0',
     limit: '1'
   };
@@ -130,6 +135,8 @@ function warmUp() {
     }
 
     console.log(`ウォームアップ完了 (${elapsed}秒)`);
+    console.log(`ウォームアップ取得件数: ${json.count}件`);
+    console.log(`ウォームアップresult: ${json.result}`);
 
     // 10分後ではコールドスタート対策にならなかったため、3分後に scheduledRun を動的トリガーで予約
     const newTrigger = ScriptApp.newTrigger('scheduledRun')
@@ -137,8 +144,7 @@ function warmUp() {
       .after(3 * 60 * 1000)
       .create();
     // 動的トリガーのUIDを保存（scheduledRun 側で削除するために使用）
-    PropertiesService.getScriptProperties()
-      .setProperty('WARMUP_TRIGGER_UIDS', newTrigger.getUniqueId());
+    props.setProperty('WARMUP_TRIGGER_UIDS', newTrigger.getUniqueId());
     console.log('scheduledRun を3分後に予約しました (UID: ' + newTrigger.getUniqueId() + ')');
 
   } catch (e) {
