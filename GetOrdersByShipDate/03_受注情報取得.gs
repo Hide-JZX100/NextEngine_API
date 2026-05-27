@@ -111,6 +111,8 @@ function warmUp() {
     fields: ORDER_FIELDS,
     'receive_order_send_plan_date-gte': formatDateForApi(warmUpDate),
     'receive_order_send_plan_date-lte': formatDateForApi(warmUpDate),
+    'receive_order_row_cancel_flag-eq': '0',
+    'receive_order_cancel_type_id-eq': '0',
     offset: '0',
     limit: '1'
   };
