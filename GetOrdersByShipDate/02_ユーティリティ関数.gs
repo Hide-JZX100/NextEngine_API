@@ -9,9 +9,9 @@
  * @param {Date|null} endDate - 終了日
  * @return {Object} { start: Date, end: Date }
  * 引数が両方nullの場合、実行日から自動計算する:
- *  - 1日の場合：前月20日〜前月末日
- *  - 10日の場合：当月1日〜9日
- *  - 20日の場合：当月10日〜19日
+ *  - 3日の場合：前月20日〜前月末日
+ *  - 13日の場合：当月1日〜9日
+ *  - 23日の場合：当月10日〜19日
  *  - それ以外の日付の場合：当月1日〜実行前日
  */
 function getDateRange(startDate, endDate) {
