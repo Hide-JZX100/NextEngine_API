@@ -52,8 +52,10 @@ const CONFIG = {
     FILTER: {
         // 受注状態区分: 出荷確定済み
         ORDER_STATUS_ID: '50',
-        // 受注キャンセル区分: 分割・統合によりキャンセル
-        CANCEL_TYPE_ID: '3'
+        // 受注キャンセル区分: 有効な受注
+        CANCEL_TYPE_ID_VALID: '0',
+        // 受注キャンセル区分: 統合によるキャンセル
+        CANCEL_TYPE_ID_INTEGRATION: '3'
     },
 
     // API設定

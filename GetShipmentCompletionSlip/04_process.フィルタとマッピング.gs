@@ -31,7 +31,9 @@ function filterAndMapSlips(rawData) {
     const filteredData = rawData.filter(item => {
         const statusId = item.receive_order_order_status_id;
         const cancelTypeId = item.receive_order_cancel_type_id;
-        return statusId === CONFIG.FILTER.ORDER_STATUS_ID || cancelTypeId === CONFIG.FILTER.CANCEL_TYPE_ID;
+        // キャンセル区分=3(統合)は常に取得 OR 状態=50で有効な受注のみ
+        return cancelTypeId === CONFIG.FILTER.CANCEL_TYPE_ID_INTEGRATION ||
+            (statusId === CONFIG.FILTER.ORDER_STATUS_ID && cancelTypeId === CONFIG.FILTER.CANCEL_TYPE_ID_VALID);
     });
 
     console.log(`フィルタリング後: ${filteredData.length} 件`);
