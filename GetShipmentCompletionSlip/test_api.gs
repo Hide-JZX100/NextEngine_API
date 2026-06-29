@@ -57,3 +57,56 @@ function runSearchCompletedSlipsTest() {
         console.error('❌ テスト実行中にエラーが発生しました:', e.message);
     }
 }
+
+/**
+ * 【実験用】前月分（5月分）の全バッチ（1〜3）を連続実行し、指定されたテスト用シートに出力する
+ * 
+ * 【目的】
+ * 通常の月次バッチ（非同期5分間隔）を待たずに、バッチ1、2、3を同期処理で連続実行し、
+ * スプレッドシートへの書込実験を一度の実行で行います。
+ * 本番の main ロジックをそのまま使用するため、API取得、フィルタリング、
+ * Sheets APIによる書込の全プロセスが本番と同条件で検証できます。
+ * 
+ * 【実行手順】
+ * 1. 事前にスプレッドシートに空のタブ（例：`5月分_テスト出力`）を作成します。
+ * 2. GASのスクリプトプロパティ `SHEET_NAME` をそのタブ名に変更します。
+ * 3. 本関数を実行し、完了後に元シートのコピーと件数・日付内訳を比較します。
+ * 4. 比較後、スクリプトプロパティ `SHEET_NAME` を元の本番シート名に戻します。
+ */
+function testRunMainAllBatches() {
+    console.log('=== 【実験】全バッチ一括実行開始 ===');
+    
+    try {
+        const props = PropertiesService.getScriptProperties();
+        const sheetId = props.getProperty(CONFIG.SHEET.PROPERTY_KEY_ID);
+        const sheetName = props.getProperty(CONFIG.SHEET.PROPERTY_KEY_NAME);
+        
+        console.log(`現在のターゲットスプレッドシートID: ${sheetId}`);
+        console.log(`現在のターゲットシート名: ${sheetName}`);
+        
+        console.log(`⚠️ 注意: スクリプトプロパティの「SHEET_NAME」が実験用の新規タブ名になっていることを確認してください。`);
+        
+        // 1. テスト実行前に、そのシートの既存データをクリア（ヘッダー行以外）
+        console.log(`ターゲットシート '${sheetName}' の既存データをクリアします...`);
+        clearSheetData(); // cleanup.gs で定義されている既存のクリア関数を呼び出し
+        
+        // 2. バッチ1〜3を順次同期実行
+        for (let batchNum = 1; batchNum <= 3; batchNum++) {
+            console.log(`\n--- [実験] バッチ ${batchNum} 実行中 (対象範囲取得・加工・スプレッドシート書込) ---`);
+            main(batchNum); // main.gs の main(batchNumber) を呼び出し
+            
+            // Sheets APIの同一シートへの連続書き込みによる負荷を考慮し、バッチ間に短いウェイトを挟む
+            if (batchNum < 3) {
+                console.log('API制限回避のため待機中 (3秒)...');
+                Utilities.sleep(3000);
+            }
+        }
+        
+        console.log('\n=== 【実験】全バッチ一括実行完了 ===');
+        console.log(`出力先タブ '${sheetName}' のデータと、退避している5月5日取得データを比較してください。`);
+        
+    } catch (e) {
+        console.error('❌ 実験実行中にエラーが発生しました:', e.message);
+    }
+}
+
