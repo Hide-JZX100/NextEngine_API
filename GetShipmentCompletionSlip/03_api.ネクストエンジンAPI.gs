@@ -30,6 +30,7 @@ function searchCompletedSlips(startDate, endDate) {
     let allData = [];
     let offset = 0;
     let hasMore = true;
+    let lastTotalCount = null; // SRE的アプローチ: 総件数確認用
     const LIMIT = CONFIG.API.LIMIT; // APIの1回あたりの最大取得件数
 
     while (hasMore) {
@@ -45,8 +46,6 @@ function searchCompletedSlips(startDate, endDate) {
         }
 
         // パラメータ構築
-        // 出荷予定日が指定範囲内であるデータを検索
-        // wait_flag=1: 処理待ち等の制御用(通常指定推奨)
         const params = {
             'access_token': accessToken,
             'refresh_token': refreshToken,
@@ -70,7 +69,6 @@ function searchCompletedSlips(startDate, endDate) {
         const responseText = response.getContentText();
 
         if (responseCode !== 200) {
-            // トークン期限切れの可能性などを考慮してエラーハンドリング
             console.error('API Error Response:', responseText);
             throw new Error(`APIリクエスト失敗 (Code: ${responseCode}): ${responseText}`);
         }
@@ -93,26 +91,44 @@ function searchCompletedSlips(startDate, endDate) {
         }
 
         const data = json.data;
+        const totalCount = json.count ? parseInt(json.count, 10) : null;
+        if (totalCount !== null) {
+            lastTotalCount = totalCount;
+        }
+
         if (!data || data.length === 0) {
             hasMore = false;
-            console.log('件数: 0 (終了)');
+            console.log('取得データが0件に達したためループを終了します。');
         } else {
             allData = allData.concat(data);
-            console.log(`取得件数: ${data.length} (累計: ${allData.length})`);
+            console.log(`取得件数: ${data.length} (累計: ${allData.length} / 総件数: ${totalCount !== null ? totalCount : '不明'})`);
 
-            if (data.length < LIMIT) {
-                hasMore = false; // 上限未満ならこれ以上データはない
+            // 終了判定:
+            // 1. 総件数(count)が判明しており、累計取得数がそれに達した場合は終了
+            // 2. 総件数が不明な場合、または安全対策として、返却データ件数が0になるまでループを回す
+            if (totalCount !== null && allData.length >= totalCount) {
+                hasMore = false;
+                console.log('APIの総件数に達したため取得を終了します。');
             } else {
-                offset += LIMIT;
+                // offsetには実際の取得件数を加算して歯抜け(スキップ)を防止
+                offset += data.length;
                 // API制限回避のために少し待機
                 Utilities.sleep(CONFIG.API.WAIT_MS);
             }
         }
     }
 
+    // SRE的アプローチ: データ不整合検知（件数突き合わせ警告）
+    if (lastTotalCount !== null && allData.length !== lastTotalCount) {
+        console.warn(`⚠️ 警告: API上の総件数 (${lastTotalCount} 件) と実際に取得できた件数 (${allData.length} 件) が一致しません。一部データの重複や欠落が発生している可能性があります。`);
+    } else {
+        console.log('✅ データ整合性チェック: OK（API総件数と取得件数が一致）');
+    }
+
     console.log(`=== API検索終了: 合計 ${allData.length} 件 ===`);
     return allData;
 }
+
 
 /**
  * 【開発用】API検索テスト
