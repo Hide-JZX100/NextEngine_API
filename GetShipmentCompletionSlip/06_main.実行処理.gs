@@ -126,14 +126,16 @@ function warmupAndScheduleMain(batchNumber) {
             throw new Error('トークンが見つかりません。認証を行ってください。');
         }
 
-        // 3. メイン処理と同じエンドポイントに最小限のリクエスト
+        // 3. メイン処理と同じエンドポイントに、本番と完全に同一構造のクエリを送信（キャッシュと実行計画の温め）
         const params = {
             'access_token': accessToken,
             'refresh_token': refreshToken,
             'wait_flag': '1',
-            'fields': 'receive_order_id',  // 最小限のフィールド
+            'fields': CONFIG.FIELDS.map(f => f.api).join(','), // 本番と同じフィールド一覧
             'receive_order_send_plan_date-gte': dateRange.startDate,
-            'limit': '1',  // 1件のみ
+            'receive_order_send_plan_date-lte': dateRange.endDate, // lteを追加して期間指定を本番と一致
+            'receive_order_cancel_type_id-in': '0,3', // 本番と同じキャンセル区分フィルタ
+            'limit': '1',  // ウォームアップのため1件のみ
             'offset': '0'
         };
 

@@ -53,6 +53,7 @@ function searchCompletedSlips(startDate, endDate) {
             'fields': CONFIG.FIELDS.map(f => f.api).join(','),
             'receive_order_send_plan_date-gte': startDate,
             'receive_order_send_plan_date-lte': endDate,
+            'receive_order_cancel_type_id-in': '0,3', // API側で不要なキャンセル伝票(自己都合キャンセル等)を除外
             'limit': LIMIT.toString(),
             'offset': offset.toString()
         };

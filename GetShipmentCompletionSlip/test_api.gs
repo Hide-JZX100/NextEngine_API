@@ -114,3 +114,30 @@ function testRunMainAllBatches() {
     }
 }
 
+/**
+ * 修正されたウォームアップ関数 (warmupAndScheduleMain) の動作テストを実行する
+ * 
+ * 【動作フロー】
+ * 1. バッチ1を想定した日付範囲で warmupAndScheduleMain を呼び出し。
+ * 2. 同期的にネクストエンジンAPIにリクエストが送信され、エラーが発生しないことを確認。
+ * 3. ただし、本番トリガーが自動作成されるのを防ぐため、テスト実行直後に作成されたトリガーを削除します。
+ */
+function runWarmupTest() {
+    console.log('=== ウォームアップクエリ動作テスト開始 ===');
+    try {
+        // バッチ1（1日〜10日）を想定してウォームアップを実行
+        // 注: 内部で 2分後のメイン実行トリガーが作成されます
+        warmupAndScheduleMain(1);
+        
+        console.log('✅ ウォームアップクエリの送信に成功しました。');
+        
+        // テスト用トリガーが残らないように自動削除
+        console.log('テスト実行によって作成された実行トリガーをクリーンアップします...');
+        deleteMyTrigger('executeBatch1');
+        console.log('✅ トリガークリーンアップ完了');
+        
+    } catch (e) {
+        console.error('❌ ウォームアップテスト失敗:', e.message);
+    }
+}
+
