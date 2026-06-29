@@ -103,26 +103,23 @@ function searchCompletedSlips(startDate, endDate) {
             allData = allData.concat(data);
             console.log(`取得件数: ${data.length} (累計: ${allData.length} / 総件数: ${totalCount !== null ? totalCount : '不明'})`);
 
-            // 終了判定:
-            // 1. 総件数(count)が判明しており、累計取得数がそれに達した場合は終了
-            // 2. 総件数が不明な場合、または安全対策として、返却データ件数が0になるまでループを回す
-            if (totalCount !== null && allData.length >= totalCount) {
-                hasMore = false;
-                console.log('APIの総件数に達したため取得を終了します。');
-            } else {
-                // offsetには実際の取得件数を加算して歯抜け(スキップ)を防止
-                offset += data.length;
-                // API制限回避のために少し待機
-                Utilities.sleep(CONFIG.API.WAIT_MS);
-            }
+            // 終了判定の修正:
+            // APIの count フィールドはシステム負荷などにより信頼できない（実際より少ない値が返る）ことがあるため、
+            // 早期終了を防ぐために総件数による終了判定は行わず、データが空になるまで取得を続けます。
+            
+            // offsetには実際の取得件数を加算して歯抜け(スキップ)を防止
+            offset += data.length;
+            // API制限回避のために少し待機
+            Utilities.sleep(CONFIG.API.WAIT_MS);
         }
     }
 
-    // SRE的アプローチ: データ不整合検知（件数突き合わせ警告）
-    if (lastTotalCount !== null && allData.length !== lastTotalCount) {
-        console.warn(`⚠️ 警告: API上の総件数 (${lastTotalCount} 件) と実際に取得できた件数 (${allData.length} 件) が一致しません。一部データの重複や欠落が発生している可能性があります。`);
+    // SRE的アプローチ: データ不整合検知（件数不足警告）
+    // APIが返した総件数(lastTotalCount)よりも、実際に取得できた件数が少ない場合のみ警告を出します
+    if (lastTotalCount !== null && allData.length < lastTotalCount) {
+        console.warn(`⚠️ 警告: API上の総件数 (${lastTotalCount} 件) よりも実際に取得できた件数 (${allData.length} 件) が少ないです。データの欠落が発生している可能性があります。`);
     } else {
-        console.log('✅ データ整合性チェック: OK（API総件数と取得件数が一致）');
+        console.log(`✅ データ整合性チェック: OK（API総件数: ${lastTotalCount || '不明'} 件に対し、${allData.length} 件取得完了）`);
     }
 
     console.log(`=== API検索終了: 合計 ${allData.length} 件 ===`);
