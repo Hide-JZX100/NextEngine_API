@@ -134,12 +134,11 @@ function testSearchApi() {
 }
 
 /**
- * 【フェーズ1検証用】指定日付範囲の伝票件数・取得ログ検証
+ * 【フェーズ1検証用】指定日付範囲の伝票件数・取得ログ検証（詳細集計版）
  * 
  * 【目的】
- * 本番トリガーに影響を与えず、特定の日付範囲（例: 2026年5月分）における
- * APIデータ取得時のoffset推移および日ごとの件数を集計してログに出力します。
- * スプレッドシートへの書き込みは行わず、console.logへの出力のみを行います。
+ * APIからの全件取得ログに加え、店舗別・日付別の件数、および
+ * フィルタリング（出荷確定50/同梱キャンセル3）による除外状況を集計出力します。
  * 
  * @param {string} [startDate] - 取得開始日 (YYYY-MM-DD)。省略時は '2026-05-01'
  * @param {string} [endDate] - 取得終了日 (YYYY-MM-DD)。省略時は '2026-05-31'
@@ -148,19 +147,25 @@ function testVerifyDataByRange(startDate, endDate) {
     startDate = startDate || '2026-05-01';
     endDate = endDate || '2026-05-31';
 
-    console.log(`=== データ取得検証開始: ${startDate} ～ ${endDate} ===`);
+    console.log(`=== 詳細データ検証開始: ${startDate} ～ ${endDate} ===`);
 
     let allDataCount = 0;
     let offset = 0;
     let hasMore = true;
-    const LIMIT = CONFIG.API.LIMIT; // 設定から1000件を使用
-    const dateMap = {};
+    const LIMIT = CONFIG.API.LIMIT;
+
+    // 集計用オブジェクト
+    const rawDateMap = {};       // フィルタ前 日付別件数
+    const filteredDateMap = {};  // フィルタ後 日付別件数
+    const shopMap = {};          // 店舗別 累計件数（フィルタ前/後）
+    const excludedStatusMap = {}; // 除外されたデータのステータス分布 (7-9日, 19-20日対象)
+
+    const targetShortDays = ['07', '08', '09', '19', '20']; // 報告のあった日付（日）
 
     try {
         while (hasMore) {
             console.log(`検証データ取得中... Offset: ${offset}`);
 
-            // アクセストークンとリフレッシュトークンを取得
             const props = PropertiesService.getScriptProperties();
             const accessToken = props.getProperty('ACCESS_TOKEN');
             const refreshToken = props.getProperty('REFRESH_TOKEN');
@@ -169,12 +174,12 @@ function testVerifyDataByRange(startDate, endDate) {
                 throw new Error('トークンが見つかりません。認証を行ってください。');
             }
 
-            // 検証に必要な最小限のフィールドのみ取得（高速化のため）
+            // フィルタ条件判定に必要なフィールドも追加
             const params = {
                 'access_token': accessToken,
                 'refresh_token': refreshToken,
                 'wait_flag': '1',
-                'fields': 'receive_order_id,receive_order_send_plan_date,receive_order_shop_id',
+                'fields': 'receive_order_id,receive_order_send_plan_date,receive_order_shop_id,receive_order_order_status_id,receive_order_cancel_type_id',
                 'receive_order_send_plan_date-gte': startDate,
                 'receive_order_send_plan_date-lte': endDate,
                 'limit': LIMIT.toString(),
@@ -211,43 +216,82 @@ function testVerifyDataByRange(startDate, endDate) {
                     'REFRESH_TOKEN': json.refresh_token,
                     'TOKEN_UPDATED_AT': new Date().getTime().toString()
                 });
-                console.log('APIトークンを更新しました');
             }
 
             const data = json.data;
             if (!data || data.length === 0) {
                 hasMore = false;
-                console.log(`取得データが0件に達したためループを終了します（最終 Offset: ${offset}）`);
             } else {
                 allDataCount += data.length;
-                console.log(`Offset ${offset} より ${data.length} 件取得完了 (累計: ${allDataCount} 件)`);
 
-                // 日付ごとの件数集計
                 data.forEach(item => {
-                    const date = item.receive_order_send_plan_date || '日付不明';
-                    dateMap[date] = (dateMap[date] || 0) + 1;
+                    const fullDate = item.receive_order_send_plan_date || '日付不明';
+                    const shopId = item.receive_order_shop_id || '店舗不明';
+                    const statusId = item.receive_order_order_status_id;
+                    const cancelTypeId = item.receive_order_cancel_type_id;
+
+                    // 1. フィルタ前集計
+                    rawDateMap[fullDate] = (rawDateMap[fullDate] || 0) + 1;
+                    if (!shopMap[shopId]) {
+                        shopMap[shopId] = { raw: 0, filtered: 0 };
+                    }
+                    shopMap[shopId].raw++;
+
+                    // 2. フィルタ条件判定
+                    const isPass = cancelTypeId === CONFIG.FILTER.CANCEL_TYPE_ID_INTEGRATION ||
+                        (statusId === CONFIG.FILTER.ORDER_STATUS_ID && cancelTypeId === CONFIG.FILTER.CANCEL_TYPE_ID_VALID);
+
+                    if (isPass) {
+                        filteredDateMap[fullDate] = (filteredDateMap[fullDate] || 0) + 1;
+                        shopMap[shopId].filtered++;
+                    } else {
+                        // 3. 除外データのステータス調査 (特に7-9日, 19-20日)
+                        const dayStr = fullDate.split(' ')[0].split('-')[2]; // YYYY-MM-DD から DD を抽出
+                        if (targetShortDays.indexOf(dayStr) !== -1) {
+                            const statusKey = `状態:${statusId}/キャンセル:${cancelTypeId}`;
+                            excludedStatusMap[statusKey] = (excludedStatusMap[statusKey] || 0) + 1;
+                        }
+                    }
                 });
 
                 if (data.length < LIMIT) {
-                    hasMore = false; // 上限未満ならこれ以上データはない
+                    hasMore = false;
                 } else {
                     offset += LIMIT;
-                    // API制限回避のために待機
                     Utilities.sleep(CONFIG.API.WAIT_MS);
                 }
             }
         }
 
-        console.log('=== 検証結果集計 ===');
+        console.log('=== 【検証結果集集計】 ===');
         console.log(`対象期間: ${startDate} ～ ${endDate}`);
-        console.log(`総取得件数: ${allDataCount} 件`);
-        console.log('日付ごとの件数内訳（出荷予定日基準）:');
+        console.log(`API総取得（フィルタ前）: ${allDataCount} 件`);
 
-        // 日付昇順で並び替えて出力
-        const sortedDates = Object.keys(dateMap).sort();
+        console.log('\n--- 1. 日付別の件数比較（フィルタ前 vs フィルタ後） ---');
+        const sortedDates = Object.keys(rawDateMap).sort();
         sortedDates.forEach(date => {
-            console.log(`- ${date}: ${dateMap[date]} 件`);
+            const rawCount = rawDateMap[date] || 0;
+            const filteredCount = filteredDateMap[date] || 0;
+            const diff = rawCount - filteredCount;
+            console.log(`- ${date}: フィルタ前 ${rawCount} 件 -> フィルタ後 ${filteredCount} 件 (除外: ${diff} 件)`);
         });
+
+        console.log('\n--- 2. 店舗別の件数内訳（フィルタ前 vs フィルタ後） ---');
+        const sortedShops = Object.keys(shopMap).sort((a, b) => a - b);
+        sortedShops.forEach(shopId => {
+            const counts = shopMap[shopId];
+            console.log(`- 店舗コード ${shopId}: フィルタ前 ${counts.raw} 件 -> フィルタ後 ${counts.filtered} 件`);
+        });
+
+        console.log('\n--- 3. 報告のあった日付（7-9日, 19-20日）で【除外された】データのステータス内訳 ---');
+        const sortedStatusKeys = Object.keys(excludedStatusMap).sort();
+        if (sortedStatusKeys.length === 0) {
+            console.log('対象日に除外されたデータはありませんでした。');
+        } else {
+            sortedStatusKeys.forEach(key => {
+                console.log(`- ${key}: ${excludedStatusMap[key]} 件`);
+            });
+        }
 
     } catch (e) {
         console.error(`❌ 検証中に例外エラーが発生しました: ${e.message}`);
