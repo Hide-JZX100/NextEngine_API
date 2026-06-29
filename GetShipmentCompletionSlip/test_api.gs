@@ -102,6 +102,10 @@ function testRunMainAllBatches() {
             }
         }
         
+        // SRE/テスト考慮: 自動で予約されてしまったトリガーをクリア
+        console.log('実験によって自動生成されたバッチ予約トリガーを削除します...');
+        deleteAllBatchTriggers(); // cleanup.gs 内の関数
+        
         console.log('\n=== 【実験】全バッチ一括実行完了 ===');
         console.log(`出力先タブ '${sheetName}' のデータと、退避している5月5日取得データを比較してください。`);
         
