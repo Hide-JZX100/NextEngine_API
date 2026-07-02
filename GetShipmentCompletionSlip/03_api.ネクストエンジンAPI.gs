@@ -30,10 +30,18 @@ function searchCompletedSlips(startDate, endDate) {
     let allData = [];
     let offset = 0;
     let hasMore = true;
-    let lastTotalCount = null; // SRE的アプローチ: 総件数確認用
     const LIMIT = CONFIG.API.LIMIT; // APIの1回あたりの最大取得件数
 
+    let loopCount = 0;
+    const MAX_LOOP_COUNT = 100; // 安全弁: 1000件×100回=最大10万件相当。想定外の無限ループを防止
+
     while (hasMore) {
+
+        loopCount++;
+        if (loopCount > MAX_LOOP_COUNT) {
+            throw new Error(`ループ回数が上限(${MAX_LOOP_COUNT}回)を超えました。想定外のAPI応答の可能性があります。`);
+        }
+
         console.log(`取得中... Offset: ${offset}`);
 
         // アクセストークンとリフレッシュトークンを取得
@@ -92,10 +100,7 @@ function searchCompletedSlips(startDate, endDate) {
         }
 
         const data = json.data;
-        const totalCount = json.count ? parseInt(json.count, 10) : null;
-        if (totalCount !== null) {
-            lastTotalCount = totalCount;
-        }
+        const totalCount = json.count ? parseInt(json.count, 10) : null; // ログ用の参考値（判定には使用しない）
 
         if (!data || data.length === 0) {
             hasMore = false;
@@ -107,7 +112,7 @@ function searchCompletedSlips(startDate, endDate) {
             // 終了判定の修正:
             // APIの count フィールドはシステム負荷などにより信頼できない（実際より少ない値が返る）ことがあるため、
             // 早期終了を防ぐために総件数による終了判定は行わず、データが空になるまで取得を続けます。
-            
+
             // offsetには実際の取得件数を加算して歯抜け(スキップ)を防止
             offset += data.length;
             // API制限回避のために少し待機
@@ -115,12 +120,15 @@ function searchCompletedSlips(startDate, endDate) {
         }
     }
 
-    // SRE的アプローチ: データ不整合検知（件数不足警告）
-    // APIが返した総件数(lastTotalCount)よりも、実際に取得できた件数が少ない場合のみ警告を出します
-    if (lastTotalCount !== null && allData.length < lastTotalCount) {
-        console.warn(`⚠️ 警告: API上の総件数 (${lastTotalCount} 件) よりも実際に取得できた件数 (${allData.length} 件) が少ないです。データの欠落が発生している可能性があります。`);
+    // SRE的アプローチ: データ整合性チェック（重複ID検知）
+    // APIのcount値は信頼できないため、件数比較ではなく取得データ内の伝票番号重複の有無で
+    // offset計算の異常（歯抜け・重複取得の再発）を検知します
+    const idSet = new Set(allData.map(item => item.receive_order_id));
+    if (idSet.size !== allData.length) {
+        const duplicateCount = allData.length - idSet.size;
+        console.warn(`⚠️ 警告: 伝票番号の重複が ${duplicateCount} 件検出されました。offset計算に異常がある可能性があります。`);
     } else {
-        console.log(`✅ データ整合性チェック: OK（API総件数: ${lastTotalCount || '不明'} 件に対し、${allData.length} 件取得完了）`);
+        console.log(`✅ データ整合性チェック: OK（${allData.length} 件、重複なし）`);
     }
 
     console.log(`=== API検索終了: 合計 ${allData.length} 件 ===`);
