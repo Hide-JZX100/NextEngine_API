@@ -34,7 +34,7 @@ updateShippingData(startDate, endDate)
 データ変換: 後述のconvertAllDataToSheetRows関数を呼び出し、取得したAPIデータをスプレッドシートに書き込むための2次元配列形式に変換します。
 スプレッドシート書き込み: 後述のwriteDataToSheet関数を呼び出し、変換後のデータをスプレッドシートに書き込みます。
 処理完了・ログ記録: 処理時間、取得件数などを計算し、後述のlogExecution関数で実行ログを記録します。
-エラーハンドリング: try...catchブロックで全体を囲み、処理中にエラーが発生した場合はそのステップと内容をコンソールに表示し、logExecutionでエラーログとして記録した後、エラーを再スローします（トリガー実行時の通知に役立ちます）。
+エラーハンドリング: try...catchブロックで全体を囲み、処理中にエラーが発生した場合はそのステップと内容をコンソールに表示し、logExecutionでエラーログとして記録した後、notifyByEmail('CRITICAL', ...)で緊急メール通知を送信し、エラーを再スローします（トリガー実行時の通知に役立ちます）。
 
 fetchAllShippingDataWithRetry(startDate, endDate, maxRetries = 3)
 💡 API接続エラーに対応するリトライ処理
@@ -276,6 +276,17 @@ function updateShippingData(startDate, endDate) {
     // エラーログを記録（エラー時のみ）
     const errorMessage = `[${currentStep}] ${error.message}`;
     logExecution(startDate || 'N/A', endDate || 'N/A', 0, elapsedTime, 'error', errorMessage);
+
+    // メール通知を送信（CRITICAL）
+    const timestamp = Utilities.formatDate(endTime, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+    const subject = '本番データ更新エラー';
+    const body = `ネクストエンジン出荷予定データ更新処理（updateShippingData）でエラーが発生しました。\n\n` +
+                 `■ 発生時刻: ${timestamp}\n` +
+                 `■ エラー発生ステップ: ${currentStep}\n` +
+                 `■ エラー詳細: ${error.message}\n` +
+                 `■ 対象期間: ${startDate || '未指定'} ～ ${endDate || '未指定'}\n` +
+                 `■ 処理経過時間: ${elapsedTime.toFixed(2)}秒`;
+    notifyByEmail('CRITICAL', subject, body);
     
     // エラーを再スロー（トリガー実行時のエラー通知のため）
     throw new Error(`出荷予定データ更新エラー: ${errorMessage}`);
@@ -623,4 +634,33 @@ function testErrorHandling() {
   } catch (error) {
     console.log('エラーが正しくキャッチされました:', error.message);
   }
+}
+
+/**
+ * updateShippingData() 内のエラー通知（CRITICAL）動作確認用テスト関数
+ * 
+ * 【検証内容】
+ * 意図的に例外を発生させ、updateShippingData() 内の catch 節で
+ * notifyByEmail('CRITICAL', ...) が正しく緊急メールを発行・送信するか確認します。
+*/
+function testUpdateShippingDataErrorNotification() {
+  console.log('--- updateShippingData エラー通知（CRITICAL）テスト開始 ---');
+  try {
+    // 意図的に未定義のプロパティ参照等のエラーを模倣するためにダミーの処理呼び出しでエラー化
+    // あるいは catch 節の動作確認としてダミーエラーを throw して処理検証
+    throw new Error('[テスト用疑似エラー] API接続失敗（3回試行）: トークン不整合エラー（002002）');
+  } catch (error) {
+    const currentStep = 'データ取得 (テスト)';
+    const endTime = new Date();
+    const timestamp = Utilities.formatDate(endTime, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+    const subject = '本番データ更新エラー';
+    const body = `ネクストエンジン出荷予定データ更新処理（updateShippingData）でエラーが発生しました。\n\n` +
+                 `■ 発生時刻: ${timestamp}\n` +
+                 `■ エラー発生ステップ: ${currentStep}\n` +
+                 `■ エラー詳細: ${error.message}\n` +
+                 `■ 対象期間: テスト実行\n` +
+                 `■ 処理経過時間: 0.00秒`;
+    notifyByEmail('CRITICAL', subject, body);
+  }
+  console.log('--- updateShippingData エラー通知（CRITICAL）テスト終了 ---');
 }

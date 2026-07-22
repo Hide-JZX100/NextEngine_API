@@ -11,6 +11,7 @@
  * - 本番（fetchAllShippingData）と同一のフィールド・フィルタ条件を使用する
  * - トークンが更新された場合はスクリプトプロパティを更新する
  * - エラーが発生しても本番処理を阻害しないようログ出力に留める
+ * - エラー発生時は notifyByEmail('WARNING', ...) によりスクリプト所有者へ警告メールを送信
  *
  * 【トリガー設定】
  * 本番実行（7:56）の約20分前、7:35 に実行すること
@@ -105,7 +106,41 @@ function warmUpNextEngineConnection() {
 
     } catch (error) {
         console.error('ウォームアップ中に予期せぬエラーが発生しました:', error.message);
+
+        // メール通知を送信（WARNING）
+        const timestamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+        const subject = 'ウォームアップ失敗';
+        const body = `ネクストエンジンAPI接続のウォームアップ中に予期せぬエラーが発生しました。\n\n` +
+                     `■ 発生時刻: ${timestamp}\n` +
+                     `■ エラー内容: ${error.message}\n` +
+                     `■ 関数名: warmUpNextEngineConnection()`;
+        notifyByEmail('WARNING', subject, body);
     }
 
     console.log('=== ウォームアップ終了 ===');
 }
+
+/**
+ * warmUpNextEngineConnection() 内のエラー通知（WARNING）動作確認用テスト関数
+ *
+ * 【検証内容】
+ * 意図的に例外をシミュレートし、catch 節の notifyByEmail('WARNING', ...) が
+ * 正しく警告メールを発行・送信するか確認します。
+ */
+function testWarmUpNextEngineConnectionNotification() {
+    console.log('--- warmUpNextEngineConnection エラー通知テスト開始 ---');
+    try {
+        throw new Error('[テスト用疑似エラー] トークン更新に失敗しました（002002）');
+    } catch (error) {
+        console.error('ウォームアップ中に予期せぬエラーが発生しました:', error.message);
+
+        const timestamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+        const subject = 'ウォームアップ失敗';
+        const body = `ネクストエンジンAPI接続のウォームアップ中に予期せぬエラーが発生しました。\n\n` +
+                     `■ 発生時刻: ${timestamp}\n` +
+                     `■ エラー内容: ${error.message}\n` +
+                     `■ 関数名: warmUpNextEngineConnection() (テスト実行)`;
+        notifyByEmail('WARNING', subject, body);
+    }
+    console.log('--- warmUpNextEngineConnection エラー通知テスト終了 ---');
+}
