@@ -48,3 +48,34 @@ function notifyByEmail(severity, subject, body) {
   }
 }
 
+/**
+ * notifyByEmail() の動作確認用テスト関数
+ *
+ * 【検証方法】
+ * GASエディタ上で本関数を選択して実行し、以下の2通のメールが届くことを目視確認する。
+ * 1. 件名: 【警告】[テスト] ウォームアップ通知テスト
+ * 2. 件名: 【緊急】[テスト] 本番データ更新エラー通知テスト
+ */
+function testNotifyByEmail() {
+  console.log('--- notifyByEmail テスト開始 ---');
+
+  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+
+  // 1. WARNING テスト
+  console.log('WARNINGメール送信テスト...');
+  notifyByEmail(
+    'WARNING',
+    '[テスト] ウォームアップ通知テスト',
+    `これはメール通知機能のテスト送信です（WARNING）。\n発生時刻: ${now}\n詳細: テストメッセージです。`
+  );
+
+  // 2. CRITICAL テスト
+  console.log('CRITICALメール送信テスト...');
+  notifyByEmail(
+    'CRITICAL',
+    '[テスト] 本番データ更新エラー通知テスト',
+    `これはメール通知機能のテスト送信です（CRITICAL）。\n発生時刻: ${now}\n詳細: テストメッセージです。`
+  );
+
+  console.log('--- notifyByEmail テスト完了 ---');
+}
