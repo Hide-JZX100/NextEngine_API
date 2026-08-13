@@ -25,16 +25,16 @@
  * - **外部ライブラリ**: NEAuth (v5)
  * 
  * ### 注意事項
- * - **トリガー**: 運用時は `mainWithRetry()` を設定してください。
+ * - **トリガー**: 運用時は `mainWithRetry()` または `integratedDailyUpdate()` を設定してください。
  * - **リトライ**: `RETRY_COUNT` プロパティに従い、失敗のたびに待機時間（5s, 10s...）を増やして再試行します。
  * - **通知**: `NOTIFY_ON_SUCCESS` が `true` の場合、成功時もメール送信されます（1日100通の上限に注意）。
- * - **時間制限**: `integratedDailyUpdate()` は内部に5分待機を含むため、GASの6分制限に注意してください。
+ * - **トリガーチェーン**: `integratedDailyUpdate()` は mainWithRetry() 完了後、sleepせずに dailyUpdate() 起動用のワンタイムトリガーを作成して終了します。両処理は別々の実行枠で動くため6分制限の影響を受けません。
  * 
- * @version 1.0
- * @date 2025-11-24
+ * @version 1.1
+ * @date 2026-08-13
  * @see mainWithRetry - リトライ付きメイン処理
  * @see testPhase5 - 統合テスト
- * @see integratedDailyUpdate - 統合実行関数 (NE取得 + 売れ数転記)
+ * @see integratedDailyUpdate - 統合実行関数 (NE取得 + 売れ数転記トリガー予約)
  */
 
 // =============================================================================
@@ -440,27 +440,23 @@ function displayStatistics(result) {
 // =============================================================================
 
 /**
- * 統合メイン処理: ネクストエンジン受注明細取得 → 売れ数転記
+ * 統合メイン処理: ネクストエンジン受注明細取得 → 売れ数転記トリガー予約（トリガーチェーン）
  * 
  * @details
- * 本システムと、別のシステム（売れ数転記スクリプト）を連携させる「マスタ・プログラム」です。
+ * 本システムと、別のシステム（売れ数転記スクリプト）を非同期に連携させるマスタ・プログラムです。
  * 
- * **【5分待機の理由】**
- * ネクストエンジンから書き出したデータが、スプレッドシート上で他の計算式（Query関数やVLOOKUPなど）
- * に反映されるまでには、わずかなタイムラグが生じることがあります。
- * 次の集計処理が不完全なデータを読み込まないよう、あえて「5分間の休憩」を挟んでいます。
+ * 【トリガーチェーン方式】
+ * `mainWithRetry()` を実行し、成功した場合にスクリプトプロパティ `DAILY_UPDATE_DELAY_SECONDS`
+ * に設定された遅延秒数後に `dailyUpdate()` 起動用のワンタイムトリガーを動的作成します。
+ * これにより、`Utilities.sleep()` による長時間の待機を排除し、GASの6分実行制限を回避します。
  * 
- * **【GAS制限への注意】**
- * この関数自体が6分制限に非常に近くなるため、待機時間や処理時間の合計に注意が必要です。
+ * 運用時の時限トリガー（8:00, 12:00, 17:00など）には、この関数を登録します。
  * 
- * 運用時の時限トリガー（深夜0時など）には、この関数を登録します。
- * 
- * @return {Object} 両方の処理結果を含む統合レポート
- * @throws {Error} dailyUpdate 関数が見つからない場合
+ * @return {Object} NE取得結果および dailyUpdate 予約状況を含む統合レポート
  */
 function integratedDailyUpdate() {
   console.log('╔════════════════════════════════════════════════════════════╗');
-  console.log('║  統合処理開始: NE取得 → 売れ数転記                       ║');
+  console.log('║  統合処理開始: NE取得 → 売れ数転記(トリガーチェーン)       ║');
   console.log('╚════════════════════════════════════════════════════════════╝');
   console.log('');
 
@@ -487,34 +483,23 @@ function integratedDailyUpdate() {
     console.log('');
 
     // ========================================
-    // 待機時間(5分)
+    // Phase 2: 売れ数転記トリガー予約
     // ========================================
-    const waitMinutes = 5;
-    console.log(`【待機】${waitMinutes}分間待機します...`);
-    console.log(`待機開始: ${new Date().toLocaleString('ja-JP')}`);
+    if (results.neExecution && results.neExecution.success) {
+      console.log('【Phase 2】売れ数転記トリガー予約');
+      console.log('');
 
-    Utilities.sleep(waitMinutes * 60 * 1000);
+      const delaySeconds = getDailyUpdateDelaySeconds();
+      scheduleDailyUpdateTrigger(delaySeconds);
 
-    console.log(`待機終了: ${new Date().toLocaleString('ja-JP')}`);
-    console.log('');
-
-    // ========================================
-    // Phase 2: 売れ数転記処理
-    // ========================================
-    console.log('【Phase 2】売れ数転記処理');
-    console.log('');
-
-    // dailyUpdate()を呼び出す
-    // ※dailyUpdate_main.gsに定義されている関数を使用
-    if (typeof dailyUpdate === 'function') {
-      results.dailyUpdate = dailyUpdate();
+      results.dailyUpdate = 'scheduled';
+      console.log('');
+      console.log(`✅ 売れ数転記トリガー予約完了 (${delaySeconds}秒後に起動)`);
+      console.log('');
     } else {
-      throw new Error('dailyUpdate()関数が見つかりません。dailyUpdate_main.gsが読み込まれているか確認してください。');
+      console.warn('⚠️ ネクストエンジン受注明細取得が失敗したため、売れ数転記トリガー予約をスキップします。');
+      results.dailyUpdate = 'skipped';
     }
-
-    console.log('');
-    console.log('✅ 売れ数転記処理完了');
-    console.log('');
 
     // ========================================
     // 統合結果サマリー
@@ -535,7 +520,7 @@ function integratedDailyUpdate() {
     console.error('エラー内容:', error.message);
 
     // エラー通知
-    const subject = '❌ [エラー] 統合処理(NE取得+売れ数転記)失敗';
+    const subject = '❌ [エラー] 統合処理(NE取得+売れ数転記予約)失敗';
     const body = `
 統合処理でエラーが発生しました。
 
@@ -543,8 +528,8 @@ function integratedDailyUpdate() {
 ${error.message}
 
 【実行状況】
-- ネクストエンジン取得: ${results.neExecution ? '完了' : '未完了またはエラー'}
-- 売れ数転記: ${results.dailyUpdate ? '完了' : '未完了またはエラー'}
+- ネクストエンジン取得: ${results.neExecution && results.neExecution.success ? '成功' : '失敗またはエラー'}
+- 売れ数転記予約: ${results.dailyUpdate || '未実行'}
 
 【発生時刻】
 ${new Date().toLocaleString('ja-JP')}
@@ -561,10 +546,62 @@ URL: https://script.google.com/home/projects/${ScriptApp.getScriptId()}/edit
 }
 
 /**
+ * スクリプトプロパティから dailyUpdate 起動までの遅延秒数を取得
+ *
+ * @details
+ * ハードコーディング・フォールバックデフォルトは禁止のため、
+ * スクリプトプロパティ 'DAILY_UPDATE_DELAY_SECONDS' が未設定、
+ * または不正な値の場合は例外を送出する。
+ *
+ * @return {number} 遅延秒数
+ * @throws {Error} プロパティ未設定または不正値の場合
+ */
+function getDailyUpdateDelaySeconds() {
+  const propertyName = 'DAILY_UPDATE_DELAY_SECONDS';
+  const val = PropertiesService.getScriptProperties().getProperty(propertyName);
+
+  if (val === null || val === undefined || val.trim() === '') {
+    throw new Error(`スクリプトプロパティ '${propertyName}' が設定されていません。GASエディタの「プロジェクトの設定」から登録してください。`);
+  }
+
+  const delaySeconds = Number(val);
+  if (isNaN(delaySeconds) || delaySeconds < 0) {
+    throw new Error(`スクリプトプロパティ '${propertyName}' の値が不正です (入力値: '${val}')。正の数値を指定してください。`);
+  }
+
+  return delaySeconds;
+}
+
+/**
+ * dailyUpdate() 起動用のワンタイムトリガーを作成
+ *
+ * @details
+ * 重複起動を防ぐため、既存の dailyUpdate 向けトリガーを
+ * 07_トリガー作成スクリプト.gs の deleteTriggersForFunction() で
+ * 先に削除してから、指定秒数後に発火するワンタイムトリガーを作成する。
+ *
+ * @param {number} delaySeconds - 発火までの遅延秒数
+ */
+function scheduleDailyUpdateTrigger(delaySeconds) {
+  const targetFunctionName = 'dailyUpdate';
+
+  // 既存トリガー削除（07_トリガー作成スクリプト.gs に定義済みの deleteTriggersForFunction を利用）
+  deleteTriggersForFunction(targetFunctionName);
+
+  const delayMs = delaySeconds * 1000;
+  ScriptApp.newTrigger(targetFunctionName)
+    .timeBased()
+    .after(delayMs)
+    .create();
+
+  console.log(`トリガー作成完了: 関数 '${targetFunctionName}' を ${delaySeconds}秒後に実行します。`);
+}
+
+/**
  * 統合処理結果サマリーを表示
  * 
  * @details
- * `integratedDailyUpdate` 内の2つの大きなタスクが、それぞれどのような状態（成功/失敗）
+ * `integratedDailyUpdate` 内の2つの大きなタスクが、それぞれどのような状態（成功/失敗/予約）
  * で終わったかを一目で確認するためのサマリーをログ出力します。
  * 
  * @param {Object} results - 統合実行の結果オブジェクト
@@ -594,8 +631,11 @@ function displayIntegratedSummary(results) {
   console.log('');
 
   console.log('【売れ数転記処理】');
-  if (results.dailyUpdate) {
-    // dailyUpdate()の結果は内部で表示されているため、ここでは簡易表示
+  if (results.dailyUpdate === 'scheduled') {
+    console.log('ステータス: 起動予約済み（非同期実行）');
+  } else if (results.dailyUpdate === 'skipped') {
+    console.log('ステータス: スキップ（NE取得失敗のため）');
+  } else if (results.dailyUpdate) {
     console.log('ステータス: 完了(詳細は上記参照)');
   } else {
     console.log('ステータス: 未実行またはエラー');
@@ -850,5 +890,75 @@ function testAllPhases() {
     console.error('エラー内容:', error.message);
 
     throw error;
+  }
+}
+
+/**
+ * トリガーチェーンヘルパー関数の単体テスト
+ * 
+ * @details
+ * - getDailyUpdateDelaySeconds() の未設定時・設定時の動作検証
+ * - scheduleDailyUpdateTrigger() によるワンタイムトリガー作成検証
+ */
+function testTriggerChainHelpers() {
+  console.log('=== トリガーチェーンヘルパー関数 テスト開始 ===');
+  const propKey = 'DAILY_UPDATE_DELAY_SECONDS';
+  const props = PropertiesService.getScriptProperties();
+  const originalValue = props.getProperty(propKey);
+
+  try {
+    // 1. 未設定時エラーテスト
+    console.log('\n--- 1. 未設定時エラーテスト ---');
+    props.deleteProperty(propKey);
+    try {
+      getDailyUpdateDelaySeconds();
+      console.error('❌ FAIL: 未設定時エラーがスローされませんでした。');
+    } catch (e) {
+      console.log('✅ PASS: 未設定時エラーキャッチ:', e.message);
+    }
+
+    // 2. 不正値エラーテスト
+    console.log('\n--- 2. 不正値エラーテスト ---');
+    props.setProperty(propKey, 'invalid_number');
+    try {
+      getDailyUpdateDelaySeconds();
+      console.error('❌ FAIL: 不正値エラーがスローされませんでした。');
+    } catch (e) {
+      console.log('✅ PASS: 不正値エラーキャッチ:', e.message);
+    }
+
+    // 3. 正常取得テスト
+    console.log('\n--- 3. 正常取得テスト ---');
+    props.setProperty(propKey, '30');
+    const delay = getDailyUpdateDelaySeconds();
+    if (delay === 30) {
+      console.log('✅ PASS: 遅延秒数取得成功:', delay);
+    } else {
+      console.error(`❌ FAIL: 取得値が一致しません。期待値: 30, 実際: ${delay}`);
+    }
+
+    // 4. ワンタイムトリガー作成テスト
+    console.log('\n--- 4. ワンタイムトリガー作成テスト ---');
+    scheduleDailyUpdateTrigger(30);
+    const triggers = ScriptApp.getProjectTriggers();
+    const dailyUpdateTriggers = triggers.filter(t => t.getHandlerFunction() === 'dailyUpdate');
+    if (dailyUpdateTriggers.length === 1) {
+      console.log('✅ PASS: dailyUpdate のワンタイムトリガーが1件正常に作成されました。');
+    } else {
+      console.error(`❌ FAIL: トリガー件数が不正です。期待値: 1, 実際: ${dailyUpdateTriggers.length}`);
+    }
+
+    // テスト作成したトリガーを後掃除
+    deleteTriggersForFunction('dailyUpdate');
+    console.log('🧹 テスト用トリガーを削除しました。');
+
+  } finally {
+    // リストア
+    if (originalValue !== null) {
+      props.setProperty(propKey, originalValue);
+    } else {
+      props.deleteProperty(propKey);
+    }
+    console.log('\n=== テスト完了 ===');
   }
 }
