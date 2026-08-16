@@ -829,3 +829,59 @@ function testPhase1_Step3() {
         console.error(`テストエラー: ${error.message}`);
     }
 }
+
+/**
+ * 商品コードを指定して、在庫マスタAPIから最終更新日フィールドの中身を確認する診断用関数。
+ * 既存の 13_NextEngineAPI.gs（getBatchStockData）と同じ呼び出し規約
+ * （getStoredTokens / NE_API_URL / updateStoredTokens）に合わせている。
+ * 本番の在庫取得ロジックには組み込まない、確認専用のスクリプト。
+ *
+ * @param {string} goodsCode - 確認したい商品コード（例: 'ABC-001'）
+ * @return {Object|null} 取得した在庫データ（1件）。見つからない場合はnull
+ */
+function checkStockLastModifiedFields(goodsCode) {
+    const tokens = getStoredTokens();
+    const url = `${NE_API_URL}/api_v1_master_stock/search`;
+
+    const payload = {
+        'access_token': tokens.accessToken,
+        'refresh_token': tokens.refreshToken,
+        'stock_goods_id-eq': goodsCode,
+        'fields': 'stock_goods_id,' +
+                  'stock_last_modified_date,stock_last_modified_null_safe_date'
+    };
+
+    const options = {
+        'method': 'POST',
+        'headers': {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        'payload': Object.keys(payload).map(key =>
+            encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
+        ).join('&')
+    };
+
+    const response = UrlFetchApp.fetch(url, options);
+    const responseData = JSON.parse(response.getContentText());
+
+    // 既存コードと同様、トークンが更新されていれば保存する
+    if (responseData.access_token && responseData.refresh_token) {
+        updateStoredTokens(responseData.access_token, responseData.refresh_token);
+    }
+
+    if (responseData.result === 'success' && responseData.data && responseData.data.length > 0) {
+        Logger.log(JSON.stringify(responseData.data[0], null, 2));
+        return responseData.data[0];
+    }
+
+    Logger.log(`該当データなし、またはAPIエラー: ${JSON.stringify(responseData)}`);
+    return null;
+}
+
+/**
+ * checkStockLastModifiedFields() のテスト用エントリーポイント。
+ * goodsCode は確認したい商品コードに書き換えて実行する。
+ */
+function testCheckStockLastModifiedFields() {
+    checkStockLastModifiedFields('確認したい商品コード');
+}
