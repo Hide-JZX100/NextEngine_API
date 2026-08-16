@@ -885,3 +885,27 @@ function checkStockLastModifiedFields(goodsCode) {
 function testCheckStockLastModifiedFields() {
     checkStockLastModifiedFields('確認したい商品コード');
 }
+
+/**
+ * stock_last_modified_date-gte フィルタが実際に機能しているかを検証するテスト関数。
+ * 過去日時（全件ヒット想定）と未来日時（0件想定）で結果を比較する。
+ * 本番の在庫取得ロジックには組み込まない、確認専用のスクリプト。
+ */
+function testStockLastModifiedGteFilter() {
+    const oldDate = '2000-01-01 00:00:00';    // 十分に古い日時 → 全件ヒットするはず
+    const futureDate = '2099-01-01 00:00:00'; // 未来日時 → 0件になるはず
+
+    const resultOld = queryStockByLastModifiedGte(oldDate);
+    const resultFuture = queryStockByLastModifiedGte(futureDate);
+
+    Logger.log(`過去日時(${oldDate})でのヒット件数: ${resultOld.length}`);
+    Logger.log(`未来日時(${futureDate})でのヒット件数: ${resultFuture.length}`);
+
+    if (resultOld.length > 0 && resultFuture.length === 0) {
+        Logger.log('✅ -gte 演算子は正しく機能している可能性が高いです。');
+    } else if (resultOld.length > 0 && resultFuture.length > 0) {
+        Logger.log('⚠️ 未来日時でもヒットしています。演算子が無視されている可能性があります。');
+    } else {
+        Logger.log('⚠️ 想定と異なる結果です。日時フォーマットや演算子の仕様を確認してください。');
+    }
+}
