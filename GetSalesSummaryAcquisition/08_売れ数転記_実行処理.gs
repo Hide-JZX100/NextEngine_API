@@ -267,6 +267,9 @@ function formatDateToString(date) {
  * 各処理段階(元を開く/先を開く/開始行計算/元読込/先書込)の
  * 所要時間をログ出力します(原因調査用の一時的な計測機能)。
  * 
+ * config.targetSheetName が指定されている場合はそのシート名を優先し、
+ * 未指定の場合は共通の TARGET_SHEET_NAME を使用します。
+ * 
  * @param {Object} config - メーカー設定オブジェクト
  * @return {Object} 実行結果 {success: boolean, message: string}
  */
@@ -283,7 +286,7 @@ function copyMakerData(config) {
 
     // コピー先を開く
     const targetSS = openSpreadsheet(config.targetId);
-    const targetSheet = getSheet(targetSS, TARGET_SHEET_NAME);
+    const targetSheet = getSheet(targetSS, config.targetSheetName || TARGET_SHEET_NAME);
     const t2 = Date.now();
 
     // 貼付開始行を計算
