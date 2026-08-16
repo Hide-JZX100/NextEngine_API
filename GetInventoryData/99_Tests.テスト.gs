@@ -829,3 +829,127 @@ function testPhase1_Step3() {
         console.error(`テストエラー: ${error.message}`);
     }
 }
+
+/**
+ * 商品コードを指定して、在庫マスタAPIから最終更新日フィールドの中身を確認する診断用関数。
+ * 既存の 13_NextEngineAPI.gs（getBatchStockData）と同じ呼び出し規約
+ * （getStoredTokens / NE_API_URL / updateStoredTokens）に合わせている。
+ * 本番の在庫取得ロジックには組み込まない、確認専用のスクリプト。
+ *
+ * @param {string} goodsCode - 確認したい商品コード（例: 'ABC-001'）
+ * @return {Object|null} 取得した在庫データ（1件）。見つからない場合はnull
+ */
+function checkStockLastModifiedFields(goodsCode) {
+    const tokens = getStoredTokens();
+    const url = `${NE_API_URL}/api_v1_master_stock/search`;
+
+    const payload = {
+        'access_token': tokens.accessToken,
+        'refresh_token': tokens.refreshToken,
+        'stock_goods_id-eq': goodsCode,
+        'fields': 'stock_goods_id,' +
+                  'stock_last_modified_date,stock_last_modified_null_safe_date'
+    };
+
+    const options = {
+        'method': 'POST',
+        'headers': {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        'payload': Object.keys(payload).map(key =>
+            encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
+        ).join('&')
+    };
+
+    const response = UrlFetchApp.fetch(url, options);
+    const responseData = JSON.parse(response.getContentText());
+
+    // 既存コードと同様、トークンが更新されていれば保存する
+    if (responseData.access_token && responseData.refresh_token) {
+        updateStoredTokens(responseData.access_token, responseData.refresh_token);
+    }
+
+    if (responseData.result === 'success' && responseData.data && responseData.data.length > 0) {
+        Logger.log(JSON.stringify(responseData.data[0], null, 2));
+        return responseData.data[0];
+    }
+
+    Logger.log(`該当データなし、またはAPIエラー: ${JSON.stringify(responseData)}`);
+    return null;
+}
+
+/**
+ * checkStockLastModifiedFields() のテスト用エントリーポイント。
+ * goodsCode は確認したい商品コードに書き換えて実行する。
+ */
+function testCheckStockLastModifiedFields() {
+    checkStockLastModifiedFields('確認したい商品コード');
+}
+
+/**
+ * stock_last_modified_date-gte フィルタが実際に機能しているかを検証するテスト関数。
+ * 過去日時（全件ヒット想定）と未来日時（0件想定）で結果を比較する。
+ * 本番の在庫取得ロジックには組み込まない、確認専用のスクリプト。
+ */
+function testStockLastModifiedGteFilter() {
+    const oldDate = '2000-01-01 00:00:00';    // 十分に古い日時 → 全件ヒットするはず
+    const futureDate = '2099-01-01 00:00:00'; // 未来日時 → 0件になるはず
+
+    const resultOld = queryStockByLastModifiedGte(oldDate);
+    const resultFuture = queryStockByLastModifiedGte(futureDate);
+
+    Logger.log(`過去日時(${oldDate})でのヒット件数: ${resultOld.length}`);
+    Logger.log(`未来日時(${futureDate})でのヒット件数: ${resultFuture.length}`);
+
+    if (resultOld.length > 0 && resultFuture.length === 0) {
+        Logger.log('✅ -gte 演算子は正しく機能している可能性が高いです。');
+    } else if (resultOld.length > 0 && resultFuture.length > 0) {
+        Logger.log('⚠️ 未来日時でもヒットしています。演算子が無視されている可能性があります。');
+    } else {
+        Logger.log('⚠️ 想定と異なる結果です。日時フォーマットや演算子の仕様を確認してください。');
+    }
+}
+
+/**
+ * stock_last_modified_date-gte を指定して在庫マスタAPIを検索する。
+ * @param {string} thresholdDateTime - 検索基準日時（例: '2000-01-01 00:00:00'）
+ * @return {Array} 取得した在庫データの配列
+ */
+function queryStockByLastModifiedGte(thresholdDateTime) {
+    const tokens = getStoredTokens();
+    const url = `${NE_API_URL}/api_v1_master_stock/search`;
+
+    const payload = {
+        'access_token': tokens.accessToken,
+        'refresh_token': tokens.refreshToken,
+        'stock_last_modified_date-gte': thresholdDateTime,
+        'fields': 'stock_goods_id,stock_last_modified_date,' +
+                  'stock_last_modified_null_safe_date',
+        'limit': '5'  // テスト用に少件数に絞る
+    };
+
+    const options = {
+        'method': 'POST',
+        'headers': {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        'payload': Object.keys(payload).map(key =>
+            encodeURIComponent(key) + '=' + encodeURIComponent(payload[key])
+        ).join('&')
+    };
+
+    const response = UrlFetchApp.fetch(url, options);
+    const responseData = JSON.parse(response.getContentText());
+
+    if (responseData.access_token && responseData.refresh_token) {
+        updateStoredTokens(responseData.access_token, responseData.refresh_token);
+    }
+
+    if (responseData.result === 'success' && responseData.data) {
+        Logger.log(JSON.stringify(responseData.data, null, 2));
+        return responseData.data;
+    }
+
+    Logger.log(`APIエラーまたは0件: ${JSON.stringify(responseData)}`);
+    return [];
+}
